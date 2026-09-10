@@ -1,0 +1,50 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=25mm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[hidelinks]{hyperref}
+\newtheorem{assumption}{Assumption}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\title{Allocation and information}
+\author{Modern Editor compilation fixture}
+\date{}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+This small technical example tests source comments, proposed changes and PDF compilation.
+\end{abstract}
+\section{Setup}
+Let $\theta\in[0,1]$ denote a type and let $x\in[0,1]$ be an allocation.
+The objective is $u(x,\theta)=-(x-\theta)^2$.
+\begin{assumption}\label{ass:regularity}
+The distribution $F$ has a continuous density on $[0,1]$.
+\end{assumption}
+\begin{lemma}\label{lem:ordering}
+The unique optimal allocation is $x(\theta)=\theta$ and is monotone.
+\end{lemma}
+\begin{proof}
+The objective is at most zero, with equality exactly when $x=\theta$.
+\end{proof}
+\section{Main result}\label{sec:equilibrium}
+It follows from Lemma~\ref{lem:ordering} that the allocation is monotone.
+\begin{proposition}\label{prop:monotone}
+For any distribution $F$ satisfying Assumption~\ref{ass:regularity}, there exists a monotone optimal allocation.
+\end{proposition}
+\begin{proof}
+In order to establish the claim, we consider the identity allocation.
+For $\theta'>\theta$, the optimal allocation satisfies
+\begin{equation}\label{eq:monotone}
+  x(\theta')-x(\theta)=\theta'-\theta>0.
+\end{equation}
+Equation~\eqref{eq:monotone} proves monotonicity.
+\end{proof}
+The values satisfy $x(\theta)\in\mathbb{R}$ and $x(\theta)\geq 0$.
+The latter inequality is strict for every $\theta\in[0,1]$.
+\section{Discussion}\label{sec:discussion}
+The review checks the endpoint at $\theta=0$, where the allocation equals zero.
+A proposed correction must preserve compilation.
+
+\end{document}

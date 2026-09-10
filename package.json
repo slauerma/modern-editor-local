@@ -1,0 +1,43 @@
+{
+  "name": "modern-codex-editor",
+  "productName": "Modern Codex Editor",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main.cjs",
+  "description": "Local LaTeX editing with source comments and compiled PDF review",
+  "scripts": {
+    "notices": "node scripts/collect-third-party-notices.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "start": "electron .",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "pretest:compile": "node scripts/generate-compile-fixtures.mjs",
+    "test:compile": "node --experimental-strip-types --test --test-concurrency=1 tests/compile.integration.ts tests/compile.audit.ts tests/texpile.integration.ts tests/compile-review.integration.ts tests/fragment-preamble.integration.ts tests/stabilization.integration.ts tests/pdf-navigation.integration.ts"
+  },
+  "dependencies": {
+    "@codemirror/commands": "6.11.0",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/legacy-modes": "6.5.4",
+    "@codemirror/merge": "6.12.2",
+    "@codemirror/state": "6.7.4",
+    "@codemirror/view": "6.43.11",
+    "pdfjs-dist": "6.3.289",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "@types/react": "18.3.28",
+    "@types/react-dom": "18.3.7",
+    "electron": "42.11.2",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

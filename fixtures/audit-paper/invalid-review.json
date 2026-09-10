@@ -1,0 +1,29 @@
+[
+  {
+    "id": "invalid-import",
+    "category": "Clarity",
+    "title": "State the result directly",
+    "explanation": "This prepared audit comment tests editing inside the source anchor and safe undo.",
+    "original": "It is important to note that the allocation is monotone.",
+    "replacement": "The allocation is monotone.",
+    "packages": [],
+    "from": 447,
+    "to": 503,
+    "decision": "open",
+    "validity": "current",
+    "messages": [
+      {
+        "role": "assistant",
+        "text": "Malformed package fixture",
+        "createdAt": "2026-09-07T15:20:30.332Z",
+        "proposal": {
+          "replacement": "The allocation is monotone.",
+          "packages": [
+            "../invalid-package"
+          ]
+        }
+      }
+    ],
+    "replyDraft": ""
+  }
+]

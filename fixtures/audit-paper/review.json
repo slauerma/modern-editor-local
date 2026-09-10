@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "rootFile": "main.tex",
+  "sourceHash": "1f73f21a7827474ee028fdf2e380203af0526d3408c2c40d8ec09d19f6025804",
+  "activeId": "audit-1",
+  "comments": [
+    {
+      "id": "audit-1",
+      "category": "Clarity",
+      "title": "State the result directly",
+      "explanation": "This prepared audit comment tests editing inside the source anchor and safe undo.",
+      "original": "It is important to note that the allocation is monotone.",
+      "replacement": "The allocation is monotone.",
+      "packages": [],
+      "from": 447,
+      "to": 503,
+      "decision": "open",
+      "validity": "current",
+      "messages": [],
+      "replyDraft": ""
+    },
+    {
+      "id": "audit-2",
+      "category": "Clarity",
+      "title": "Use a definition symbol",
+      "explanation": "This tests accepting a source change together with its missing package.",
+      "original": "The objective is $u(x,\\theta)=-(x-\\theta)^2$.",
+      "replacement": "The objective is $u(x,\\theta)\\coloneqq -(x-\\theta)^2$.",
+      "packages": [
+        "mathtools"
+      ],
+      "from": 504,
+      "to": 549,
+      "decision": "open",
+      "validity": "current",
+      "messages": [],
+      "replyDraft": ""
+    },
+    {
+      "id": "audit-3",
+      "category": "Audit failure case",
+      "title": "Deliberately unresolved citation",
+      "explanation": "This intentionally invalid test proposal must be blocked while the last successful PDF remains visible.",
+      "original": "The appendix gives a second-page check of the result.",
+      "replacement": "The appendix gives a second-page check~\\cite{missing-audit-key}.",
+      "packages": [],
+      "from": 1109,
+      "to": 1162,
+      "decision": "open",
+      "validity": "current",
+      "messages": [],
+      "replyDraft": ""
+    }
+  ],
+  "updatedAt": "2026-09-07T15:20:30.326Z"
+}

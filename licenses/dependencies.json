@@ -1,0 +1,1388 @@
+{
+  "lockfileSha256": "9b7d56735dc39d9cf42f2457a22723f7dd130085461a53e5ec73cbd0801e36e2",
+  "packages": [
+    {
+      "name": "@codemirror/commands",
+      "version": "6.11.0",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@codemirror/commands/LICENSE"
+      ]
+    },
+    {
+      "name": "@codemirror/language",
+      "version": "6.12.4",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@codemirror/language/LICENSE"
+      ]
+    },
+    {
+      "name": "@codemirror/legacy-modes",
+      "version": "6.5.4",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@codemirror/legacy-modes/LICENSE"
+      ]
+    },
+    {
+      "name": "@codemirror/merge",
+      "version": "6.12.2",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@codemirror/merge/LICENSE"
+      ]
+    },
+    {
+      "name": "@codemirror/state",
+      "version": "6.7.4",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@codemirror/state/LICENSE"
+      ]
+    },
+    {
+      "name": "@codemirror/view",
+      "version": "6.43.11",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@codemirror/view/LICENSE"
+      ]
+    },
+    {
+      "name": "@electron-internal/extract-zip",
+      "version": "1.0.5",
+      "license": "BSD-2-Clause",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": []
+    },
+    {
+      "name": "@electron/get",
+      "version": "5.1.0",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@electron/get/LICENSE"
+      ]
+    },
+    {
+      "name": "@esbuild/aix-ppc64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/android-arm",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/android-arm64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/android-x64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/darwin-arm64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": true,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/darwin-x64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/freebsd-arm64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/freebsd-x64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/linux-arm",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/linux-arm64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/linux-ia32",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/linux-loong64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/linux-mips64el",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/linux-ppc64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/linux-riscv64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/linux-s390x",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/linux-x64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/netbsd-arm64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/netbsd-x64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/openbsd-arm64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/openbsd-x64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/openharmony-arm64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/sunos-x64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/win32-arm64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/win32-ia32",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@esbuild/win32-x64",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@lezer/common",
+      "version": "1.5.2",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@lezer/common/LICENSE"
+      ]
+    },
+    {
+      "name": "@lezer/highlight",
+      "version": "1.2.3",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@lezer/highlight/LICENSE"
+      ]
+    },
+    {
+      "name": "@lezer/lr",
+      "version": "1.4.10",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@lezer/lr/LICENSE"
+      ]
+    },
+    {
+      "name": "@marijn/find-cluster-break",
+      "version": "1.0.4",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@marijn/find-cluster-break/LICENSE"
+      ]
+    },
+    {
+      "name": "@napi-rs/canvas",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@napi-rs/canvas/LICENSE"
+      ]
+    },
+    {
+      "name": "@napi-rs/canvas-android-arm64",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-darwin-arm64",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": true,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-darwin-x64",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-linux-arm-gnueabihf",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-linux-arm64-gnu",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-linux-arm64-musl",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-linux-riscv64-gnu",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-linux-x64-gnu",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-linux-x64-musl",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-win32-arm64-msvc",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/canvas-win32-x64-msvc",
+      "version": "1.0.8",
+      "license": "MIT",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@napi-rs/lzma-linux-x64-gnu",
+      "version": "1.5.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-android-arm-eabi",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-android-arm64",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-darwin-arm64",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": true,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-darwin-x64",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-freebsd-arm64",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-freebsd-x64",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-arm-gnueabihf",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-arm-musleabihf",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-arm64-gnu",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-arm64-musl",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-loong64-gnu",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-loong64-musl",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-ppc64-gnu",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-ppc64-musl",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-riscv64-gnu",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-riscv64-musl",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-s390x-gnu",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-x64-gnu",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-linux-x64-musl",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-openbsd-x64",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-openharmony-arm64",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-win32-arm64-msvc",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-win32-ia32-msvc",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-win32-x64-gnu",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@rollup/rollup-win32-x64-msvc",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@types/estree",
+      "version": "1.0.9",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@types/estree/LICENSE"
+      ]
+    },
+    {
+      "name": "@types/node",
+      "version": "24.12.4",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@types/node/LICENSE"
+      ]
+    },
+    {
+      "name": "@types/prop-types",
+      "version": "15.7.15",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@types/prop-types/LICENSE"
+      ]
+    },
+    {
+      "name": "@types/react",
+      "version": "18.3.28",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@types/react/LICENSE"
+      ]
+    },
+    {
+      "name": "@types/react-dom",
+      "version": "18.3.7",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@types/react-dom/LICENSE"
+      ]
+    },
+    {
+      "name": "crelt",
+      "version": "1.0.7",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/crelt/LICENSE"
+      ]
+    },
+    {
+      "name": "csstype",
+      "version": "3.2.3",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/csstype/LICENSE"
+      ]
+    },
+    {
+      "name": "debug",
+      "version": "4.4.3",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/debug/LICENSE"
+      ]
+    },
+    {
+      "name": "electron",
+      "version": "42.11.2",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/electron/LICENSE"
+      ]
+    },
+    {
+      "name": "env-paths",
+      "version": "3.0.0",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/env-paths/license"
+      ]
+    },
+    {
+      "name": "esbuild",
+      "version": "0.28.2",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/esbuild/LICENSE.md"
+      ]
+    },
+    {
+      "name": "fdir",
+      "version": "6.5.0",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/fdir/LICENSE"
+      ]
+    },
+    {
+      "name": "fsevents",
+      "version": "2.3.3",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/fsevents/LICENSE"
+      ]
+    },
+    {
+      "name": "graceful-fs",
+      "version": "4.2.11",
+      "license": "ISC",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/graceful-fs/LICENSE"
+      ]
+    },
+    {
+      "name": "js-tokens",
+      "version": "4.0.0",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/js-tokens/LICENSE"
+      ]
+    },
+    {
+      "name": "loose-envify",
+      "version": "1.4.0",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/loose-envify/LICENSE"
+      ]
+    },
+    {
+      "name": "ms",
+      "version": "2.1.3",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/ms/license.md"
+      ]
+    },
+    {
+      "name": "nanoid",
+      "version": "3.3.18",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/nanoid/LICENSE"
+      ]
+    },
+    {
+      "name": "pdfjs-dist",
+      "version": "6.3.289",
+      "license": "Apache-2.0",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/pdfjs-dist/LICENSE",
+        "node_modules/pdfjs-dist/cmaps/LICENSE",
+        "node_modules/pdfjs-dist/standard_fonts/LICENSE_FOXIT",
+        "node_modules/pdfjs-dist/standard_fonts/LICENSE_LIBERATION",
+        "node_modules/pdfjs-dist/wasm/LICENSE_JBIG2",
+        "node_modules/pdfjs-dist/wasm/LICENSE_OPENJPEG",
+        "node_modules/pdfjs-dist/wasm/LICENSE_PDFJS_JBIG2",
+        "node_modules/pdfjs-dist/wasm/LICENSE_PDFJS_OPENJPEG",
+        "node_modules/pdfjs-dist/wasm/LICENSE_PDFJS_QCMS",
+        "node_modules/pdfjs-dist/wasm/LICENSE_QCMS",
+        "node_modules/pdfjs-dist/iccs/LICENSE"
+      ]
+    },
+    {
+      "name": "picocolors",
+      "version": "1.1.1",
+      "license": "ISC",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/picocolors/LICENSE"
+      ]
+    },
+    {
+      "name": "picomatch",
+      "version": "4.0.7",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/picomatch/LICENSE"
+      ]
+    },
+    {
+      "name": "postcss",
+      "version": "8.5.28",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/postcss/LICENSE"
+      ]
+    },
+    {
+      "name": "progress",
+      "version": "2.0.3",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/progress/LICENSE"
+      ]
+    },
+    {
+      "name": "react",
+      "version": "18.3.1",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/react/LICENSE"
+      ]
+    },
+    {
+      "name": "react-dom",
+      "version": "18.3.1",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/react-dom/LICENSE"
+      ]
+    },
+    {
+      "name": "rollup",
+      "version": "4.63.1",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/rollup/LICENSE.md"
+      ]
+    },
+    {
+      "name": "scheduler",
+      "version": "0.23.2",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/scheduler/LICENSE"
+      ]
+    },
+    {
+      "name": "semver",
+      "version": "7.8.5",
+      "license": "ISC",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/semver/LICENSE"
+      ]
+    },
+    {
+      "name": "source-map-js",
+      "version": "1.2.1",
+      "license": "BSD-3-Clause",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/source-map-js/LICENSE"
+      ]
+    },
+    {
+      "name": "style-mod",
+      "version": "4.1.3",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/style-mod/LICENSE"
+      ]
+    },
+    {
+      "name": "sumchecker",
+      "version": "3.0.1",
+      "license": "Apache-2.0",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/sumchecker/LICENSE"
+      ]
+    },
+    {
+      "name": "tinyglobby",
+      "version": "0.2.17",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/tinyglobby/LICENSE"
+      ]
+    },
+    {
+      "name": "typescript",
+      "version": "5.9.3",
+      "license": "Apache-2.0",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/typescript/LICENSE.txt",
+        "node_modules/typescript/ThirdPartyNoticeText.txt"
+      ]
+    },
+    {
+      "name": "undici",
+      "version": "7.29.1",
+      "license": "MIT",
+      "development": true,
+      "optional": true,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/undici/LICENSE"
+      ]
+    },
+    {
+      "name": "undici-types",
+      "version": "7.16.0",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/undici-types/LICENSE"
+      ]
+    },
+    {
+      "name": "vite",
+      "version": "7.3.6",
+      "license": "MIT",
+      "development": true,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/vite/LICENSE.md"
+      ]
+    },
+    {
+      "name": "w3c-keyname",
+      "version": "2.2.8",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/w3c-keyname/LICENSE"
+      ]
+    },
+    {
+      "name": "zod",
+      "version": "3.25.76",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/zod/LICENSE"
+      ]
+    }
+  ],
+  "notices": [
+    {
+      "path": "node_modules/@codemirror/commands/LICENSE",
+      "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07"
+    },
+    {
+      "path": "node_modules/@codemirror/language/LICENSE",
+      "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07"
+    },
+    {
+      "path": "node_modules/@codemirror/legacy-modes/LICENSE",
+      "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07"
+    },
+    {
+      "path": "node_modules/@codemirror/merge/LICENSE",
+      "sha256": "7c6e3a020c1db4725560be9120b96eb2305ae7d37d155ee20e6023bb27ad144e"
+    },
+    {
+      "path": "node_modules/@codemirror/state/LICENSE",
+      "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07"
+    },
+    {
+      "path": "node_modules/@codemirror/view/LICENSE",
+      "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07"
+    },
+    {
+      "path": "node_modules/@electron/get/LICENSE",
+      "sha256": "edab8abb78d9c5b36944c3e00aebf6a90eb32378993f49ac8a3904007029c629"
+    },
+    {
+      "path": "node_modules/@lezer/common/LICENSE",
+      "sha256": "568902fb66eaf1f11750e966b33fd7b5d7c618e65af09f35ef843635bcf5f1ba"
+    },
+    {
+      "path": "node_modules/@lezer/highlight/LICENSE",
+      "sha256": "568902fb66eaf1f11750e966b33fd7b5d7c618e65af09f35ef843635bcf5f1ba"
+    },
+    {
+      "path": "node_modules/@lezer/lr/LICENSE",
+      "sha256": "568902fb66eaf1f11750e966b33fd7b5d7c618e65af09f35ef843635bcf5f1ba"
+    },
+    {
+      "path": "node_modules/@marijn/find-cluster-break/LICENSE",
+      "sha256": "9360b00fdd091f05c783b568bdd46c679c41b72415599252de98949462ea1acb"
+    },
+    {
+      "path": "node_modules/@napi-rs/canvas/LICENSE",
+      "sha256": "8802fecf9da4367bc23bcf20b21cc143785fc6c92b152f3fa7fbe6ce08d344d6"
+    },
+    {
+      "path": "node_modules/@types/estree/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "path": "node_modules/@types/node/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "path": "node_modules/@types/prop-types/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "path": "node_modules/@types/react/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "path": "node_modules/@types/react-dom/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "path": "node_modules/crelt/LICENSE",
+      "sha256": "23852ebf6aef7fadffc92514b3c5df163a8651f2c3ed0dbb494cb49d93bd5de5"
+    },
+    {
+      "path": "node_modules/csstype/LICENSE",
+      "sha256": "11d55bd4541c75ee7879547ac49089c489163dae49551389713c3d026cab383e"
+    },
+    {
+      "path": "node_modules/debug/LICENSE",
+      "sha256": "3a61c6c96caf5c1d9b623fb9b04c822b783dfcb78aa7e49c76a3f643e6ed7f95"
+    },
+    {
+      "path": "node_modules/electron/LICENSE",
+      "sha256": "5154e165bd6c2cc0cfbcd8916498c7abab0497923bafcd5cb07673fe8480087d"
+    },
+    {
+      "path": "node_modules/env-paths/license",
+      "sha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
+    },
+    {
+      "path": "node_modules/esbuild/LICENSE.md",
+      "sha256": "b40ec5baec7bb34fa5b1c09521fa3cd52d5fad7adafed74932a2010d3612a681"
+    },
+    {
+      "path": "node_modules/fdir/LICENSE",
+      "sha256": "9a39f2aadab11a3697edd668ff2d8ad885b649737b7ab4d3bf12b34e5ada0c86"
+    },
+    {
+      "path": "node_modules/fsevents/LICENSE",
+      "sha256": "2a8a5d6197bb97a018b8a190dd3ed853d750ca87c8e80c17aad41d6c6ff448e1"
+    },
+    {
+      "path": "node_modules/graceful-fs/LICENSE",
+      "sha256": "f65c5d9f22a317b2a10803bd1868461ce6499c2ed7217bc80c0cc772a748789c"
+    },
+    {
+      "path": "node_modules/js-tokens/LICENSE",
+      "sha256": "2213d91c606205c71eb051a199478cdc2adde945893404d7f1421436dd6d5cc1"
+    },
+    {
+      "path": "node_modules/loose-envify/LICENSE",
+      "sha256": "4eb7543b08d955a6d23fcc224601d43ff566e775be918805e26210d7f6eb4893"
+    },
+    {
+      "path": "node_modules/ms/license.md",
+      "sha256": "1662fae9b5314d11cf51284e2dcd1f006a354f7343f08712a730fcff9a359801"
+    },
+    {
+      "path": "node_modules/nanoid/LICENSE",
+      "sha256": "da4db1480d9beea3483a2eda5c53b22238d0827d57da162b48f122e04d2d9987"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/LICENSE",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/cmaps/LICENSE",
+      "sha256": "aa92ab5a472974865a96fd4a4e9c13bb41bf6fe1b309cb6b8da48bc9e19839a2"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/standard_fonts/LICENSE_FOXIT",
+      "sha256": "b578cdd2345840ada550bd12519533812320d5f1d21cf4c1c7e1b1b0a31c98b7"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/standard_fonts/LICENSE_LIBERATION",
+      "sha256": "d2c4d5b3e115a519cb58eb691aa64538397e2611f9ebe801392cf9667997e7dc"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/wasm/LICENSE_JBIG2",
+      "sha256": "9e66b7f1b934a28b37f3bc4dac97915de1674271e79a0a88182a18ed9731b4d1"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/wasm/LICENSE_OPENJPEG",
+      "sha256": "a6af136f3e15038a666b61f376612a07d9a4e48cb7c01adbf3e33b3f14ab49b6"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/wasm/LICENSE_PDFJS_JBIG2",
+      "sha256": "aad3cce09842e00e9e11ad5e8fef8cc02fbc3a3768fe2f007443b9cee37aaee5"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/wasm/LICENSE_PDFJS_OPENJPEG",
+      "sha256": "717fc62da03292dbb4dd0c8280bd4ce7bb8550dcf31d772bc93455fb50313425"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/wasm/LICENSE_PDFJS_QCMS",
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/wasm/LICENSE_QCMS",
+      "sha256": "36d847ae882f6574ebc72f56a4f354e4f104fde4a584373496482e97d52d31bc"
+    },
+    {
+      "path": "node_modules/pdfjs-dist/iccs/LICENSE",
+      "sha256": "286e4fd7b447330b2c88e23890e3cd0a9d38cb398d4a59cb247f578ccbda3213"
+    },
+    {
+      "path": "node_modules/picocolors/LICENSE",
+      "sha256": "6582629e2979466878f6014313dcc2f3756c9616148682227ce3063dde310750"
+    },
+    {
+      "path": "node_modules/picomatch/LICENSE",
+      "sha256": "d0cd141b0c322fded5dfad1d4645bb2fedfc05b7321fe1009469638190d59ef9"
+    },
+    {
+      "path": "node_modules/postcss/LICENSE",
+      "sha256": "5be1f3465bba68a626777f984878814aaf35e7ef8e9fd314d469bcf887050fb8"
+    },
+    {
+      "path": "node_modules/progress/LICENSE",
+      "sha256": "d7d2a7786de7c7cfd96f920c6f12927d74e1d2a861ca4498bf465c3bc3f4c21c"
+    },
+    {
+      "path": "node_modules/react/LICENSE",
+      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+    },
+    {
+      "path": "node_modules/react-dom/LICENSE",
+      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+    },
+    {
+      "path": "node_modules/rollup/LICENSE.md",
+      "sha256": "fa1bd040c5bdeefe65b3821cebf474f2733ce65df13089bd151dda1778e62fe8"
+    },
+    {
+      "path": "node_modules/scheduler/LICENSE",
+      "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85"
+    },
+    {
+      "path": "node_modules/semver/LICENSE",
+      "sha256": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b"
+    },
+    {
+      "path": "node_modules/source-map-js/LICENSE",
+      "sha256": "6cb0631f71c7749763fd3dd1d5bee52dd1070ec17f2edc1710079ad070bd2fbd"
+    },
+    {
+      "path": "node_modules/style-mod/LICENSE",
+      "sha256": "cb4474e26547397169061d3586c00022cda5330a1b64fa13e872319f3b63aff1"
+    },
+    {
+      "path": "node_modules/sumchecker/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "node_modules/tinyglobby/LICENSE",
+      "sha256": "22c68811e174cbbfb3813d4135918df4f540959c14d872e601d9abe83d3cde8f"
+    },
+    {
+      "path": "node_modules/typescript/LICENSE.txt",
+      "sha256": "a7d00bfd54525bc694b6e32f64c7ebcf5e6b7ae3657be5cc12767bce74654a47"
+    },
+    {
+      "path": "node_modules/typescript/ThirdPartyNoticeText.txt",
+      "sha256": "1af3c68039c57e539422da82a4faada506ce6d0ea6f90e0b699d02dbcdb7a90c"
+    },
+    {
+      "path": "node_modules/undici/LICENSE",
+      "sha256": "a6db8096b2707bc0102d256917d4d33f298ba36d8c3f25de067a2b5bb379db27"
+    },
+    {
+      "path": "node_modules/undici-types/LICENSE",
+      "sha256": "a6db8096b2707bc0102d256917d4d33f298ba36d8c3f25de067a2b5bb379db27"
+    },
+    {
+      "path": "node_modules/vite/LICENSE.md",
+      "sha256": "a77a1c089806b39ad339535bdf3677f636c91d96693e8ad7b11fe733f650ea64"
+    },
+    {
+      "path": "node_modules/w3c-keyname/LICENSE",
+      "sha256": "869c30f368eb08735e779027b9f4bc9fea2f39624351856aebe42741f0bc0884"
+    },
+    {
+      "path": "node_modules/zod/LICENSE",
+      "sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8"
+    }
+  ]
+}

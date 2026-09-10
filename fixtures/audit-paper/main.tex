@@ -1,0 +1,36 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=24mm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,graphicx}
+\usepackage[hidelinks]{hyperref}
+\newtheorem{proposition}{Proposition}
+\title{A local review across two pages}
+\author{Synthetic editor audit fixture}
+\date{}
+\begin{document}
+\maketitle
+\section{An allocation rule}\label{sec:rule}
+Let $\theta\in[0,1]$ be a type and let $x(\theta)=\theta$.
+It is important to note that the allocation is monotone.
+The objective is $u(x,\theta)=-(x-\theta)^2$.
+\begin{proposition}\label{prop:optimal}
+For each type, the identity allocation uniquely maximizes the objective.
+\end{proposition}
+\begin{proof}
+The objective is nonpositive and equals zero exactly when $x=\theta$.
+\end{proof}
+The comparison is illustrated in Figure~\ref{fig:allocation}.
+\begin{figure}[h]
+\centering
+\includegraphics[width=.54\linewidth]{figures/allocation.pdf}
+\caption{A synthetic identity allocation used only for editor testing.}\label{fig:allocation}
+\end{figure}
+The bibliography entry is a fictional test record~\cite{audit-fixture}.
+The appendix gives a second-page check of the result.
+\newpage
+\input{sections/appendix}
+\bibliographystyle{plain}
+\bibliography{references}
+\typeout{AUDIT_LAST_PAGE=\thepage}
+\end{document}
