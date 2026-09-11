@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { copyBuildAssets, verifyDependencyNotices } from '../scripts/copy-build-assets.mjs';
 
-const sources = ['fixtures/sample/main.tex', 'fixtures/sample/review.json',
+const sources = ['docs/USER_GUIDE.md', 'docs/SETUP.md', 'docs/FAQ.md', 'CHANGELOG.md', 'fixtures/sample/main.tex', 'fixtures/sample/review.json',
   'resources/tex-support/tcilatex.tex', 'resources/tex-support/README.md',
   'licenses/modern-editor-predecessor-MIT.txt', 'licenses/dependencies.json',
   'LICENSE', 'THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_LICENSES.txt',
@@ -36,6 +36,7 @@ test('build assets include only the working sample, support macro and notices; s
     await put(root, 'dist/main.cjs', 'Keep the built application');
     await copyBuildAssets(root);
     assert.deepEqual(await files(path.join(root, 'dist')), [
+      'help/USER_GUIDE.md', 'help/SETUP.md', 'help/FAQ.md', 'help/CHANGELOG.md',
       'fixtures/sample/main.tex', 'fixtures/sample/review.json', 'main.cjs',
       'tex-support/tcilatex.tex', 'tex-support/README.md',
       'licenses/modern-editor-predecessor-MIT.txt', 'licenses/dependencies.json', 'licenses/LICENSE',

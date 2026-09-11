@@ -66,6 +66,22 @@ textarea:disabled { color:#708074; background:#f5f6f3; }
 .review-heading { flex-wrap:wrap; gap:8px; }
 .review-heading .actions-popover { width:270px; max-width:calc(100vw - 40px); display:block; padding:12px; }
 .review-heading .actions-popover small { font-size:11px; line-height:1.5; color:var(--muted); }
+.review-heading .hide-comments { font-size:19px; padding:1px 5px; color:var(--muted); }
+.source-pane-tools { display:flex; gap:18px; align-items:center; }
+.restore-comments { font-weight:500; }
+.review-activity { padding:28px 24px; margin:32px auto; max-width:470px; border:1px solid #c7d9c9; border-radius:12px; background:#edf5ee; box-shadow:0 4px 18px #2d655009; }
+.review-activity-heading { display:flex; align-items:center; gap:12px; }
+.review-activity h2 { margin:0; font-size:19px; line-height:1.4; color:#285640; }
+.review-activity-indicator { flex-shrink:0; width:21px; height:21px; border:2px solid #c5d9ca; border-top-color:var(--green); border-radius:50%; animation:review-turn 1.2s linear infinite; }
+.review-activity-indicator.paused { animation:none; border-color:#9db6a2; }
+.review-activity p { line-height:1.6; }
+.review-section-label { color:#41644e; font-size:12px; overflow-wrap:anywhere; margin:14px 0 8px; }
+.review-activity-note { font-size:12px; color:#637868; margin:12px 0 18px; }
+.review-activity-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }.review-activity-actions button { font-size:11px; padding:6px 9px; }
+.review-activity.compact { position:sticky; top:0; z-index:8; max-width:none; margin:0 0 14px; padding:13px 15px; }
+.review-activity.compact h2 { font-size:14px; }.review-activity.compact .review-activity-indicator { width:16px; height:16px; }
+@keyframes review-turn { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .review-activity-indicator { animation:none; } }
 .review-nav { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:12px; margin-bottom:12px; }.review-nav button { padding:5px 8px; }.review-nav>span { color:#778278; font-size:11px; }
 .comment-card { background:white; border:1px solid #dfe6dc; border-radius:8px; padding:18px; box-shadow:0 2px 4px #1c3a2010; }
 .comment-card h1 { font-size:13px; line-height:1.65; margin:0 0 10px; font-weight:600; }
@@ -101,6 +117,7 @@ textarea:disabled { color:#708074; background:#f5f6f3; }
 .reply-packages,.reply-current { font-size:11px; color:#617358; }
 .reply-current { display:block; margin-top:6px; }
 .empty-comments { padding:20px 7px; color:#74816f; line-height:1.7; }.empty-comments h2 { font-size:16px; color:#40543e; }.empty-comments p { font-size:12px; }
+.comment-card .accept-unchecked { font-size:11px; padding:5px 0; margin-top:4px; text-decoration:underline; text-underline-offset:3px; color:#647869; }
 .comment-overview { border:1px solid #dce4d7; border-radius:6px; background:white; padding:8px; margin-bottom:12px; }.comment-overview>div:first-child { display:flex; gap:6px; }.comment-overview select { min-width:0; max-width:52%; font-size:11px; padding:5px; }.overview-items { max-height:240px; overflow:auto; }.overview-items button { display:block; width:100%; white-space:normal; text-align:left; border:0; margin-top:5px; font-size:12px; }.overview-items small { display:block; color:var(--muted); margin-top:4px; }.overview-items [aria-current=true] { background:#e7f0e1; }
 .pdf-pane { display:flex; flex-direction:column; min-height:0; min-width:0; background:#e9ece7; }
 .pdf-controls { height:36px; flex-shrink:0; display:flex; align-items:center; gap:6px; padding:0 10px; font-size:11px; background:#f5f7f2; border-bottom:1px solid #dce2d6; }
@@ -132,6 +149,13 @@ footer { display:flex; gap:14px; align-items:center; padding:6px 16px; min-heigh
   .with-pdf .pdf-pane { grid-column:1/-1; border-top:1px solid var(--line); }.pdf-divider { display:none; }
   .with-pdf .pdf-scroll { padding:15px 35px; }.unified-toolbar { gap:8px; padding-inline:12px; }.toolbar-actions { gap:4px; }.toolbar-actions>button { padding:7px 8px; }
 }
+
+/* A writing layout keeps both live panes mounted and reuses their proportions. */
+.workspace.comments-hidden { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr); }
+.workspace.comments-hidden.with-pdf { grid-template-columns:minmax(0,var(--source-fr,.28fr)) 6px minmax(0,var(--pdf-fr,.39fr)); }
+.workspace.comments-hidden .review-rail { display:none; }
+.workspace.comments-hidden .pdf-divider { display:block; }
+.workspace.comments-hidden .pdf-pane { grid-column:auto; border-top:0; }
 
 .version-history { flex-shrink:0; max-height:280px; overflow:auto; padding:12px 16px; border-bottom:1px solid var(--line); background:#f6f8f5; font-size:12px; }
 .version-picker,.version-budget,.version-confirm { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }.version-history label { display:flex; align-items:center; gap:8px; }.version-history select { max-width:460px; }.version-history p { line-height:1.5; margin:8px 0; }.version-history summary { cursor:pointer; }.version-budget input { width:80px; border:1px solid #ccd8ce; padding:5px; }.version-confirm { padding:8px; background:#fff1e8; }.version-history button,.version-history select { font-size:12px; }.fast-mode-control small { color:var(--muted); }

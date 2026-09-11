@@ -24,6 +24,10 @@ import { prepareRuntimeStorage, runtimeLocation, createDraftSource } from './run
 import { ToolSettingsService } from './tool-settings.ts';
 import { formatSetupDetails, toolSettingsSchema, type ToolSettingsState } from '../shared/tool-settings.ts';
 import { verifiedCodexVersions } from './codex-policy.ts';
+import { HelpChat } from './help-chat.ts';
+import { chatInputSchema, chatScopeSchema } from '../shared/help-chat.ts';
+import { normalizeChatImage } from './chat-images.ts';
+import { readRegularFile } from './files.ts';
 
 app.setName('Modern Codex Editor');
 const runtimeOverride = process.env.MODERN_EDITOR_RUNTIME_DIR;
@@ -39,6 +43,10 @@ const references = new ReferenceService(projects, path.join(runtime, 'reference-
 const codex = new CodexService(projects, path.join(runtime, 'codex-context'), attachments, references);
 const buildHelp = new BuildInputHelp(projects, compiler, codex);
 const tools = new ToolSettingsService(runtime);
+const helpChat = new HelpChat(projects, codex.client, path.join(runtime, 'help-chats'), async () => ({
+  version: app.getVersion(), platform: process.platform, osVersion: process.getSystemVersion(),
+  documentation: (await Promise.all(['USER_GUIDE.md','SETUP.md','FAQ.md','CHANGELOG.md'].map(async name => `## ${name}\n${(await readRegularFile(path.join(__dirname, 'help', name), 100000)).toString('utf8')}`))).join('\n\n')
+}), references);
 let storageNotices: string[] = [], setupBusy = false, activeToolOperations = 0;
 let window: BrowserWindow | null = null, closing = false, rendererGone = false;
 app.on('second-instance', () => { if (window?.isMinimized()) window.restore(); window?.show(); window?.focus(); });
@@ -189,13 +197,25 @@ handle('feedback:list', id => codex.feedback.list(z.string().parse(id)));
 handle('codex:review', input => { const p = textInput.extend({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), instructions: z.string().max(10000), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional() }).parse(input); return codex.review(p, message => window?.webContents.send('codex:progress', message)); });
 handle('codex:reply', input => { const p = textInput.extend({ comment: commentSchema, message: z.string().min(1).max(10000), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional(), deeper: z.boolean().optional() }).parse(input); return codex.reply(p, message => window?.webContents.send('codex:progress', message)); });
 handle('codex:waiting', id => codex.results.list(z.string().parse(id)));
+handle('chat:state', input => helpChat.state(chatScopeSchema.parse(input)));
+handle('chat:clear', input => helpChat.clear(chatScopeSchema.parse(input)));
+handle('chat:retry', input => helpChat.retry(chatScopeSchema.parse(input)));
+handle('chat:preview', input => {
+  const parsed = chatInputSchema.parse(input);
+  parsed.images = parsed.images.map(normalizeChatImage);
+  return helpChat.preview(parsed);
+});
+handle('codex:chat', input => {
+  const parsed = chatScopeSchema.extend({ previewId: z.string().uuid() }).strict().parse(input);
+  return helpChat.send({ projectId: parsed.projectId }, parsed.previewId, message => window?.webContents.send('codex:progress', message));
+});
 handle('codex:acknowledge', input => { const p = z.object({ projectId: z.string(), resultId: z.string().uuid(), outcome: z.enum(['adopted', 'dismissed']) }).parse(input); return codex.results.acknowledge(p.projectId, p.resultId, p.outcome); });
-handle('codex:cancel', () => { buildHelp.cancel(); return codex.cancel(); });
+handle('codex:cancel', () => { buildHelp.cancel(); return Promise.all([helpChat.cancel(), codex.cancel()]); });
 handle('codex:preamble', input => codex.preamble(preambleRequestSchema.parse(input), message => window?.webContents.send('codex:progress', message)));
 async function finishClose() {
-  await Promise.all([compiler.stop(), codex.cancel(), attachments.stop()]);
+  await Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), attachments.stop()]);
   // A finished model process can still have an answer being validated/written.
-  await codex.settle(); await projects.settle();
+  await Promise.all([codex.settle(), helpChat.settle()]); await projects.settle();
   closing = true; window?.close();
 }
 handle('window:close-ready', finishClose);
@@ -206,7 +226,7 @@ async function createWindow() {
   window.webContents.on('will-navigate', (event, url) => { if (url !== documentURL) event.preventDefault(); });
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   window.webContents.on('console-message', details => { if (['warning', 'error'].includes(details.level)) console.error('Renderer:', details.message); });
-  window.webContents.on('render-process-gone', () => { rendererGone = true; void Promise.all([compiler.stop(), codex.cancel(), attachments.stop()]).catch(console.error); });
+  window.webContents.on('render-process-gone', () => { rendererGone = true; void Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), attachments.stop()]).catch(console.error); });
   window.on('close', event => { if (!closing) { event.preventDefault(); if (rendererGone) void finishClose().catch(console.error); else window?.webContents.send('window:close-requested'); } });
   window.on('closed', () => { window = null; });
   await window.loadFile(documentFile);
@@ -227,7 +247,7 @@ if (primaryInstance) app.whenReady().then(async () => {
       { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('undo') },
       { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: () => send('redo') },
       { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'pasteAndMatchStyle' }, { role: 'delete' }, { type: 'separator' }, { role: 'selectAll' }
-    ] }, { label: 'Find', submenu: [{ label: 'Find in focused pane…', accelerator: 'CmdOrCtrl+F', click: () => send('find') }] }, { label: 'View', submenu: [{ label: 'Toggle PDF', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('pdf') }, { label: 'Show/hide toolbar', accelerator: 'CmdOrCtrl+Shift+M', click: () => send('toolbar') }, { label: 'Focus source', accelerator: 'CmdOrCtrl+1', click: () => send('focus-source') }, { label: 'Focus comments', accelerator: 'CmdOrCtrl+2', click: () => send('focus-comments') }, { label: 'Help and shortcuts…', click: () => send('help') }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' }] }
+    ] }, { label: 'Find', submenu: [{ label: 'Find in focused pane…', accelerator: 'CmdOrCtrl+F', click: () => send('find') }] }, { label: 'View', submenu: [{ label: 'Toggle PDF', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('pdf') }, { label: 'Show/hide toolbar', accelerator: 'CmdOrCtrl+Shift+M', click: () => send('toolbar') }, { label: 'Focus source', accelerator: 'CmdOrCtrl+1', click: () => send('focus-source') }, { label: 'Focus comments', accelerator: 'CmdOrCtrl+2', click: () => send('focus-comments') }, { label: 'Show/hide comments', click: () => send('comments') }, { label: 'Help me…', accelerator: 'CmdOrCtrl+Shift+H', click: () => send('help-chat') }, { label: 'Help and shortcuts…', click: () => send('help') }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' }] }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
   await createWindow();

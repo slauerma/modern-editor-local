@@ -14,6 +14,25 @@ async function fixture() {
   return { directory, client: new CodexClient(directory, binary) };
 }
 
+test('help chat sends screenshots as typed image inputs and preserves the restrictive runtime policy', async () => {
+  const { client, directory } = await fixture();
+  const screenshot = 'data:image/png;base64,iVBORw0KGgo=';
+  await client.run('normal', replyOutputSchema, () => {}, 'medium', false, undefined, { purpose: 'help', images: [screenshot] });
+  const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  const turn = requests.find((r: any) => r.method === 'turn/start').params;
+  assert.deepEqual(turn.input, [{ type: 'text', text: 'normal' }, { type: 'image', url: screenshot }]);
+  const thread = requests.find((r: any) => r.method === 'thread/start').params;
+  assert.match(thread.baseInstructions, /Modern Codex Editor/); assert.equal(thread.approvalPolicy, 'never');
+  assert.deepEqual(thread.dynamicTools, []); assert.deepEqual(thread.environments, []);
+  assert(Object.values(thread.config.mcp_servers).every((server: any) => !server.enabled));
+  await assertExited(directory);
+  await fs.writeFile(path.join(directory, 'text-only'), '');
+  await assert.rejects(client.run('normal', replyOutputSchema, () => {}, 'medium', false, undefined, { images: [screenshot] }), /does not accept images/);
+  const rejected = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  assert(!rejected.some((r: any) => r.method === 'turn/start')); await assertExited(directory);
+  await assert.rejects(client.run('normal', replyOutputSchema, () => {}, 'medium', false, undefined, { images: ['file:///private/screen.png'] }));
+});
+
 test('only attached reference dynamic tools run; wrong threads/turns/namespaces, repeated calls and approvals are refused', async () => {
   const { directory, client } = await fixture(), calls: string[] = []; let cancelled = false;
   const result = await client.run('reference-tools', replyOutputSchema, () => {}, 'medium', false, { tools: referenceTools, call: async name => { calls.push(name); return { text: 'Synthetic reference.' }; }, cancel: async () => { cancelled = true; } });

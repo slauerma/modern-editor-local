@@ -71,7 +71,7 @@ These commands install the locked dependencies, prepare esbuild and the Electron
 
 Open **Settings**, choose the paths described above, and run **Check setup**. Then choose **Try the working sample**. Compile it with **Command+T** or **Command+B**, inspect a comment, accept a suggestion, and Undo. Prepared comments and compilation need no Codex account. To check the AI connection, choose **Review with Codex** and request a short language review of the sample; this uses your account.
 
-Help, Settings and **Modern Codex Editor → About** show the editor version, **0.2.1** for this release. For setup troubleshooting, **Settings → Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It makes no AI request and excludes paper text, file paths and account details. The **Changelog** tab in Help summarizes the release.
+Help, Settings and **Modern Codex Editor → About** show the editor version, **0.3.0** for this release. For setup troubleshooting, **Settings → Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It makes no AI request and excludes paper text, file paths and account details. The **Changelog** tab in Help summarizes the release.
 
 Keep real papers in their own folders with their bibliography, figures, and local styles. Start with a copy while learning the editor. **Use this wording** changes a proposal; **Accept** changes the draft; **Save** writes the `.tex` file. The [user guide](USER_GUIDE.md) covers the next steps, and the [FAQ](FAQ.md) covers setup errors and recovery.
 

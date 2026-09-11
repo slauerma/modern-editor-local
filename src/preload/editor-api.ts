@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { EditorAPI } from '../shared/contracts.ts';
 const api: EditorAPI = {
+  chatState: scope => ipcRenderer.invoke('chat:state', scope),
+  clearChat: scope => ipcRenderer.invoke('chat:clear', scope),
+  retryChat: scope => ipcRenderer.invoke('chat:retry', scope),
+  previewChat: input => ipcRenderer.invoke('chat:preview', input),
+  sendChat: (scope, previewId) => ipcRenderer.invoke('codex:chat', { ...scope, previewId }),
   getSetup: () => ipcRenderer.invoke('setup:get'),
   chooseTool: tool => ipcRenderer.invoke('setup:choose', tool),
   saveSetup: settings => ipcRenderer.invoke('setup:save', settings),

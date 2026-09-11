@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 — Help me chat
+
+- Prominent review progress in the Comments pane, including section progress and pause/stop controls.
+- Hide Comments for more writing space; restore with the source-heading button or Command+2. The choice is saved per paper and background arrivals respect it.
+- A smaller secondary action for accepting without compilation; checked acceptance and its shortcuts remain primary.
+
+- A collapsible chat drawer for editor questions, errors, paper discussions and suggestions, available with Command+Shift+H.
+- Paste, drop or attach screenshots, with removable/enlargeable thumbnails and image inputs to Codex.
+- Inspectable context using bundled guides and the running version; optional paper, comment, diagnostics and reference reading.
+- Separate saved conversations for editor help and each paper. Explicit, undoable conversion of answers into review comments; manuscript edits still require acceptance.
+
 ## 0.2.1 — Independent tool setup
 
 - Save a Codex or TeX executable path even when the unchanged other tool is unavailable. Changed paths are still validated before saving.

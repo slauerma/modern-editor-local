@@ -22,6 +22,10 @@ If the error says **Codex review restrictions could not be verified**, no paper 
 
 If the error names an unsupported effort, choose an effort listed as supported in that error. If Fast mode was refused, turn **Fast mode** off in Actions or check the model's access before retrying. The app reports an unsupported setting instead of silently substituting one. Authentication details belong in your own CLI configuration, never in a paper or shared bug report.
 
+## Can I ask about an error or the paper with a screenshot?
+
+For questions about the editor, errors, or a paper, open **Help me** (**Command+Shift+H**). It supports screenshots and optional error context. See the [chat guide](USER_GUIDE.md#ask-help-me-about-the-editor-or-paper). The ordinary searchable **Help** works offline; **Help me** calls Codex when you send a question. In paper conversations it uses that paper's effort/Fast settings; editor-only help uses Standard effort with Fast mode off.
+
 ## What do effort, Fast mode, and answer length mean?
 
 **Actions → Codex effort** offers Quick (`low`), Standard (`medium`), Deep (`high`), and Max (`max`). These request different reasoning efforts from the configured model; they do not promise a fixed thinking time or answer length. The choice is saved per paper. **Think more** requests Deep/high effort, retaining Max if already selected.
@@ -156,6 +160,6 @@ If Save reports that version history needs attention, the source was saved but h
 
 ## How should I report a problem?
 
-Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **0.2.1**.
+Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **0.3.0**.
 
 Add the exact action and error, whether the synthetic sample reproduces it, your Node version (`node --version`), and the editor commit if known. A small synthetic `.tex` example is most useful. Inspect logs, screenshots, and `.modern-editor` records before sharing: they may contain source, discussion, or local paths. Do not include authentication tokens or account configuration. The [testing guide](../TESTING.md) separates offline checks from optional live Codex requests.

@@ -48,7 +48,7 @@ test('workspace settings are per root, do not Save source, and corrupt view stat
   const file = path.join(root, 'main.tex'), second = path.join(root, 'other.tex'); await fs.writeFile(file, 'Original'); await fs.writeFile(second, 'Other');
   const service = new ProjectService(path.join(root, 'runtime')), p = await service.open(file), view = defaultWorkspace();
   view.pdf = { page: 9, zoom: 1.5, scrollX: .2, scrollY: .6 }; view.followComments = false; view.reviewView = 'later';
-  view.source = { anchor: 3, head: 6, topLine: 4, offset: 17 }; view.toolbarCollapsed = true;
+  view.source = { anchor: 3, head: 6, topLine: 4, offset: 17 }; view.toolbarCollapsed = true; view.commentsHidden = true;
   await service.setWorkspace(p.id, view);
   assert.equal((await service.open(second)).workspace, undefined);
   const reopened = await service.open(file); assert.deepEqual(reopened.workspace, view); assert.equal(await fs.readFile(file, 'utf8'), 'Original');
@@ -172,4 +172,17 @@ test('PDF reveal leaves visible passages still, and rapid following retains only
   for (let n = 2; n <= 20; n++) tasks.replace(async () => { calls.push(n); });
   first.resolve(); await tick(); assert.deepEqual(calls, [1, 20]);
   const second = defer(); tasks.replace(() => second.promise); tasks.replace(async () => { calls.push(21); }); tasks.clear(); second.resolve(); await tick(); assert.deepEqual(calls, [1, 20]);
+});
+
+
+test('earlier workspace records default to visible comments without losing reading state', async () => {
+  const root = path.resolve('.test-runs', 'workspace-legacy-layout-' + randomUUID()); await fs.mkdir(root, { recursive: true });
+  const file = path.join(root, 'main.tex'); await fs.writeFile(file, 'Original source');
+  const service = new ProjectService(path.join(root, 'runtime')), paper = await service.open(file);
+  const home = await service.stateDirectory(paper.id), legacy = { ...defaultWorkspace(), pdfOpen: true } as Partial<ReturnType<typeof defaultWorkspace>>;
+  delete legacy.commentsHidden;
+  await fs.writeFile(path.join(home, 'workspace.json'), JSON.stringify({ rootFile: 'main.tex', workspace: legacy }));
+  const reopened = await service.open(file);
+  assert.equal(reopened.workspace?.commentsHidden, false); assert.equal(reopened.workspace?.pdfOpen, true);
+  assert.deepEqual(reopened.workspace?.paneSizes, legacy.paneSizes); assert.equal(await fs.readFile(file, 'utf8'), 'Original source');
 });

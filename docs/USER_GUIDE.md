@@ -132,7 +132,23 @@ Choose **Actions → New draft**, select a new `.tex` filename in your paper fol
 
 Supply the original definitions of custom mathematical commands. This action preserves the body and makes additions only, so conflicting packages or errors in the paragraph may need manual correction. It accepts up to 120,000 characters and has no unchecked acceptance option. **Cancel preamble** stops the attempt. See [where new drafts are saved](FAQ.md#where-is-my-new-draft).
 
+## Ask Help me about the editor or paper
+
+Open **Help me** in the top bar, or press **Command+Shift+H**. The drawer leaves your workspace in place. Closing it keeps the conversation and unsent question in this window. Select **Editor help** for program questions, even without an open paper, or **This paper** for its own conversation.
+
+Ask, for example, “Why did compilation fail?”, “Explain this lemma”, or “Make this suggestion more compact.” The installed editor version and bundled guides accompany every question. Expand **Context** to choose the current draft, selected passage, current comment, latest error/build details, or enabled reference folders. **Preview what is sent** shows the request; sent messages retain that context for inspection. The current draft can include unsaved changes. Long drafts include only their first 120,000 characters, with an explicit notice; select a later passage when needed.
+
+Paste a screenshot with **Command+V**, drop it into the question area, or choose **Attach screenshot…**. Click a thumbnail to enlarge it or × to remove it before sending. Up to three PNG/JPEG screenshots are accepted, each at most 2 MB and 4096 × 4096 pixels. The editor removes image metadata; inspect the visible image itself before sending. Screenshots are sent as images. Older screenshots remain in the saved chat but are not resent automatically—reattach one to ask about its pixels again.
+
+**Ask Codex** or **Command+Enter** sends the question. **Stop** cancels it. Only one Codex request runs at a time. Replies advise; they cannot execute repairs, compile, or change the manuscript. A proposed revision shows its original and replacement. **Turn into comment** adds it to the normal review queue with Undo; it does not accept or save source changes. If the source has changed since the answer, placement needs confirmation. For a general answer, select a passage first to turn it into a question. **Go to passage** and **Show in PDF** use a verified attached passage.
+
+Chats are saved in application storage, separately from source and review sidecars. Paper chats are keyed by the document's full path, so moving or renaming it starts a separate chat. **Clear chat…** deletes that conversation after confirmation. The chat is limited to 100 exchanges and 16 MB; reaching a limit stops new sends without deleting earlier exchanges. Copy anything you need before clearing. Up to 12 recent exchanges (48,000 characters) accompany follow-ups; the context preview shows omissions. Unsent questions are not saved across app restarts.
+
 ## Keyboard shortcuts on Mac
+
+To write with more room, click **×** in the Comments heading or turn off **Actions → Show comments**. The source and PDF expand into the available space. **Show comments** above the source, **Command+2**, or **View → Show/hide comments** brings the pane back. The choice is remembered for this paper; comments, discussions and pane widths are retained. A new review deliberately opens the pane, but background comments arriving after you hide it leave it hidden.
+
+During a review, a prominent progress card appears in the Comments pane. Section reviews show the current section and completed-section count, with Pause/Continue and Stop. Existing comments remain usable while later sections are prepared. **Accept without compiling** is the smaller text action beneath Accept/Reject/Skip; it keeps the same placement guards and Undo behavior.
 
 The buttons visibly show **Shift+A** for checked acceptance, **Shift+R** for rejection and **Shift+S** for skipping. These review shortcuts work while focus is in the comments controls, outside typing fields. Click a comment control such as **Next** to return focus there. They do not intercept uppercase letters in the source, replacement, note, or Find field.
 
@@ -152,6 +168,8 @@ The buttons visibly show **Shift+A** for checked acceptance, **Shift+R** for rej
 | **Command+1**, **Command+2** | Focus source / comments |
 | **Command+Shift+P** | Show/hide PDF |
 | **Command+Shift+M** | Show/hide toolbar |
+| **Command+Shift+H** | Open Help me chat |
+| **Command+Enter** in Help me | Send the question |
 | **Command+,** | Settings |
 
 While typing in a text field, Undo follows that field's text history. The native menus also list application shortcuts. If the toolbar is hidden, **Show controls ▾** brings it back.
@@ -162,4 +180,4 @@ Open **Actions → Settings and Check setup…** or press **Command+,** to choos
 
 **Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It excludes manuscript text, file paths and account details. Expand **Copied setup details** to inspect the copied summary.
 
-**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **0.2.1**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
+**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **0.3.0**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.

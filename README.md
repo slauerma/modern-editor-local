@@ -2,7 +2,7 @@
 
 A local desktop editor for LaTeX source, compiled PDF reading, and Codex-assisted review. It uses Electron, React, CodeMirror, and PDF.js.
 
-**Version 0.2.1.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
+**Version 0.3.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
 
 This is a personal project, kept lean for individual use. **macOS is the currently validated platform. Windows is not yet supported.** The repository contains development source; there is no packaged application or installer.
 
@@ -17,7 +17,7 @@ These Markdown guides can be read locally without an account or internet connect
 
 ## Overview
 
-Open a root `.tex` file, review a selection or document, discuss comments, and inspect proposed replacements before applying them. The editor can compile a candidate before accepting it, preserve the last successful PDF after a failed compile, compare saved versions, and export source recovery to a new file. Discussion replies show their proposed source changes beside the explanation. Scroll continuously through the PDF or search its text. You can also convert outside feedback into comments and attach reference files or folders that Codex can consult during reviews and discussions.
+Open a root `.tex` file, review a selection or document, discuss comments, and inspect proposed replacements before applying them. The editor can compile a candidate before accepting it, preserve the last successful PDF after a failed compile, compare saved versions, and export source recovery to a new file. Discussion replies show their proposed source changes beside the explanation. The **Help me** drawer answers editor and paper questions with optional screenshots and inspectable context. Scroll continuously through the PDF or search its text. You can also convert outside feedback into comments and attach reference files or folders that Codex can consult during reviews and discussions.
 
 [Watch the short demonstration](demo/modern-editor-demo.mp4) · [Demo credits](demo/README.md).
 

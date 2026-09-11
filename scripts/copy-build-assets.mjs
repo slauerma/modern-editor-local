@@ -5,6 +5,8 @@ import path from 'node:path';
 // Runtime assets are explicit: Git's ignore rules do not filter filesystem copies.
 // In particular, opening a fixture must never put its local review into a build.
 const assets = [
+  ...['USER_GUIDE.md', 'SETUP.md', 'FAQ.md'].map(name => [`docs/${name}`, `help/${name}`]),
+  ['CHANGELOG.md', 'help/CHANGELOG.md'],
   ['fixtures/sample/main.tex', 'fixtures/sample/main.tex'],
   ['fixtures/sample/review.json', 'fixtures/sample/review.json'],
   ['resources/tex-support/tcilatex.tex', 'tex-support/tcilatex.tex'],
@@ -42,7 +44,7 @@ export async function copyBuildAssets(root = process.cwd()) {
   if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('The build output must be a regular directory.');
   // Remove stale generated copies too: filtering this build alone would retain
   // private sidecars copied by an earlier version of the build script.
-  for (const name of ['fixtures', 'tex-support', 'licenses']) await rm(path.join(dist, name), { recursive: true, force: true });
+  for (const name of ['fixtures', 'tex-support', 'licenses', 'help']) await rm(path.join(dist, name), { recursive: true, force: true });
   for (const [source, destination] of assets) {
     const target = path.join(dist, destination);
     await mkdir(path.dirname(target), { recursive: true });

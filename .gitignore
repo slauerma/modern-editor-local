@@ -30,6 +30,8 @@
 !/scripts/generate-compile-fixtures.mjs
 !/scripts/check-discussion-proposals.mjs
 !/scripts/check-codex-isolation.mjs
+!/scripts/check-help-chat.mjs
+!/scripts/check-chat-images-protocol.mjs
 !/scripts/collect-third-party-notices.mjs
 !/fixtures/
 !/resources/

@@ -20,7 +20,7 @@ function inline(value: string): ReactNode[] {
     return <span key={index}>{link ? link[1] : part}</span>;
   });
 }
-function MarkdownText({ text }: { text: string }) {
+export function MarkdownText({ text }: { text: string }) {
   const lines = text.split('\n'), blocks: ReactNode[] = []; let index = 0;
   while (index < lines.length) {
     const line = lines[index], key = index;

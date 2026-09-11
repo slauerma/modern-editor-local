@@ -49,13 +49,13 @@ export const workspaceSchema = z.object({
   schemaVersion: z.literal(1),
   source: z.object({ anchor: z.number().int().min(0).max(2000000), head: z.number().int().min(0).max(2000000), topLine: z.number().int().min(1).max(2000001), offset: z.number().finite().min(-2000).max(10000000) }),
   pdf: z.object({ page: z.number().int().min(1).max(100000), zoom: z.union([z.literal(1), z.literal(1.25), z.literal(1.5), z.literal(2)]), scrollX: fractionSchema, scrollY: fractionSchema, flow: z.boolean().optional() }),
-  pdfBuildId: z.string().uuid().nullable(), pdfOpen: z.boolean(),
+  pdfBuildId: z.string().uuid().nullable(), pdfOpen: z.boolean(), commentsHidden: z.boolean().default(false),
   paneSizes: z.tuple([fractionSchema, fractionSchema, fractionSchema]).refine(v => v.every(n => n >= .05) && Math.abs(v.reduce((a, b) => a + b, 0) - 1) < .001, 'Invalid pane proportions'),
   toolbarCollapsed: z.boolean(), followComments: z.boolean(), reviewView: z.enum(['pending', 'later', 'history'])
 });
 export type WorkspaceState = z.infer<typeof workspaceSchema>;
 export function defaultWorkspace(): WorkspaceState {
-  return { schemaVersion: 1, source: { anchor: 0, head: 0, topLine: 1, offset: 0 }, pdf: { page: 1, zoom: 1, scrollX: 0, scrollY: 0 }, pdfBuildId: null, pdfOpen: false, paneSizes: [.28, .33, .39], toolbarCollapsed: false, followComments: true, reviewView: 'pending' };
+  return { schemaVersion: 1, source: { anchor: 0, head: 0, topLine: 1, offset: 0 }, pdf: { page: 1, zoom: 1, scrollX: 0, scrollY: 0 }, pdfBuildId: null, pdfOpen: false, commentsHidden: false, paneSizes: [.28, .33, .39], toolbarCollapsed: false, followComments: true, reviewView: 'pending' };
 }
 export const effortSchema = z.enum(['low', 'medium', 'high', 'max']);
 export type Effort = z.infer<typeof effortSchema>;
@@ -90,6 +90,11 @@ export const resultSchema = z.discriminatedUnion('kind', [
 export type WaitingResult = z.infer<typeof resultSchema>;
 export type SourceRecovery = { name: string; choices: { label: string; text: string }[]; notices: string[] };
 export type EditorAPI = {
+  chatState(scope: import('./help-chat.ts').ChatScope): Promise<import('./help-chat.ts').ChatState>;
+  clearChat(scope: import('./help-chat.ts').ChatScope): Promise<void>;
+  retryChat(scope: import('./help-chat.ts').ChatScope): Promise<import('./help-chat.ts').ChatState>;
+  previewChat(input: import('./help-chat.ts').ChatInput): Promise<import('./help-chat.ts').ChatPreview>;
+  sendChat(scope: import('./help-chat.ts').ChatScope, previewId: string): Promise<import('./help-chat.ts').ChatTurn>;
   openProject(): Promise<Project | null>;
   resumeProject(): Promise<Project | null>;
   openDemo(): Promise<Project>;

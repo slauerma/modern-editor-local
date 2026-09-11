@@ -52,7 +52,7 @@ input.on('line', line => {
     if(has('paginate')){send({id,result:{data:params.cursor?data.slice(1):data.slice(0,1),nextCursor:params.cursor?null:'second'}});return;}
     send({id,result:{data,nextCursor:null}});
   }
-  if (method === 'model/list') send({ id, result: { data: [{ id: 'fixture-model', model: 'fixture-model', supportedReasoningEfforts: (fs.existsSync('only-medium') ? ['medium'] : ['low', 'medium', 'high', 'max']).map(reasoningEffort => ({ reasoningEffort })), serviceTiers: fs.existsSync('no-fast') ? [] : [{ id: 'priority' }] }], nextCursor: null } });
+  if (method === 'model/list') send({ id, result: { data: [{ id: 'fixture-model', model: 'fixture-model', inputModalities: has('text-only') ? ['text'] : ['text', 'image'], supportedReasoningEfforts: (fs.existsSync('only-medium') ? ['medium'] : ['low', 'medium', 'high', 'max']).map(reasoningEffort => ({ reasoningEffort })), serviceTiers: fs.existsSync('no-fast') ? [] : [{ id: 'priority' }] }], nextCursor: null } });
   if (method === 'turn/start') {
     const mode = params.input[0].text;
     const started = { id, result: { turn: { id: 'turn-1', status: 'inProgress' } } };

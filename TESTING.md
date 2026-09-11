@@ -63,10 +63,18 @@ After `npm run build` and `npm start`, choose **Try the working sample**. It has
 5. Try **Accept without compiling** for an individual suggestion and confirm that the PDF is marked older. Compile again, then use Source/PDF navigation.
 6. Put one pending comment in Later. Use **More → Dismiss pending comments**, inspect History, and Undo once. Confirm the pending batch returns, Later remains set, and source text and discussions are unchanged.
 7. Add an author question to a source selection and rewrite that passage. Use **Link question to current selection** and verify that the card retains Earlier wording beside the Linked current passage. Undo the link and confirm the source stays unchanged by linking. Replacement suggestions must still require exact original text for reattachment.
-8. Open Help and Settings, verify version **0.2.1**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
+8. Open Help and Settings, verify version **0.3.0**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
 9. Save, compare with the retained original, and reopen the sample to check saved comments and source. Test Undo before quitting; its history is session-only.
 
 This check needs the local TeX toolchain but no model/account call. Source remains in the generated sample folder. See the [user guide](docs/USER_GUIDE.md) for the controls and [FAQ](docs/FAQ.md) for recovery.
+
+### Help me chat checks
+
+After building, `node scripts/check-help-chat.mjs` runs an isolated Electron check with synthetic papers, screenshots and controlled replies. If Playwright is installed elsewhere, pass `--playwright-package /absolute/path/to/playwright/package.json`. It checks context/version, image attachment and normalization, cancellation/retry, proposal conversion with Undo, changed-source guards, drawer layout, and conversation persistence. It uses a simulated paste event; physical operating-system clipboard delivery is a separate manual check. It makes no model request.
+
+`node --experimental-strip-types scripts/check-chat-images-protocol.mjs /absolute/path/to/codex` uses the supported installed Codex runtime and a synthetic HTTP provider on localhost. It verifies that screenshot bytes reach the provider as an image input and that no account credentials accompany the request. The server replies with a fixed answer; this establishes transport, not visual understanding. Both checks put local results in ignored `.test-runs/` folders and may need permission to launch Electron or listen on localhost.
+
+For a manual chat smoke check, paste/drop an image, inspect its thumbnail and context, ask about a synthetic error, then request a revision to a selected passage. Verify that **Turn into comment** leaves the source unchanged and that closing/reopening the drawer preserves the conversation. Live answer quality requires an explicitly sent account request.
 
 ### Optional live Codex check — uses your account
 

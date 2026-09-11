@@ -18,6 +18,10 @@ Keep personal papers outside the editor checkout. Sharing a paper folder can als
 
 ## Codex requests
 
+**Help me** saves questions, replies, included context and screenshots in application storage, separately for editor help and each document path. It can therefore contain manuscript text, errors, visible account details, or private material shown in an image. **Clear chat…** removes the selected conversation. Clearing it does not undo content already sent to the configured service, remove comments explicitly created from replies, or clear the separate **Sources used** records.
+
+Sending a Help me question includes bundled guides, the installed version, recent exchanges, and the context you select. Paper source, current comment, error/build details and read-only reference access have separate controls. Editor-only help excludes automatic paper source and references; screenshots and error details you explicitly include can still contain paper information. Attached PNG/JPEG images are decoded and re-encoded locally to drop metadata, then sent as image inputs to Codex. Visible image content is preserved. Previous images are retained locally but are not automatically resent. Inspect **Preview what is sent** and the thumbnails before sending. Chat itself cannot edit files or run repairs; a revision must first be added to the review queue and then accepted.
+
 AI actions launch the external Codex CLI with its existing sign-in and model configuration. Submitted text can leave the machine through that service. The editor sends structured text according to the action:
 
 - A review includes the selected passage, bounded nearby text and preamble, review instructions, and saved paper instructions.
