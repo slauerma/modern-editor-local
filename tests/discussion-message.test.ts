@@ -53,3 +53,8 @@ test('long multiline alternatives are rendered in full without truncating the su
   const html = render(message(replacement));
   assert(html.includes(replacement));
 });
+
+test('an alternative for earlier question wording stays visible but cannot replace the newly linked passage', () => {
+  const html = render({ ...message('Earlier alternative.'), proposalOriginal: 'Earlier quote.' }, { ...comment, original: 'Newly linked quote.' });
+  assert.match(html, /Earlier alternative\./); assert.match(html, /earlier passage/); assert.match(html, /button disabled=""/);
+});

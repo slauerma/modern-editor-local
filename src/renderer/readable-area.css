@@ -1,0 +1,5 @@
+.readable-area { min-width:0; }
+.readable-area.expanded > pre,.readable-area.expanded > p { max-height:none; overflow:visible; }
+.readable-area.expanded > textarea { height:auto; max-height:none; field-sizing:content; overflow:hidden; }
+.readable-controls { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:4px 0 10px; color:#627568; font-size:11px; }
+.readable-controls button { font-size:11px; flex-shrink:0; }

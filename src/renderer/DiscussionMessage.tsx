@@ -9,6 +9,7 @@ export function DiscussionMessage({ message, comment, onUse }: {
   onUse: (proposal: Proposal) => void;
 }) {
   const proposal = message.proposal;
+  const earlierPassage = message.proposalOriginal !== undefined && message.proposalOriginal !== comment.original;
   const current = proposal && comment.decision === 'open'
     && proposal.replacement === (comment.draft ?? comment.replacement)
     && proposal.packages.length === comment.packages.length
@@ -25,7 +26,8 @@ export function DiscussionMessage({ message, comment, onUse }: {
         <div>Requested packages (added if missing when accepted)</div>
         <pre tabIndex={0} aria-label="Suggested packages">{proposal.packages.map(name => `\\usepackage{${name}}`).join('\n')}</pre>
       </div>}
-      <button disabled={comment.decision !== 'open' || !!current} onClick={() => onUse(proposal)}>Use this wording</button>
+      <button disabled={comment.decision !== 'open' || !!current || earlierPassage} onClick={() => { if (!earlierPassage) onUse(proposal); }}>Use this wording</button>
+      {earlierPassage && <p>This alternative refers to the earlier passage. Ask Codex for wording for the newly linked text.</p>}
       {current && <span className="reply-current">Matches the current proposal</span>}
     </div>}
   </div>;

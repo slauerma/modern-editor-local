@@ -1,18 +1,20 @@
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, execFile, type ChildProcess } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { Build, Engine, PdfRequest, PdfLocation } from '../shared/contracts.ts';
 import { compiledPosition, syncTexLocation } from './pdf-navigation.ts';
 import type { ProjectService } from './project-service.ts';
 import { digest, readRegularFile, readJSON, privateDirectory, writeJSON } from './files.ts';
 import { classifyBuildLog } from './diagnostics.ts';
-import { compilerEnvironment, toolchainPaths, recordedInputs, type RecordedInput } from './compile-inputs.ts';
+import { compilerEnvironment, toolchainPaths, recordedInputs, within, type RecordedInput } from './compile-inputs.ts';
 import { rememberPdf, restorePdf } from './pdf-workspace-cache.ts';
+import { planBuildInputs, readBuildInput, type BuildInputLimits, type BuildInputPlan } from './build-input-plan.ts';
 
 type Input = { relative: string; hash: string };
-type Record = { build: Build; projectId: string; text: string; inputs: Input[]; directory: string; pdf: string; external: RecordedInput[]; tciSupport?: { path: string; hash: string }; restored?: boolean };
-const allowed = new Set(['.tex', '.bib', '.bst', '.cls', '.sty', '.png', '.jpg', '.jpeg', '.pdf', '.eps', '.svg', '.csv', '.dat', '.txt', '.bbl', '.bb', '.def', '.otf', '.ttf', '.tikz', '.pgf']);
+type Record = { build: Build; projectId: string; text: string; inputs: Input[]; directory: string; pdf: string; external: RecordedInput[]; tciSupport?: { path: string; hash: string }; restored?: boolean; selectedPaths?: string[]; limits?: BuildInputLimits };
+const execute = promisify(execFile);
 export class CompileService {
   private running: { child: ChildProcess; cancelled: boolean } | null = null;
   private busy = false;
@@ -23,28 +25,52 @@ export class CompileService {
   private preparation: AbortController | null = null;
   readonly projects: ProjectService;
   readonly cache: string;
-  readonly latexmk: string;
+  private executable: string;
+  get latexmk() { return this.executable; }
+  get isBusy() { return this.busy || this.navigation.size > 0; }
+  setLatexmk(latexmk: string) {
+    if (this.isBusy) throw new Error('Finish compilation and PDF navigation before changing TeX executables.');
+    this.executable = latexmk;
+  }
   readonly timeoutMs: number;
   readonly tciLatexPath: string | undefined;
-  constructor(projects: ProjectService, cache: string, latexmk = '/Library/TeX/texbin/latexmk', timeoutMs = 120000, tciLatexPath?: string) { this.projects = projects; this.cache = cache; this.latexmk = latexmk; this.timeoutMs = timeoutMs; this.tciLatexPath = tciLatexPath; }
-  private async inputFiles(rootDir: string, rootName: string, checkCancellation = false) {
-    const files: string[] = []; let total = 0;
-    const walk = async (relative = '') => {
-      if (checkCancellation && this.cancelled) throw new Error('Compilation cancelled.');
-      for (const entry of await fs.readdir(path.join(rootDir, relative), { withFileTypes: true })) {
-        if (entry.name.startsWith('.') || ['node_modules', 'dist', 'build', 'output', 'out', 'releases'].includes(entry.name)) continue;
-        const rel = path.join(relative, entry.name), source = path.join(rootDir, rel);
-        if (entry.isSymbolicLink()) { if (allowed.has(path.extname(entry.name).toLowerCase())) throw new Error(`The snapshot cannot include the linked resource ${rel}. Use a self-contained project copy.`); continue; }
-        if (entry.isDirectory()) { await walk(rel); continue; }
-        if (!entry.isFile() || !allowed.has(path.extname(entry.name).toLowerCase()) || rel === rootName.replace(/\.tex$/i, '.pdf')) continue;
-        total += (await fs.stat(source)).size;
-        if (total > 200 * 1024 * 1024 || files.length >= 2000) throw new Error('Choose a smaller, self-contained paper folder (maximum 200 MB / 2,000 inputs in this version).');
-        files.push(rel);
+  constructor(projects: ProjectService, cache: string, latexmk = '/Library/TeX/texbin/latexmk', timeoutMs = 120000, tciLatexPath?: string) { this.projects = projects; this.cache = cache; this.executable = latexmk; this.timeoutMs = timeoutMs; this.tciLatexPath = tciLatexPath; }
+  private async prepareInputs(projectId: string, text: string, selectedPaths?: string[], limits?: BuildInputLimits, signal = new AbortController().signal): Promise<BuildInputPlan> {
+    const project = this.projects.get(projectId), texCache = path.join(this.cache, 'texmf-cache');
+    const expectedIdentity = await this.projects.assertDirectory(projectId);
+    const env = compilerEnvironment(this.latexmk, texCache), known = new Map<string, Promise<boolean>>();
+    let toolchain: ReturnType<typeof toolchainPaths> | undefined;
+    const standardFileExists = async (name: string) => {
+      if (!/^[\p{L}\p{N}_][\p{L}\p{N}_.+-]*$/u.test(name)) return false;
+      if (!known.has(name)) {
+        if (known.size >= 256) return false;
+        known.set(name, (async () => {
+          if (name.toLowerCase() === 'tcilatex.tex' && this.tciLatexPath) {
+            try { const stat = await fs.lstat(this.tciLatexPath); if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= 8_000_000) return true; } catch {}
+          }
+          try {
+            toolchain ??= toolchainPaths(this.latexmk, env, signal);
+            const roots = await toolchain;
+            const result = await execute(path.join(path.dirname(this.latexmk), 'kpsewhich'), [name], { env, signal, timeout: 5000, maxBuffer: 16_000 });
+            const actual = await fs.realpath(result.stdout.trim());
+            return roots.files.includes(actual) || roots.directories.some(directory => within(directory, actual));
+          } catch { if (signal.aborted) throw new Error('Compilation cancelled.'); return false; }
+        })());
       }
+      return known.get(name)!;
     };
-    await walk(); return files.sort();
+    return planBuildInputs({ rootDir: path.dirname(project.path), rootName: project.name, text, selectedPaths, limits, signal, standardFileExists, expectedIdentity });
   }
-  async compile(projectId: string, text: string, engine: Engine): Promise<Build> {
+  async planInputs(projectId: string, text: string, selectedPaths?: string[], limits?: BuildInputLimits): Promise<BuildInputPlan> {
+    if (this.busy) throw new Error('Finish compilation before preparing a file selection.');
+    if (text.length > 2_000_000) throw new Error('Source exceeds the supported size.');
+    this.busy = true; this.cancelled = false; this.preparation = new AbortController();
+    try {
+      await this.projects.assertUnchanged(projectId);
+      return await this.prepareInputs(projectId, text, selectedPaths, limits, this.preparation.signal);
+    } finally { this.preparation = null; this.busy = false; this.stopped.splice(0).forEach(resolve => resolve()); }
+  }
+  async compile(projectId: string, text: string, engine: Engine, selectedPaths?: string[], limits?: BuildInputLimits): Promise<Build> {
     if (this.busy) throw new Error('A compilation is already running.');
     if (text.length > 2000000) throw new Error('Source exceeds the supported size.');
     this.busy = true;
@@ -53,21 +79,35 @@ export class CompileService {
     try {
       const project = this.projects.get(projectId);
       await this.projects.assertUnchanged(projectId);
+      const expectedIdentity = await this.projects.assertDirectory(projectId);
+      const preparationStarted = Date.now();
+      const plan = await this.prepareInputs(projectId, text, selectedPaths, limits, this.preparation.signal);
+      if (plan.status === 'needs-selection') {
+        return { id: randomUUID(), engine, success: false, clean: false, dependenciesVerified: false, sourceHash: digest(text),
+          diagnostics: [{ severity: 'error', message: plan.reason }, ...plan.issues.map(message => ({ severity: 'warning' as const, message }))],
+          log: [plan.reason, ...plan.issues].join('\n'), elapsedMs: Date.now() - preparationStarted, inputPreparation: plan };
+      }
       const id = randomUUID(), directory = path.join(this.cache, id);
       await fs.mkdir(this.cache, { recursive: true, mode: 0o700 });
       await privateDirectory(this.cache, id);
       await writeJSON(path.join(directory, '.editor-build.json'), { schemaVersion: 1, id }, 1000);
       const inputs: Input[] = [];
       const rootDir = path.dirname(project.path);
-      for (const rel of await this.inputFiles(rootDir, project.name, true)) {
+      let copiedBytes = 0;
+      for (const input of plan.files) {
         if (this.cancelled) throw new Error('Compilation cancelled.');
-        const bytes = rel === project.name ? Buffer.from(text) : await readRegularFile(path.join(rootDir, rel), 200 * 1024 * 1024);
+        const rel = input.relative;
+        const bytes = rel === project.name ? Buffer.from(text) : await readBuildInput(rootDir, rel, plan.limits.maxBytes, expectedIdentity);
+        copiedBytes += bytes.length;
+        if (bytes.length !== input.size || input.hash && digest(bytes) !== input.hash) throw new Error(`Build input changed after dependency planning: ${rel}. Compile again.`);
+        if (copiedBytes > plan.limits.maxBytes) throw new Error('Build inputs grew beyond the approved size limit. Compile again.');
         const target = path.join(directory, rel);
         await fs.mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
         await fs.writeFile(target, bytes, { mode: 0o600, flag: 'wx' });
         inputs.push({ relative: rel, hash: digest(bytes) });
       }
       if (this.cancelled) throw new Error('Compilation cancelled.');
+      await this.projects.assertDirectory(projectId);
       if (!inputs.some(i => i.relative === project.name)) throw new Error('The root source was not included in the snapshot.');
       // SWP 5.5 support belongs only in the build snapshot. A paper's own
       // root-level copy always wins, including case variants on macOS.
@@ -91,6 +131,7 @@ export class CompileService {
       env.openin_any = engine === 'lualatex' ? 'r' : 'p';
       const toolchain = await toolchainPaths(this.latexmk, env, this.preparation.signal).catch(() => ({ directories: [], files: [] }));
       if (this.cancelled) throw new Error('Compilation cancelled.');
+      await this.projects.assertDirectory(projectId);
       const child = spawn(this.latexmk, args, { cwd: directory, shell: false, detached: process.platform !== 'win32', env, stdio: ['ignore', 'pipe', 'pipe'] });
       const running = { child, cancelled: false, timedOut: false }; this.running = running;
       // Decode streams incrementally: a Unicode character can span two output chunks.
@@ -118,13 +159,15 @@ export class CompileService {
         for (const input of inputs.filter(i => !i.relative.endsWith('.bbl'))) {
           if (digest(await readRegularFile(path.join(directory, input.relative), 200 * 1024 * 1024)) !== input.hash) throw new Error(`Compilation changed the copied input ${input.relative}.`);
         }
-        dependenciesVerified = true;
+        dependenciesVerified = plan.unresolvedIssues.length === 0;
+        if (plan.unresolvedIssues.length) diagnostics.unshift({ severity: 'warning', message: 'This explicitly selected preview has unresolved dependency commands. Its inputs cannot support checked acceptance. ' + plan.unresolvedIssues.slice(0, 3).join(' ') });
       } catch (error) { diagnostics.unshift({ severity: 'warning', message: `PDF dependencies are not verified. ${String(error)}` }); }
       if (running.cancelled || this.cancelled) diagnostics.unshift({ severity: 'error', message: running.timedOut ? 'Compilation exceeded its time limit and was stopped. Check the engine and build log.' : 'Compilation cancelled.' });
       const success = code === 0 && validPdf && !running.cancelled && !this.cancelled;
       if (!success && !diagnostics.some(d => d.severity === 'error')) diagnostics.push({ severity: 'error', message: 'LaTeX did not produce a successful PDF. See the build log.' });
-      const build: Build = { id, engine, success, clean: success && !blockingWarnings && dependenciesVerified && logReadable, dependenciesVerified, sourceHash: digest(text), diagnostics: diagnostics.slice(0, 50), log: output.slice(-30000), elapsedMs: Date.now() - started };
-      this.records.set(id, { build, projectId, text, inputs, directory, pdf, tciSupport, external });
+      const build: Build = { id, engine, success, clean: success && !blockingWarnings && dependenciesVerified && logReadable, dependenciesVerified, sourceHash: digest(text), diagnostics: diagnostics.slice(0, 50), log: output.slice(-30000), elapsedMs: Date.now() - started,
+        inputSelection: { mode: plan.mode, fileCount: plan.files.length, totalBytes: plan.totalBytes, ...(plan.unresolvedIssues.length ? { unresolvedIssues: plan.unresolvedIssues } : {}) } };
+      this.records.set(id, { build, projectId, text, inputs, directory, pdf, tciSupport, external, selectedPaths: selectedPaths ? plan.files.map(file => file.relative) : undefined, limits });
       // This optional snapshot is only for reopening the reader. Failure does
       // not turn a valid compilation into a failed source edit.
       if (success) try { await rememberPdf(directory, project.path, build); }
@@ -149,12 +192,15 @@ export class CompileService {
     try {
       const project = this.projects.get(projectId);
       await this.projects.assertUnchanged(projectId);
+      const expectedIdentity = await this.projects.assertDirectory(projectId);
       if (record.tciSupport && digest(await readRegularFile(record.tciSupport.path, 8000000)) !== record.tciSupport.hash) return false;
       for (const input of record.external) if (digest(await readRegularFile(input.path, 64000000)) !== input.hash) return false;
-      const names = await this.inputFiles(path.dirname(project.path), project.name);
+      const plan = await this.planInputs(projectId, text, record.selectedPaths, record.limits);
+      if (plan.status !== 'ready' || plan.unresolvedIssues.length) return false;
+      const names = plan.files.map(file => file.relative);
       if (JSON.stringify(names) !== JSON.stringify(record.inputs.map(input => input.relative))) return false;
       for (const input of record.inputs) {
-        const hash = input.relative === project.name ? digest(text) : digest(await readRegularFile(path.join(path.dirname(project.path), input.relative), 200 * 1024 * 1024));
+        const hash = input.relative === project.name ? digest(text) : digest(await readBuildInput(path.dirname(project.path), input.relative, 200_000_000, expectedIdentity));
         if (hash !== input.hash) return false;
       }
       return true;

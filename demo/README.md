@@ -1,6 +1,6 @@
 # Demo
 
-[Watch the demonstration](modern-editor-demo.mp4).
+[Watch the demonstration](modern-editor-demo.mp4). Some controls and labels have changed since this recording.
 
 Demo narration generated with ElevenLabs. Background music created for this demonstration.
 

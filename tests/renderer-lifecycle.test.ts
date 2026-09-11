@@ -13,13 +13,15 @@ import { WorkGate } from '../src/renderer/work-gate.ts';
 import { LatestTask } from '../src/renderer/workspace-state.ts';
 import { SectionReview } from '../src/shared/section-review.ts';
 import * as contextTools from '../src/shared/codex-context.ts';
+import { attachmentPromptContext } from '../src/shared/attachments.ts';
+import * as acceptanceTools from '../src/shared/acceptance.ts';
 import * as preambleTools from '../src/shared/fragment-preamble.ts';
 
 // Exercise the actual App function bodies and its actual transaction filter with
 // real CodeMirror/Zod, replacing only DOM painting and the narrow IPC boundary.
 const source = await fs.readFile('src/renderer/App.tsx', 'utf8');
 const syntax = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf'];
+const names = ['input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf'];
 const extracted: string[] = []; let filter = '', bindings = '';
 function visit(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? '')) extracted.push(node.getText(syntax));
@@ -54,18 +56,22 @@ function fixture(text = quote) {
     finishClose: async () => { states.events.push('closed'); },
   };
   const scope: any = {
-    EditorState, Transaction, isolateHistory, undo, redo, defaultKeymap, historyKeymap, commentSchema, crypto, defaultWorkspace, workspaceSchema, ...reviewTools, ...stateTools, ...preambleTools, ...contextTools,
+    EditorState, Transaction, isolateHistory, undo, redo, attachmentPromptContext, defaultKeymap, historyKeymap, commentSchema, crypto, defaultWorkspace, workspaceSchema, ...reviewTools, ...stateTools, ...preambleTools, ...contextTools, ...acceptanceTools,
     document: { body: {}, activeElement: {} }, requestAnimationFrame: (callback: () => void) => { states.frame = callback; }, setCompareOpen: () => {},
     workspaceValues: { current: defaultWorkspace() }, restoredSource: { current: null }, laterRef: { current: false }, discussionLock: { current: false }, followPending: { current: null }, followTasks: { current: new LatestTask() },
     sourcePosition: () => defaultWorkspace().source,
-    preambleRun: { current: null }, sectionRun: { current: null }, comparisonPosition: { current: {} },
+    preambleRun: { current: null }, buildRun: { current: null }, sectionRun: { current: null }, comparisonPosition: { current: {} },
+    warningAcceptance: null,
+    approvedBuildInputs: { current: undefined }, buildHelpEpoch: { current: 0 }, buildRetry: null,
     displayedBuild: { current: null }, pdfRequest: { current: 0 }, keyboardReviewFocus: { current: null },
     gate: { current: gate }, window: { editor: api }, view: { current: editor }, projectRef: { current: p }, reviewRef: { current: review }, activeRef: { current: c.id }, historyRef: { current: false }, active: c,
-    viewCandidate: false, busy: false, aiBusy: false, effortBusy: false, engine: 'pdflatex', errorText: (e: Error) => e.message,
+    attachmentPreview: null, attachmentBusy: false, attachmentPending: false, codexCancelEpoch: { current: 0 }, viewCandidate: false, busy: false, aiBusy: false, effortBusy: false, engine: 'pdflatex', errorText: (e: Error) => e.message,
     setError: (e: string) => states.errors.push(e), setNotice: (v: string) => { states.notice = v; }, setStatus: (v: string) => { states.status = v; },
     choose: (v: string) => { scope.activeRef.current = v; }, move: () => {},
   };
   for (const setter of ['CandidatePosition', 'DiscussionBusy', 'LaterOnly', 'PaneSizes', 'ToolbarCollapsed', 'FollowComments', 'Busy', 'AiBusy', 'PreambleBusy', 'LastAttempt', 'Build', 'PdfText', 'DependencyStale', 'PdfOpen', 'PdfJump', 'PdfNavigation', 'PdfLocating', 'ViewCandidate', 'CandidateBuild', 'ShowHistory', 'NotesOpen', 'Project', 'CompareOpen', 'Baseline', 'Effort', 'FastMode', 'Engine', 'Text', 'SavedText', 'PdfPosition', 'FindOpen', 'FindNotice', 'ActiveId', 'PaperInstructions', 'SavedInstructions', 'SectionProgress', 'ContextOpen', 'OverviewOpen', 'InboxOpen', 'ContextText']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  for (const setter of ['BuildRetry', 'ReferenceState', 'SourcesOpen']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  scope.setWarningAcceptance = (value: any) => { states.WarningAcceptance = value; scope.warningAcceptance = value; };
   scope.workspaceWriter = { current: new RecoveryWriter<any>(async value => { states.workspace = value; }, () => {}) };
   scope.writer = { current: new RecoveryWriter<any>((value: any) => api.persist(value), (e: unknown) => { throw e; }) };
   editor.state = editor.state.update({ effects: StateEffect.appendConfig.of(makeFilter(scope)) }).state;
@@ -120,6 +126,57 @@ test('ordinary Compile validates its completed snapshot and exposes a stale PDF 
   await f.scope.compile();
   assert.equal(f.states.validations.length, 1); assert.equal(f.states.Build.id, 'build-1'); assert.equal(f.states.DependencyStale, true);
   assert.match(f.states.status, /inputs changed/); assert.equal(f.editor.state.doc.toString(), quote);
+});
+
+test('dependency preparation never applies a checked suggestion; stale help and cancelled previews cannot continue', async () => {
+  const f = fixture(), preparation = { status: 'needs-selection', reason: 'Computed input needs a choice', issues: ['Computed input'], requiredPaths: ['main.tex'], limits: { maxBytes: 50_000_000, maxFiles: 500 }, inventory: { paths: [], truncated: false, visitedEntries: 0 } };
+  f.api.compile = async () => ({ id: 'preparation', success: false, clean: false, inputPreparation: preparation });
+  await f.scope.compile('c1');
+  assert.equal(f.editor.state.doc.toString(), quote); assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'open');
+  f.scope.buildRetry = f.states.BuildRetry; assert.equal(f.scope.buildRetry.acceptId, 'c1');
+  let calls = 0;
+  f.api.previewBuildHelp = async () => { calls++; return {}; };
+  f.editor.dispatch({ changes: { from: 0, insert: 'Changed ' } });
+  await assert.rejects(f.scope.buildAssistance(), /changed/); assert.equal(calls, 0);
+  f.editor.dispatch({ changes: { from: 0, to: 8 } });
+  const held = deferred<any>(); f.api.previewBuildHelp = () => held.promise;
+  const pending = f.scope.buildAssistance(), rejected = assert.rejects(pending, /cancelled/);
+  await turns(); await f.scope.cancelCompilation(); held.resolve({ id: 'late' }); await rejected;
+  assert.equal(f.gate.locked, false); assert.equal(f.editor.state.doc.toString(), quote);
+});
+
+test('approved build paths persist for this paper session but a larger budget applies to one compilation only', async () => {
+  const f = fixture(), requests: any[] = [], original = f.api.compile;
+  f.api.compile = async (request: any) => { requests.push(request); return original(); };
+  await f.scope.compile(undefined, undefined, { selectedPaths: ['main.tex', 'figure.pdf'], limits: { maxBytes: 80_000_000, maxFiles: 500 } });
+  await f.scope.compile();
+  assert.deepEqual(requests[1].selectedPaths, requests[0].selectedPaths); assert.equal(requests[0].limits.maxBytes, 80_000_000); assert.equal(requests[1].limits, undefined);
+});
+
+for (const phase of ['flush', 'build', 'validation']) test(`Cancel during ${phase} never applies a checked suggestion`, { timeout: 3000 }, async () => {
+  const f = fixture(), entered = deferred<void>(), release = deferred<void>();
+  let compileCalls = 0;
+  const pause = async () => { entered.resolve(); await release.promise; };
+  f.api.persist = async (value: any) => { f.states.writes.push(structuredClone(value)); if (phase === 'flush') await pause(); };
+  f.api.compile = async () => {
+    compileCalls++;
+    if (phase === 'build') await pause();
+    return { id: 'candidate', success: true, clean: true };
+  };
+  f.api.validateBuild = async () => { if (phase === 'validation') await pause(); return true; };
+  const checking = f.scope.compile('c1');
+  await entered.promise;
+  await f.scope.cancelCompilation();
+  release.resolve(); await checking;
+  assert.equal(f.editor.state.doc.toString(), quote);
+  assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'open');
+  assert.equal(undoDepth(f.editor.state), 0);
+  assert(f.states.writes.every((record: any) => record.text === quote && record.review.comments[0].decision === 'open'));
+  assert.equal(f.states.Build, undefined);
+  assert.match(f.states.status, /cancelled/);
+  assert.equal(f.scope.buildRun.current, null);
+  if (phase === 'flush') assert.equal(compileCalls, 0);
+  assert.equal(f.gate.locked, false);
 });
 test('source PDF requests use explicit comment bounds or cursor bounds and ignore late results after another jump or draft edit', async()=>{
   const f=fixture(), first=deferred<any>(); f.scope.displayedBuild.current={id:'old'};
@@ -406,4 +463,66 @@ test('returning from comparison does not steal focus from a subsequently selecte
   Object.assign(f.editor, { requestMeasure() {}, focus() { focused = true; }, dom: { contains() { return false; } } });
   f.scope.returnToSource(); f.scope.document.activeElement = { label: 'PDF page input' }; f.states.frame(); assert.equal(focused, false);
   f.scope.returnToSource(); f.scope.document.activeElement = f.scope.document.body; f.states.frame(); assert.equal(focused, true);
+});
+
+test('outside-feedback import Undo/Redo affects only that import and preserves newer background advice', () => {
+  const f = fixture();
+  f.editor.dispatch({ changes: { from: 0, insert: 'Prefix ' }, annotations: isolateHistory.of('full') });
+  const originalText = f.editor.state.doc.toString();
+  const outside = commentSchema.parse({ id: 'outside', title: 'Outside advice', explanation: 'Check assumptions.', original: '', replacement: null });
+  const background = commentSchema.parse({ ...outside, id: 'background', title: 'Later incoming advice' });
+  f.scope.appendReview([outside], true);
+  f.scope.appendReview([background]);
+  f.scope.patch(outside.id, { messages: [{ role:'assistant', text:'A completed explanation.', createdAt:'2026-09-10T00:00:00Z' }] });
+  f.scope.doHistory();
+  assert.equal(f.editor.state.doc.toString(), originalText);
+  assert.deepEqual(f.editor.state.field(stateTools.commentsField).map(c => c.id), ['c1', 'background']);
+  f.scope.doHistory(true);
+  assert.equal(f.editor.state.doc.toString(), originalText);
+  const restored = f.editor.state.field(stateTools.commentsField);
+  assert.equal(restored.find(c => c.id === 'outside')?.messages[0].text, 'A completed explanation.');
+  assert(restored.some(c => c.id === 'background'));
+});
+
+const warningBuild = () => ({ id: 'warning-candidate', engine: 'pdflatex', success: true, clean: false, dependenciesVerified: true, sourceHash: '', diagnostics: [{ severity: 'warning', message: "LaTeX Warning: Citation missing on page 1 undefined." }], log: '', elapsedMs: 1 });
+test('warning-only acceptance is explicit, revalidates the frozen candidate and stays one undoable unsaved change', async () => {
+  const f = fixture(); f.api.compile = async () => warningBuild();
+  await f.scope.compile('c1');
+  assert.equal(f.editor.state.doc.toString(), quote); assert.match(f.states.status, /PDF generated.*undefined citations/); assert(f.scope.warningAcceptance);
+  await f.scope.applyDespiteWarnings();
+  assert.equal(f.states.validations.length, 1); assert.equal(f.editor.state.doc.toString(), 'The allocation is increasing.'); assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'applied');
+  assert.equal(f.states.saved, undefined); assert.equal(f.scope.warningAcceptance, null); assert.equal(f.states.Build.id, 'warning-candidate');
+  assert.equal(f.scope.doHistory(), true); assert.equal(f.editor.state.doc.toString(), quote); assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'open');
+});
+for (const failure of ['compile', 'unverified', 'source', 'proposal', 'dependency', 'cancel-validation']) test(`warning override preserves source for ${failure}`, async () => {
+  const f = fixture(); f.api.compile = async () => ({ ...warningBuild(), ...(failure === 'compile' ? { success: false } : {}), ...(failure === 'unverified' ? { dependenciesVerified: false } : {}) });
+  await f.scope.compile('c1');
+  if (['compile', 'unverified'].includes(failure)) { assert.equal(f.scope.warningAcceptance, null); assert.equal(f.editor.state.doc.toString(), quote); return; }
+  if (failure === 'source') f.editor.dispatch({ changes: { from: 0, insert: 'Changed ' } });
+  if (failure === 'proposal') f.scope.patch('c1', { draft: 'A different proposal.' });
+  if (failure === 'dependency') f.api.validateBuild = async () => false;
+  const before = f.editor.state.doc.toString();
+  if (failure === 'cancel-validation') {
+    const waiting = deferred<boolean>(); f.api.validateBuild = () => waiting.promise;
+    const applying = f.scope.applyDespiteWarnings(); await turns(); await f.scope.cancelCompilation(); waiting.resolve(true); await applying;
+  } else await f.scope.applyDespiteWarnings();
+  assert.equal(f.editor.state.doc.toString(), before); assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'open'); assert.equal(f.states.saved, undefined);
+});
+for (const warnings of [false, true]) test(`bulk acceptance compiles once, ${warnings ? 'waits for explicit warnings override' : 'applies clean candidates'}, and leaves later arrivals undoable independently`, async () => {
+  const f = fixture(quote + ' The proof is short.');
+  const c2 = reviewTools.adoptComment(f.editor.state.doc.toString(), commentSchema.parse({ id: 'c2', title:'Proof style', explanation:'Synthetic review.', original: 'The proof is short.', replacement: 'The proof is concise.' }));
+  f.editor.dispatch({ effects: stateTools.loadComments.of([...f.editor.state.field(stateTools.commentsField), c2]), annotations: Transaction.addToHistory.of(false) });
+  let calls = 0;
+  f.api.compile = async (request: any) => {
+    calls++; assert.equal(request.text, 'The allocation is increasing. The proof is concise.');
+    const incoming = { ...c2, id: 'later-arrival' };
+    f.editor.dispatch({ effects: stateTools.loadComments.of([...f.editor.state.field(stateTools.commentsField), incoming]), annotations: Transaction.addToHistory.of(false) });
+    return { ...warningBuild(), clean: !warnings };
+  };
+  await f.scope.compile(undefined, undefined, { acceptIds: ['c1', 'c2'] });
+  if (warnings) { assert.equal(f.editor.state.doc.toString(), quote + ' The proof is short.'); await f.scope.applyDespiteWarnings(); }
+  assert.equal(calls, 1); assert.equal(f.editor.state.doc.toString(), 'The allocation is increasing. The proof is concise.');
+  assert.deepEqual(f.editor.state.field(stateTools.commentsField).map(c => c.decision), ['applied', 'applied', 'open']);
+  assert(f.scope.doHistory()); assert.equal(f.editor.state.doc.toString(), quote + ' The proof is short.'); assert.equal(f.editor.state.field(stateTools.commentsField).length, 3);
+  assert.deepEqual(f.editor.state.field(stateTools.commentsField).map(c => c.decision), ['open', 'open', 'open']);
 });

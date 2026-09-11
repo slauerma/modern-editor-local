@@ -8,8 +8,17 @@ import { prepareDocumentState, readStateFile } from './document-state.ts';
 import { adoptComment, anchorReview } from '../shared/review.ts';
 import { assertRecoveryFits, serializeJSON } from '../shared/persistence.ts';
 import { atomicWrite, digest, exists, normalize, privateDirectory, readJSON, readRegularFile, writeJSON } from './files.ts';
+import { assertBuildDirectory, captureBuildDirectory, type BuildDirectoryIdentity } from './build-input-plan.ts';
 
 type Recovery = { schemaVersion: 1; baseDiskHash: string; text: string; review: Review; revision?: number };
+async function readProjectSource(file: string, identity: BuildDirectoryIdentity) {
+  await assertBuildDirectory(path.dirname(file), identity);
+  const stat = await fs.lstat(file);
+  await assertBuildDirectory(path.dirname(file), identity);
+  const bytes = await readRegularFile(file, 2000000, stat);
+  await assertBuildDirectory(path.dirname(file), identity);
+  return bytes;
+}
 async function readRecovery(file: string, rootFile: string): Promise<Recovery | null> {
   if (!(await exists(file))) return null;
   const saved = await readJSON(file) as Recovery;
@@ -50,6 +59,7 @@ export class ProjectService {
   private lineEnding = '\n';
   private bom = '';
   private recoveryRevision = 0;
+  private openedDirectory: { projectId: string; identity: BuildDirectoryIdentity } | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   readonly cache: string;
   private readonly writeAtomic: typeof atomicWrite;
@@ -62,7 +72,15 @@ export class ProjectService {
     if (!this.current || this.current.id !== projectId) throw new Error('This paper is no longer open.');
     return this.current;
   }
+  async assertDirectory(projectId: string): Promise<BuildDirectoryIdentity> {
+    const p = this.get(projectId), opened = this.openedDirectory;
+    if (!opened || opened.projectId !== projectId) throw new Error('The opened paper folder identity is unavailable. Reopen the paper.');
+    await assertBuildDirectory(path.dirname(p.path), opened.identity);
+    this.get(projectId);
+    return { ...opened.identity };
+  }
   private async dirs(p: Project) {
+    await this.assertDirectory(p.id);
     const home = await prepareDocumentState(p.path, true);
     return { home, recovery: await privateDirectory(home, 'recovery') };
   }
@@ -70,7 +88,8 @@ export class ProjectService {
   async open(file: string): Promise<Project> { return this.serial(async () => {
     const actual = await fs.realpath(file);
     if (path.extname(actual).toLowerCase() !== '.tex') throw new Error('Choose the root .tex document.');
-    const bytes = await readRegularFile(actual, 2000000);
+    const directoryIdentity = await captureBuildDirectory(path.dirname(actual));
+    const bytes = await readProjectSource(actual, directoryIdentity);
     if (bytes.length > 2000000) throw new Error('This first version supports source files up to 2 MB.');
     const raw = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
     const lineEnding = raw.includes('\r\n') ? '\r\n' : '\n';
@@ -152,7 +171,10 @@ export class ProjectService {
     }
     p.review = anchorReview(p.text, review, review.sourceHash === digest(p.text));
     await fs.mkdir(this.cache, { recursive: true });
+    await assertBuildDirectory(path.dirname(actual), directoryIdentity);
     await writeJSON(path.join(this.cache, 'last-project.json'), { path: actual });
+    await assertBuildDirectory(path.dirname(actual), directoryIdentity);
+    this.openedDirectory = { projectId: p.id, identity: directoryIdentity };
     this.current = p; this.lineEnding = lineEnding; this.bom = bom; this.recoveryRevision = recoveryRevision;
     return structuredClone(p);
   }); }
@@ -249,9 +271,10 @@ export class ProjectService {
   }
   async assertUnchanged(projectId: string) {
     const p = this.get(projectId);
+    const directoryIdentity = await this.assertDirectory(projectId);
     const stat = await fs.lstat(p.path);
     if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('The source path was replaced. Reopen the paper before saving; your recovery is preserved.');
-    if (digest(await readRegularFile(p.path, 2000000)) !== p.diskHash) throw new Error('The source changed in another editor. Reload it before saving or compiling; your recovery is preserved.');
+    if (digest(await readProjectSource(p.path, directoryIdentity)) !== p.diskHash) throw new Error('The source changed in another editor. Reload it before saving or compiling; your recovery is preserved.');
   }
   async persist(input: BufferInput) { return this.serial(async () => {
     const { p, text, review } = this.checked(input), recovery = this.recovery(p, text, review);
@@ -279,7 +302,7 @@ export class ProjectService {
     await retainRecovery(journal);
     await this.writeAtomic(journal, journalJSON);
     if (Buffer.byteLength(bytes) > 2000000) throw new Error('The edited source exceeds the 2 MB file limit. Save stopped; the original source and your recovery draft were preserved.');
-    const previous = await readRegularFile(p.path, 2000000);
+    const previous = await readProjectSource(p.path, await this.assertDirectory(p.id));
     if (digest(previous) !== p.diskHash) throw new Error('The source changed in another editor. Reload it before saving; your recovery is preserved.');
     const backups = await privateDirectory(dirs.home, 'backups');
     for (const content of [previous, Buffer.from(bytes)]) {

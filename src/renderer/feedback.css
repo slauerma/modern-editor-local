@@ -1,0 +1,12 @@
+.feedback-overlay { position:fixed; inset:0; background:#18251d77; z-index:40; display:grid; place-items:center; padding:2rem; }
+.feedback-overlay[hidden] { display:none; }
+.feedback-panel { background:#fff; color:#29382f; width:min(850px,95vw); max-height:90vh; overflow:auto; padding:1.5rem; border:1px solid #cbd7cb; border-radius:12px; box-shadow:0 10px 40px #0003; }
+.feedback-panel h2 { font-size:1.25rem; margin:0; }
+.feedback-panel label { display:block; margin:.75rem 0; }
+.feedback-panel label>input:not([type=checkbox]), .feedback-panel label>textarea, .feedback-panel label>select { display:block; width:100%; margin-top:.35rem; }
+.feedback-panel textarea { min-height:10rem; }
+.feedback-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
+.feedback-panel pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:18rem; overflow:auto; background:#f6f8f4; padding:.8rem; }
+.feedback-panel details { margin:1rem 0; }
+.feedback-comment { border-top:1px solid #d7e0d7; margin:1rem 0; padding:.5rem 0; }
+.feedback-comment small { color:#667869; }

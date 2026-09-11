@@ -1,0 +1,3 @@
+.references-drawer { flex-shrink:0; max-height:min(50vh,500px); overflow:auto; border-bottom:1px solid #d7e0d7; background:#fff; padding:1rem 1.5rem; }
+.references-drawer[hidden] { display:none; }
+.references-drawer>.recovery-heading { margin-bottom:.75rem; }

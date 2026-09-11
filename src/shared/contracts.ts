@@ -1,3 +1,7 @@
+import type { FeedbackRequest, FeedbackRecord, FeedbackList } from './feedback.ts';
+import type { AttachmentInventory, AttachmentPreview, AttachmentSelection } from './attachments.ts';
+import type { ToolSettings, ToolSettingsState, SetupCheck, CopiedSetupDetails } from './tool-settings.ts';
+import type { ReferenceState, SourcesHistory } from './references.ts';
 import { z } from 'zod';
 import { assertRecoveryFits, serializeJSON } from './persistence.ts';
 
@@ -7,11 +11,12 @@ function boundedJSON(value: unknown, ctx: z.RefinementCtx) {
 }
 
 const packageListSchema = z.array(z.string().regex(/^[a-zA-Z][a-zA-Z0-9-]*$/, 'Use a plain LaTeX package name.')).max(10);
-export const messageSchema = z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(100000), createdAt: z.string(), resultId: z.string().uuid().optional(), proposal: z.object({ replacement: z.string().max(100000).nullable(), packages: packageListSchema }).optional() });
+export const messageSchema = z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(100000), createdAt: z.string(), resultId: z.string().uuid().optional(), proposalOriginal: z.string().max(100000).optional(), proposal: z.object({ replacement: z.string().max(100000).nullable(), packages: packageListSchema }).optional() });
 export const commentSchema = z.object({
   id: z.string().min(1).max(200), category: z.string().max(100).default('Clarity'),
   title: z.string().max(300), explanation: z.string().max(100000),
   original: z.string().max(100000), replacement: z.string().max(100000).nullable(),
+  questionOriginal: z.string().max(100000).optional(),
   before: z.string().max(2000).default(''), after: z.string().max(2000).default(''),
   from: z.number().int().nonnegative().default(0), to: z.number().int().nonnegative().default(0),
   decision: z.enum(['open', 'applied', 'dismissed', 'resolved']).default('open'),
@@ -43,7 +48,7 @@ const fractionSchema = z.number().finite().min(0).max(1);
 export const workspaceSchema = z.object({
   schemaVersion: z.literal(1),
   source: z.object({ anchor: z.number().int().min(0).max(2000000), head: z.number().int().min(0).max(2000000), topLine: z.number().int().min(1).max(2000001), offset: z.number().finite().min(-2000).max(10000000) }),
-  pdf: z.object({ page: z.number().int().min(1).max(100000), zoom: z.union([z.literal(1), z.literal(1.25), z.literal(1.5), z.literal(2)]), scrollX: fractionSchema, scrollY: fractionSchema }),
+  pdf: z.object({ page: z.number().int().min(1).max(100000), zoom: z.union([z.literal(1), z.literal(1.25), z.literal(1.5), z.literal(2)]), scrollX: fractionSchema, scrollY: fractionSchema, flow: z.boolean().optional() }),
   pdfBuildId: z.string().uuid().nullable(), pdfOpen: z.boolean(),
   paneSizes: z.tuple([fractionSchema, fractionSchema, fractionSchema]).refine(v => v.every(n => n >= .05) && Math.abs(v.reduce((a, b) => a + b, 0) - 1) < .001, 'Invalid pane proportions'),
   toolbarCollapsed: z.boolean(), followComments: z.boolean(), reviewView: z.enum(['pending', 'later', 'history'])
@@ -67,12 +72,15 @@ export const preambleRequestSchema = z.object({ projectId: z.string(), text: z.s
 export type PreambleRequest = z.infer<typeof preambleRequestSchema>;
 export type Project = { id: string; path: string; name: string; text: string; diskHash: string; review: Review; recovered: boolean; notices: string[]; engine: Engine; effort: Effort; fastMode: boolean; paperInstructions: string; baseline: Baseline | null; workspace?: WorkspaceState; restoredPdf?: { build: Build; text: string } };
 export type Diagnostic = { severity: 'error' | 'warning'; message: string; line?: number; file?: string };
-export type Build = { id: string; engine: Engine; success: boolean; clean: boolean; dependenciesVerified?: boolean; sourceHash: string; diagnostics: Diagnostic[]; log: string; elapsedMs: number };
+export type BuildInputLimits = { maxBytes: number; maxFiles: number };
+export type BuildInputPreparation = { status: 'needs-selection'; reason: string; issues: string[]; requiredPaths: string[]; requiredBytes?: number; requiredFiles?: number; selectedBytes?: number; selectedFiles?: number; inventory: { paths: { relative: string; size: number }[]; truncated: boolean; visitedEntries: number }; limits: BuildInputLimits };
+export type BuildInputSelection = { mode: 'folder' | 'dependencies' | 'explicit'; fileCount: number; totalBytes: number; unresolvedIssues?: string[] };
+export type Build = { id: string; engine: Engine; success: boolean; clean: boolean; dependenciesVerified?: boolean; sourceHash: string; diagnostics: Diagnostic[]; log: string; elapsedMs: number; inputPreparation?: BuildInputPreparation; inputSelection?: BuildInputSelection };
 export const pdfRequestSchema = z.object({ projectId: z.string(), buildId: z.string(), text: z.string().max(2000000), from: z.number().int().nonnegative(), to: z.number().int().nonnegative() });
 export type PdfRequest = z.infer<typeof pdfRequestSchema>;
 export type PdfLocation = { kind: 'mapped'; buildId: string; page: number; x: number; y: number; width: number; height: number } | { kind: 'compile' | 'unavailable'; reason: string };
-export type ReviewRequest = { projectId: string; text: string; from: number; to: number; instructions: string; requestId?: string };
-export type ReplyRequest = { projectId: string; text: string; comment: Comment; message: string; requestId?: string; deeper?: boolean };
+export type ReviewRequest = { projectId: string; text: string; from: number; to: number; instructions: string; attachmentPreviewId?: string; requestId?: string };
+export type ReplyRequest = { projectId: string; text: string; comment: Comment; message: string; requestId?: string; attachmentPreviewId?: string; deeper?: boolean };
 export type CodexReply = { reply: string; replacement: string | null; packages: string[] };
 const resultBase = { schemaVersion: z.literal(1), id: z.string().uuid(), rootFile: z.string().max(500), sourceHash: z.string().regex(/^[a-f0-9]{64}$/), createdAt: z.string().datetime() };
 export const resultSchema = z.discriminatedUnion('kind', [
@@ -85,7 +93,23 @@ export type EditorAPI = {
   openProject(): Promise<Project | null>;
   resumeProject(): Promise<Project | null>;
   openDemo(): Promise<Project>;
-  openDraft(): Promise<Project>;
+  openDraft(): Promise<Project | null>;
+  getSetup(): Promise<ToolSettingsState>;
+  chooseTool(tool: 'codex' | 'latexmk'): Promise<string | null>;
+  saveSetup(settings: ToolSettings): Promise<ToolSettingsState>;
+  checkSetup(settings: ToolSettings): Promise<SetupCheck>;
+  copySetupDetails(settings: ToolSettings): Promise<CopiedSetupDetails>;
+  attachmentInventory(projectId: string): Promise<AttachmentInventory>;
+  chooseAttachments(projectId: string, folder: boolean): Promise<AttachmentInventory | null>;
+  previewAttachments(projectId: string, selections: AttachmentSelection[]): Promise<AttachmentPreview>;
+  removeAttachment(projectId: string, id: string): Promise<AttachmentInventory>;
+  clearAttachments(projectId: string): Promise<void>;
+  referenceState(projectId: string): Promise<ReferenceState>;
+  addReferences(projectId: string, folder: boolean): Promise<ReferenceState | null>;
+  changeReference(projectId: string, id: string, enabled: boolean | null): Promise<ReferenceState>;
+  sourcesUsed(projectId: string): Promise<SourcesHistory>;
+  convertFeedback(input: FeedbackRequest): Promise<FeedbackRecord>;
+  savedFeedback(projectId: string): Promise<FeedbackList>;
   exportSource(input: { name: string; text: string }): Promise<string | null>;
   inspectRecovery(): Promise<SourceRecovery | null>;
   persist(input: BufferInput): Promise<void>;
@@ -103,7 +127,9 @@ export type EditorAPI = {
   setHistoryBudget(projectId: string, bytes: number): Promise<VersionHistory>;
   reload(projectId: string): Promise<Project>;
   importReview(projectId: string, text: string): Promise<Review | null>;
-  compile(input: { projectId: string; text: string; engine: Engine }): Promise<Build>;
+  compile(input: { projectId: string; text: string; engine: Engine; selectedPaths?: string[]; limits?: BuildInputLimits }): Promise<Build>;
+  previewBuildHelp(input: { projectId: string; text: string }): Promise<import('./build-input-help.ts').BuildInputHelpPreview>;
+  askBuildHelp(input: { projectId: string; text: string; previewId: string }): Promise<import('./build-input-help.ts').BuildInputHelpResult>;
   validateBuild(input: { projectId: string; buildId: string; text: string }): Promise<boolean>;
   getPdf(buildId: string): Promise<Uint8Array>;
   locatePdf(input: PdfRequest): Promise<PdfLocation>;

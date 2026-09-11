@@ -10,7 +10,9 @@ npm test
 npm run build
 ```
 
-The unit suite covers source and review state, save/recovery behavior, proposal diffs, version history, PDF navigation decisions, and Codex request handling with a local fake server. It does not call an account or model service. Tests create disposable `.test-runs/` folders, and some also write `test-evidence/`.
+The unit suite covers source and review state, save/recovery behavior, proposal diffs, version history, PDF navigation decisions, and Codex request handling with a local fake server. Review-action tests cover bulk dismissal with one Undo/Redo, preserved Later/history/discussion and later arrivals, and question relinking that retains earlier wording without weakening replacement matching. Setup tests check that copied version summaries exclude private data; Help tests check release-version consistency and searchable release notes. The suite does not call an account or model service. Tests create disposable `.test-runs/` folders, and some also write `test-evidence/`.
+
+Reference tests cover remembered native-picker grants, current unsaved text, bounded PDF/text search, path replacement, revocation, cancellation and source-use records. Build-input tests distinguish the **50 MB / 500-file** discovery threshold from the **200 MB / 2,000-file** required-input cap. They cover deterministic narrowing, a required 60 MB resource, reported size totals, explicit Codex-request preparation, and rejected paths, omissions and excessive limits. Mocked model answers test the control flow, not suggestion quality.
 
 ## Real TeX integration
 
@@ -32,6 +34,8 @@ node --experimental-strip-types --test tests/compile.audit.ts
 
 The compile suite requires the MacTeX locations documented in the README. It exercises pdfLaTeX, LuaLaTeX, XeLaTeX, BibTeX, relative source/graphics inputs, Unicode paths, local fonts, missing glyphs and references, candidate validation, preserved PDFs, Scientific Word macros, and SyncTeX. The multilingual tests locate the installed `FreeSerif.otf` font using `kpsewhich` and copy it only into an ignored test run.
 
+Large-folder cases include an unrelated 60 MB file, computed inputs requiring an explicit unverified preview, preserved earlier PDFs and cancellation during local planning.
+
 Compile tests run serially and may take several minutes. They write logs, temporary paper copies, and compiled output under `.test-runs/` and `test-evidence/`. These directories and the generated fixture graphics are ignored. A missing TeX package or binary should be fixed in the local installation before retrying the relevant test.
 
 ## Desktop smoke check
@@ -52,10 +56,15 @@ The regression checks review focus and invokes the registered native Undo comman
 
 After `npm run build` and `npm start`, choose **Try the working sample**. It has prepared comments, but no prepared discussion replies.
 
-1. Compile the sample and inspect a comment's Original, Proposed replacement, and Show changes.
+1. Compile the sample with **Command+T**, then use **Command+B** after it finishes. Both shortcuts should invoke Compile; repeating either during an active build should not queue another build. Inspect a comment's Original, Proposed replacement, and Show changes.
 2. Focus the comment controls, use **Shift+S** to skip, and **Shift+A** to accept a valid suggestion after its compile check. Use Undo and confirm that the source and review decision return. Verify uppercase A/S can still be typed normally inside a replacement or note field.
-3. Try **Accept without compiling** and confirm that the PDF is marked older. Compile again, then use Source/PDF navigation.
-4. Save, compare with the retained original, and reopen the sample to check saved comments and source. Test Undo before quitting; its history is session-only.
+3. With two current, nonoverlapping pending replacements, choose **More → Accept all applicable suggestions (N)**. Verify one combined compile and one Undo for the applied source changes and decisions. Include question, stale, overlapping and Later controls and confirm they remain for individual review.
+4. On a synthetic candidate with a warning such as `\ref{missing-label}`, verify that acceptance pauses with an explanation and unchanged source. Inspect the candidate PDF, then use **Apply despite warnings** after a successful build with verified inputs. Undo the application. Change the source or proposal while a warning is pending and confirm it requires a new check; changed compilation inputs must also block application. Failed or unverified builds must not offer the override. The current warning check includes pre-existing warnings and does not compare them with an earlier build.
+5. Try **Accept without compiling** for an individual suggestion and confirm that the PDF is marked older. Compile again, then use Source/PDF navigation.
+6. Put one pending comment in Later. Use **More → Dismiss pending comments**, inspect History, and Undo once. Confirm the pending batch returns, Later remains set, and source text and discussions are unchanged.
+7. Add an author question to a source selection and rewrite that passage. Use **Link question to current selection** and verify that the card retains Earlier wording beside the Linked current passage. Undo the link and confirm the source stays unchanged by linking. Replacement suggestions must still require exact original text for reattachment.
+8. Open Help and Settings, verify version **0.2.0**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
+9. Save, compare with the retained original, and reopen the sample to check saved comments and source. Test Undo before quitting; its history is session-only.
 
 This check needs the local TeX toolchain but no model/account call. Source remains in the generated sample folder. See the [user guide](docs/USER_GUIDE.md) for the controls and [FAQ](docs/FAQ.md) for recovery.
 

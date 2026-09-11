@@ -51,6 +51,14 @@ export function reattachComment(text: string, c: Comment, from: number, to: numb
     throw new Error('Select the exact original words in the source before confirming this passage.');
   return captureContext(text, { ...c, from, to, validity: 'current' });
 }
+export function linkQuestionToSelection(text: string, c: Comment, from: number, to: number): Comment {
+  if (c.decision !== 'open' || c.replacement !== null || c.draft !== undefined) throw new Error('Only a question without a replacement can be linked to changed wording.');
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to > text.length || to <= from || to - from > 100000 || !text.slice(from, to).trim()) throw new Error('Select the current passage for this question (at most 100,000 characters).');
+  // Earlier alternatives remain readable in the discussion, but cannot become
+  // replacements for a newly linked passage without a fresh Codex proposal.
+  const messages = c.messages.map(message => message.proposal && message.proposalOriginal === undefined ? { ...message, proposalOriginal: c.original } : message);
+  return captureContext(text, commentSchema.parse({ ...c, original: text.slice(from, to), questionOriginal: c.questionOriginal ?? c.original, messages, from, to, validity: 'current' }));
+}
 export function anchorReview(text: string, review: Review, trustOffsets = false): Review {
   return { ...review, comments: review.comments.map(c => locate(text, c, trustOffsets)) };
 }
@@ -94,6 +102,8 @@ export function visibleCommentId(comments: readonly Comment[], id: string | null
 }
 export function historyCommentId(before: readonly Comment[], after: readonly Comment[], activeId: string | null): string | null {
   const old = new Map(before.map(c => [c.id, c]));
-  const affected = after.filter(c => { const p = old.get(c.id); return p && (p.later !== c.later || p.decision !== c.decision || p.validity !== c.validity || p.draft !== c.draft || p.replacement !== c.replacement || JSON.stringify(p.packages) !== JSON.stringify(c.packages)); });
+  const restored = after.find(c => !old.has(c.id));
+  if (restored) return restored.id;
+  const affected = after.filter(c => { const p = old.get(c.id); return p && (p.later !== c.later || p.decision !== c.decision || p.validity !== c.validity || p.original !== c.original || p.questionOriginal !== c.questionOriginal || p.draft !== c.draft || p.replacement !== c.replacement || JSON.stringify(p.packages) !== JSON.stringify(c.packages)); });
   return affected.find(c => c.id === activeId)?.id ?? affected[0]?.id ?? activeId;
 }

@@ -1,0 +1,16 @@
+.reference-panel { padding: 0 1rem 1rem; }
+.reference-roots { list-style: none; padding: 0; margin: .75rem 0; }
+.reference-roots li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--line, #dce2d8); padding: .65rem 0; }
+.reference-roots label { display: flex; align-items: center; gap: .65rem; overflow-wrap: anywhere; }
+.reference-roots small { display: block; color: #68766c; margin-top: .2rem; }
+.reference-roots input { flex: none; }
+.reference-excerpts { margin: 0 1rem 1rem; }
+.reference-excerpts > summary { cursor: pointer; padding: .5rem 0; }
+.sources-panel { width: min(850px, 92vw); }
+.workspace-panel-backdrop { position:fixed; inset:0; z-index:70; background:#1e30233b; display:flex; justify-content:center; align-items:flex-start; padding:4rem 1rem 2rem; }
+.workspace-panel.sources-panel { max-height:calc(100vh - 6rem); overflow:auto; background:#fbfcf9; border:1px solid #cddbc6; border-radius:10px; padding:1.25rem 1.5rem; box-shadow:0 10px 36px #23362130; font-size:12px; }
+.sources-panel h2 { font-size:16px; margin:0; }.sources-panel p { line-height:1.6; }
+.source-request { border-top: 1px solid #dce2d8; padding: .8rem 0; }
+.source-request summary { cursor: pointer; overflow-wrap: anywhere; }
+.source-use { margin: .7rem 0 .7rem 1rem; }
+.source-use pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 20rem; overflow: auto; padding: .8rem; background: #f5f7f3; border: 1px solid #dce2d8; border-radius: .35rem; }

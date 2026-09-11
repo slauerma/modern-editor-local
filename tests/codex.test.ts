@@ -5,6 +5,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { CodexClient, InvalidCodexResponse } from '../src/main/codex-client.ts';
 import { replyOutputSchema } from '../src/main/codex-service.ts';
+import { referenceTools } from '../src/main/reference-service.ts';
 
 async function fixture() {
   const directory = path.resolve('.test-runs', 'codex-' + randomUUID());
@@ -12,6 +13,46 @@ async function fixture() {
   await fs.chmod(binary, 0o755);
   return { directory, client: new CodexClient(directory, binary) };
 }
+
+test('only attached reference dynamic tools run; wrong threads/turns/namespaces, repeated calls and approvals are refused', async () => {
+  const { directory, client } = await fixture(), calls: string[] = []; let cancelled = false;
+  const result = await client.run('reference-tools', replyOutputSchema, () => {}, 'medium', false, { tools: referenceTools, call: async name => { calls.push(name); return { text: 'Synthetic reference.' }; }, cancel: async () => { cancelled = true; } });
+  assert.deepEqual(calls, ['references_list', 'references_read']); assert(cancelled);
+  assert.equal((result as any).reply, 'Reference checked');
+  const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  const thread = requests.find((r: any) => r.method === 'thread/start').params;
+  assert.deepEqual(thread.dynamicTools, referenceTools);
+  assert.equal(thread.config.features.code_mode_host, true);
+  assert.deepEqual(thread.config.agents, { enabled: false });
+  assert.deepEqual(thread.config.skills.config, ['host-skill', 'already-disabled-skill'].map(name => ({ path: path.join(directory, name, 'SKILL.md'), enabled: false })));
+  assert.deepEqual(requests.find((r: any) => r.method === 'skills/list').params, { cwds: [directory], forceReload: true });
+  assert(requests.findIndex((r: any) => r.method === 'skills/list') < requests.findIndex((r: any) => r.method === 'thread/start'));
+  assert(!requests.some((r: any) => r.method === 'skills/config/write'));
+  const args = JSON.parse(await fs.readFile(path.join(directory, 'arguments.json'), 'utf8'));
+  assert.equal(args[args.indexOf('code_mode_host') - 1], '--enable');
+  assert(args.includes('agents.enabled=false'));
+  for (const id of ['wrong-thread', 'wrong-turn', 'wrong-tool', 'wrong-namespace', 'ref-repeat']) assert.equal(requests.find((r: any) => r.id === id && !r.method).result.success, false);
+  assert(requests.find((r: any) => r.id === 'approval' && !r.method).error);
+  assert.equal(requests.find((r: any) => r.id === 'ref-read' && !r.method).result.contentItems[0].type, 'inputText');
+  await assertExited(directory);
+});
+
+test('cancelling a dynamic read stops the child and cannot send a late excerpt into a new request', async () => {
+  const { directory, client } = await fixture(); let release!: () => void, started!: () => void;
+  const waiting = new Promise<void>(resolve => { started = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+  const rejected = assert.rejects(client.run('reference-wait', replyOutputSchema, () => {}, 'medium', false, { tools: referenceTools, call: async () => { started(); await held; return { text: 'Late reference.' }; }, cancel: async () => { release(); } }), /cancelled/);
+  await within(waiting); await within(client.cancel()); await rejected; await assertExited(directory);
+  const old = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  assert(!old.some((r: any) => r.id === 'ref-wait' && !r.method));
+  await client.run('normal', replyOutputSchema, () => {}); await assertExited(directory);
+  const nextArgs = JSON.parse(await fs.readFile(path.join(directory, 'arguments.json'), 'utf8'));
+  assert.equal(nextArgs[nextArgs.indexOf('code_mode_host') - 1], '--disable');
+  const nextRequests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  const nextThread = nextRequests.find((r: any) => r.method === 'thread/start').params;
+  assert.equal(nextThread.config.features.code_mode_host, false);
+  assert.deepEqual(nextThread.config.agents, { enabled: false });
+  assert.deepEqual(nextThread.dynamicTools, []);
+});
 async function assertExited(directory: string) {
   const pid = Number(await fs.readFile(path.join(directory, 'server.pid'), 'utf8'));
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
@@ -46,6 +87,10 @@ test('Codex JSONL handles fragmented messages and stops its child after a struct
   assert.deepEqual(turn.outputSchema, replyOutputSchema);
   const args = JSON.parse(await fs.readFile(path.join(directory, 'arguments.json'), 'utf8'));
   assert(!args.includes('mcp_servers={}')); assert(args.includes('shell_tool')); assert(args.includes('plugins'));
+  assert.equal(args[args.indexOf('code_mode_host') - 1], '--disable'); assert(args.includes('agents.enabled=false'));
+  assert.equal(thread.config.features.code_mode_host, false); assert.equal(thread.config.features.skip_host_skill_discovery, true);
+  assert.deepEqual(thread.config.agents, { enabled: false });
+  assert.deepEqual(thread.config.skills.config, ['host-skill', 'already-disabled-skill'].map(name => ({ path: path.join(directory, name, 'SKILL.md'), enabled: false })));
   assert.deepEqual(thread.config.mcp_servers, { 'probe.with.dots': { enabled: false }, 'probe-two': { enabled: false } });
   assert.deepEqual(thread.environments, []); assert.deepEqual(thread.selectedCapabilityRoots, []); assert.deepEqual(thread.dynamicTools, []);
   assert(requests.findIndex((r: any) => r.method === 'config/read') < requests.findIndex((r: any) => r.method === 'thread/start'));
@@ -90,6 +135,40 @@ test('unknown runtime and unverifiable configuration stop before a thread or man
     assert(!requests.some((r: any) => r.method === 'thread/start' || r.method === 'turn/start'));
     assert(!JSON.stringify(requests).includes('SYNTHETIC_PRIVATE_SENTINEL'));
     await assertExited(directory);
+  }
+});
+
+test('reference-host, skill-discovery and agent policy mismatches stop both review modes before paper text', async () => {
+  for (const withReferences of [false, true]) {
+    for (const failure of ['unsafe-code-host', 'unsafe-skill-discovery', 'agents-enabled', 'agents-unavailable']) {
+      const { directory, client } = await fixture();
+      await fs.mkdir(directory, { recursive: true }); await fs.writeFile(path.join(directory, failure), '');
+      let calls = 0;
+      const reader = withReferences ? { tools: referenceTools, call: async () => { calls++; return {}; }, cancel: async () => {} } : undefined;
+      await assert.rejects(client.run('SYNTHETIC_PRIVATE_SENTINEL', replyOutputSchema, () => {}, 'medium', false, reader), /restrictions could not be verified/);
+      const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+      assert(!requests.some((r: any) => r.method === 'thread/start' || r.method === 'turn/start'));
+      assert(!JSON.stringify(requests).includes('SYNTHETIC_PRIVATE_SENTINEL'));
+      assert.equal(calls, 0);
+      await assertExited(directory);
+    }
+  }
+});
+
+test('unverifiable skill inventories stop both review modes before a thread or paper text', async () => {
+  for (const withReferences of [false, true]) {
+    for (const failure of ['skills-unavailable', 'skills-error', 'skills-incomplete', 'skills-wrong-cwd', 'skills-malformed', 'skills-duplicate', 'skills-oversized']) {
+      const { directory, client } = await fixture();
+      await fs.mkdir(directory, { recursive: true }); await fs.writeFile(path.join(directory, failure), '');
+      let calls = 0;
+      const reader = withReferences ? { tools: referenceTools, call: async () => { calls++; return {}; }, cancel: async () => {} } : undefined;
+      await assert.rejects(client.run('SYNTHETIC_PRIVATE_SENTINEL', replyOutputSchema, () => {}, 'medium', false, reader));
+      const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+      assert(requests.some((r: any) => r.method === 'skills/list'));
+      assert(!requests.some((r: any) => r.method === 'thread/start' || r.method === 'turn/start' || r.method === 'skills/config/write'));
+      assert(!JSON.stringify(requests).includes('SYNTHETIC_PRIVATE_SENTINEL'));
+      assert.equal(calls, 0); await assertExited(directory);
+    }
   }
 });
 
@@ -159,7 +238,7 @@ test('concurrent stop and cancellation callers all wait for the owned server to 
   await assertExited(directory);
 });
 test('cancellation during setup or before the turn-start response leaves a fresh client available', { timeout: 15000 }, async t => {
-  for (const method of ['initialize', 'config/read', 'thread/start', 'mcpServerStatus/list', 'model/list', 'turn/start']) {
+  for (const method of ['initialize', 'config/read', 'skills/list', 'thread/start', 'mcpServerStatus/list', 'model/list', 'turn/start']) {
     const { directory, client } = await fixture(), flag = 'pause-' + method.replaceAll('/', '-');
     await fs.mkdir(directory, { recursive: true }); await fs.writeFile(path.join(directory, flag), '');
     const paused = notification(client, 'fixture/paused', method);

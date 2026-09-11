@@ -1,6 +1,8 @@
 import type { PdfLocation } from '../shared/contracts.ts';
 export type PdfJump = Extract<PdfLocation, { kind: 'mapped' }> & { requestId: number; persistent?: boolean };
-export type PdfPosition = { page: number; zoom: number; scrollX?: number; scrollY?: number };
+// `flow` distinguishes page-relative offsets in the continuous reader from
+// older single-page overflow fractions saved by previous versions.
+export type PdfPosition = { page: number; zoom: number; scrollX?: number; scrollY?: number; flow?: boolean };
 export function pdfPage(value: number, pages: number) {
   return Math.max(1, Math.min(Math.max(1, pages), Number.isFinite(value) ? Math.trunc(value) : 1));
 }

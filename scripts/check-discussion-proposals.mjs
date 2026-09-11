@@ -193,7 +193,7 @@ async function undoFromMenu() {
   assert.equal(await application.evaluate(() => globalThis.__proposalProbe.undoDispatches), 1);
 }
 async function launch() {
-  application = await _electron.launch({ executablePath, args: [copy], cwd: appRoot, chromiumSandbox: true, timeout: 25000 });
+  application = await _electron.launch({ executablePath, args: [copy], cwd: appRoot, env: { ...process.env, MODERN_EDITOR_RUNTIME_DIR: path.join(root, 'isolated-runtime') }, chromiumSandbox: true, timeout: 25000 });
   const child = application.process();
   receipt.processes.push({ pid: child.pid, exited: false });
   console.log('Owned Electron PID', child.pid);

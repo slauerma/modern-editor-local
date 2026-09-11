@@ -1,6 +1,8 @@
+import path from 'node:path';
+
 // Personal editor: keep this policy small and verify it with the real CLI probe before adding versions.
 export const verifiedCodexVersions = ['0.153.4'] as const;
-export const disabledCodexFeatures = ['apps', 'plugins', 'remote_plugin', 'enable_mcp_apps', 'shell_tool', 'unified_exec', 'multi_agent', 'multi_agent_v2', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'hooks', 'code_mode', 'code_mode_host', 'skill_mcp_dependency_install', 'skill_search', 'tool_suggest', 'workspace_dependencies'];
+export const disabledCodexFeatures = ['apps', 'plugins', 'remote_plugin', 'enable_mcp_apps', 'shell_tool', 'unified_exec', 'multi_agent', 'multi_agent_v2', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'hooks', 'code_mode', 'skill_mcp_dependency_install', 'skill_search', 'tool_suggest', 'workspace_dependencies'];
 
 export class CodexPolicyError extends Error {
   constructor(detail: string) { super(`Codex review restrictions could not be verified. ${detail} No paper text was sent.`); }
@@ -11,15 +13,28 @@ export function verifyCodexVersion(userAgent: unknown): string {
   if (!version || !verifiedCodexVersions.some(v => v === version)) throw new CodexPolicyError(`This build supports tested Codex CLI ${verifiedCodexVersions.join(', ')}; run the configuration probe before updating support.`);
   return version;
 }
-export function reviewThreadConfig(result: unknown, fastMode: boolean) {
+export function reviewThreadConfig(result: unknown, fastMode: boolean, withReferences = false) {
   if (!object(result) || !object(result.config)) throw new CodexPolicyError('The effective configuration is unavailable.');
   const config = result.config;
-  if (!object(config.features) || disabledCodexFeatures.some(name => config.features[name] !== false) || config.web_search !== 'disabled' || config.project_doc_max_bytes !== 0) throw new CodexPolicyError('A required tool restriction is unavailable.');
+  if (!object(config.features) || disabledCodexFeatures.some(name => config.features[name] !== false) || config.features.code_mode_host !== withReferences || config.features.skip_host_skill_discovery !== true || !object(config.agents) || config.agents.enabled !== false || config.web_search !== 'disabled' || config.project_doc_max_bytes !== 0) throw new CodexPolicyError('A required tool restriction is unavailable.');
   const servers = config.mcp_servers === undefined ? {} : config.mcp_servers;
   if (!object(servers) || Object.keys(servers).length > 1000 || Object.values(servers).some(server => !object(server))) throw new CodexPolicyError('The MCP configuration cannot be checked.');
   // An empty TOML table merges with inherited servers. Disable each effective server instead.
   const mcp_servers = Object.fromEntries(Object.keys(servers).map(name => [name, { enabled: false }]));
-  return { mcp_servers, features: { ...Object.fromEntries(disabledCodexFeatures.map(name => [name, false])), fast_mode: fastMode, skip_host_skill_discovery: true }, web_search: 'disabled', project_doc_max_bytes: 0 };
+  return { mcp_servers, agents: { enabled: false }, features: { ...Object.fromEntries(disabledCodexFeatures.map(name => [name, false])), code_mode_host: withReferences, fast_mode: fastMode, skip_host_skill_discovery: true }, web_search: 'disabled', project_doc_max_bytes: 0 };
+}
+export function reviewSkillConfig(result: unknown, directory: string) {
+  if (!object(result) || !Array.isArray(result.data) || result.data.length !== 1) throw new CodexPolicyError('The skill inventory is unavailable.');
+  const entry = result.data[0];
+  if (!object(entry) || entry.cwd !== directory || !Array.isArray(entry.skills) || entry.skills.length > 1000 || !Array.isArray(entry.errors) || entry.errors.length) throw new CodexPolicyError('The skill inventory is incomplete or cannot be checked.');
+  const seen = new Set<string>(); let characters = 0;
+  const config = entry.skills.map((skill: unknown) => {
+    if (!object(skill) || typeof skill.path !== 'string' || !skill.path || skill.path.length > 10000 || skill.path.includes('\0') || !path.isAbsolute(skill.path) || path.normalize(skill.path) !== skill.path || path.basename(skill.path) !== 'SKILL.md' || typeof skill.enabled !== 'boolean' || seen.has(skill.path)) throw new CodexPolicyError('A discovered skill cannot be disabled reliably.');
+    seen.add(skill.path); characters += skill.path.length;
+    if (characters > 2_000_000) throw new CodexPolicyError('The skill inventory exceeds the verification limit.');
+    return { path: skill.path, enabled: false };
+  });
+  return { config };
 }
 export function verifyMcpInventory(result: unknown, expected: Set<string>, seen: Set<string>): string | null {
   if (!object(result) || !Array.isArray(result.data) || !(result.nextCursor === null || typeof result.nextCursor === 'string')) throw new CodexPolicyError('The MCP tool inventory is unavailable.');

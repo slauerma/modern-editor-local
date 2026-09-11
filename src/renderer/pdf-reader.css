@@ -1,0 +1,16 @@
+.continuous-pdf .pdf-scroll { overflow-anchor:none; }
+.pdf-pages { position:relative; margin-inline:auto; }
+.continuous-pdf .pdf-paper { margin:0; min-height:0; overflow:hidden; }
+.pdf-page-placeholder { position:absolute; inset:0; display:grid; place-items:center; padding:20px; color:#7d8b78; font-size:12px; }
+.continuous-pdf .textLayer { z-index:1; }
+.continuous-pdf .textLayer .pdf-find-hit { color:transparent; background:#f4ce4c75; padding:0; margin:0; border:0; border-radius:1px; }
+.continuous-pdf .textLayer .pdf-find-hit.active { background:#e29b168f; outline:1px solid #ad6e12; }
+.continuous-pdf .pdf-controls .pdf-find-toggle { font-size:11px; padding:3px 5px; }
+.pdf-search { flex-shrink:0; padding:7px 10px; background:#f5f7f2; border-bottom:1px solid #dce2d6; }
+.pdf-search-controls { display:flex; align-items:center; gap:5px; }
+.pdf-search-controls input { width:0; flex:1; min-width:70px; border:1px solid #c8d3c3; border-radius:4px; padding:5px 7px; font-size:12px; }
+.pdf-search-controls button { font-size:16px; padding:0 5px; border:0; background:none; }
+.pdf-match-count { font-size:10px; color:#50634d; white-space:nowrap; }
+.pdf-search-status { font-size:10px; color:#687760; line-height:1.5; margin-top:5px; }
+.pdf-search-status button { font-size:10px; padding:0 3px; border:0; background:none; text-decoration:underline; }
+@media (forced-colors:active) { .continuous-pdf .textLayer .pdf-find-hit { background:Highlight; forced-color-adjust:none; opacity:.45; } .continuous-pdf .textLayer .pdf-find-hit.active { outline:2px solid CanvasText; opacity:.75; } }

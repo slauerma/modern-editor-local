@@ -1,7 +1,7 @@
 {
   "name": "modern-codex-editor",
   "productName": "Modern Codex Editor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -14,7 +14,7 @@
     "start": "electron .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "pretest:compile": "node scripts/generate-compile-fixtures.mjs",
-    "test:compile": "node --experimental-strip-types --test --test-concurrency=1 tests/compile.integration.ts tests/compile.audit.ts tests/texpile.integration.ts tests/compile-review.integration.ts tests/fragment-preamble.integration.ts tests/stabilization.integration.ts tests/pdf-navigation.integration.ts"
+    "test:compile": "node --experimental-strip-types --test --test-concurrency=1 tests/compile.integration.ts tests/compile.audit.ts tests/texpile.integration.ts tests/compile-review.integration.ts tests/fragment-preamble.integration.ts tests/stabilization.integration.ts tests/pdf-navigation.integration.ts tests/build-input-plan.integration.ts"
   },
   "dependencies": {
     "@codemirror/commands": "6.11.0",

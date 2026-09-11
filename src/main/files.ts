@@ -6,11 +6,12 @@ export const digest = (text: string | Uint8Array) => createHash('sha256').update
 export const normalize = (text: string) => text.replace(/\r\n/g, '\n');
 export async function exists(file: string) { try { await fs.access(file); return true; } catch { return false; } }
 // Bound allocations as well as the initial stat: a file can grow during a read.
-export async function readRegularFile(file: string, limit = JSON_FILE_LIMIT) {
+export async function readRegularFile(file: string, limit = JSON_FILE_LIMIT, expected?: { dev: number; ino: number }) {
   // Nonblocking open lets fstat reject FIFOs without waiting for a writer.
   const handle = await fs.open(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
   try {
     const stat = await handle.stat();
+    if (expected && (stat.dev !== expected.dev || stat.ino !== expected.ino)) throw new Error('The file changed before it could be read. Choose it again.');
     if (!stat.isFile() || stat.size > limit) throw new Error(`Expected a regular file of at most ${limit} bytes: ${file}`);
     const chunks: Buffer[] = []; let total = 0;
     while (total <= limit) {

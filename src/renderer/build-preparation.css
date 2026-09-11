@@ -1,0 +1,5 @@
+.build-preparation { padding: 12px 20px; background: #fffaf0; border-bottom: 1px solid #e4d8bd; font-size: 13px; max-height: 48vh; overflow: auto; }
+.build-preparation p { margin: 8px 0; line-height: 1.45; }
+.build-preparation details { margin: 8px 0; }
+.build-preparation pre { max-height: 200px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; padding: 8px; background: white; border: 1px solid #ddd; }
+.build-preparation button { margin: 4px 8px 4px 0; }

@@ -1,0 +1,18 @@
+.attachment-panel { display: grid; gap: .65rem; min-width: 0; }
+.attachment-panel p { margin: 0; }
+.attachment-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.attachment-hint { font-size: .85rem; color: #66756a; line-height: 1.45; }
+.attachment-files { padding: 0; margin: 0; list-style: none; max-height: 20rem; overflow: auto; }
+.attachment-files li { display: flex; gap: .6rem; align-items: center; padding: .55rem 0; border-bottom: 1px solid #e1e6e0; }
+.attachment-file-label { display: flex; flex: 1 1 12rem; gap: .5rem; align-items: flex-start; min-width: 0; }
+.attachment-file-label input { width: auto; margin-top: .25rem; }
+.attachment-file-label span { overflow-wrap: anywhere; }
+.attachment-file-label small { display: block; color: #66756a; font-size: .78rem; }
+.attachment-range { display: grid; gap: .2rem; width: 7rem; flex-shrink: 0; font-size: .8rem; }
+.attachment-range input { min-width: 0; width: 100%; padding: .3rem; }
+.attachment-remove { font-size: .8rem; padding: .3rem .45rem; }
+.attachment-preview { display: grid; gap: .55rem; min-width: 0; }
+.attachment-preview h3, .attachment-preview h4 { font-size: .9rem; margin: .2rem 0; overflow-wrap: anywhere; }
+.attachment-preview h3 span { color: #66756a; font-weight: normal; font-size: .8rem; }
+.attachment-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; line-height: 1.45; max-height: 18rem; overflow: auto; padding: .65rem; border: 1px solid #dbe2d8; border-radius: .4rem; background: #f6f8f4; margin: .35rem 0; }
+@media (max-width: 1100px) { .attachment-files li { flex-wrap: wrap; } .attachment-file-label { flex-basis: 100%; } }

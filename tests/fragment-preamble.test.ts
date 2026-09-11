@@ -54,3 +54,23 @@ test('a model cannot insert body prose, arbitrary endings or custom mathematical
   assert.throws(() => preambleChanges('Text.', proposal('\\begin{document}')), /one complete document wrapper/);
   assert.throws(() => preambleChanges('Text.', { ...proposal(''), needsInput: 'Supply the original macro.' }), /original macro/);
 });
+
+test('nested definitions, hooks and encoded control sequences cannot pass generated preamble validation', () => {
+  const source = 'The payoff is $\\payoff{x}$.';
+  for (const addition of [String.raw`\AtBeginDocument{\newcommand{\payoff}[1]{0}}`,
+    String.raw`{\gdef\payoff#1{0}}`, String.raw`\newtheorem{lemma}{\def\payoff{0}}`]) {
+    assert.throws(() => preambleChanges(source, proposal(`\\documentclass{article}\n${addition}\n\\begin{document}`)), /custom command definitions/);
+  }
+  for (const addition of [String.raw`\AtBeginDocument{}`, String.raw`\csname newcommand\endcsname{\payoff}{0}`,
+    String.raw`\^^6eewcommand{\payoff}{0}`, String.raw`\input{some-invented-definitions}`]) {
+    assert.throws(() => preambleChanges(source, proposal(`\\documentclass{article}\n${addition}\n\\begin{document}`)), /unsupported preamble/);
+  }
+  const valid = proposal(String.raw`\documentclass{article}
+\usepackage{amsmath,amsthm}
+\newtheorem{lemma}{Lemma}[section]
+\theoremstyle{definition}
+\input{tcilatex}
+\begin{document}`);
+  const ordinary = String.raw`\begin{lemma}An ordinary theorem.\end{lemma}`;
+  assert(changedText(ordinary, preambleChanges(ordinary, valid)).includes(ordinary));
+});
