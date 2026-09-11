@@ -45,7 +45,7 @@ export function SettingsPanel({ onClose, disabled = false }: Props) {
           })}>Choose…</button></div>
       </label>)}
     </div>
-    <p className="settings-hint">Use an absolute path. The TeX installation should keep its engines, kpsewhich and SyncTeX beside latexmk.</p>
+    <p className="settings-hint">Use an absolute path. You can configure either tool independently; leave the other path unchanged if it is not installed. The TeX installation should keep its engines, kpsewhich and SyncTeX beside latexmk.</p>
     <div className="settings-actions">
       <button disabled={locked || !draft.codexPath.trim() || !draft.latexmkPath.trim()} onClick={() => void action('Checking local versions…', async () => {
         const checked = await window.editor.checkSetup({ ...draft });

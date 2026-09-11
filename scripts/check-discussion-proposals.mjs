@@ -292,7 +292,7 @@ try {
   await proposalIs(manualDraft, ['amsmath']);
   await check('Deletion is explicit, selects an empty proposal only, and remains undoable');
 
-  await button('Dismiss').click();
+  await button('Reject').click();
   await button('History').click();
   await page.getByRole('heading', { name: comment.title, exact: true }).waitFor();
   assert(await replacement().isDisabled());

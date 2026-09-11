@@ -53,6 +53,8 @@ Complete the browser sign-in using your own account. See the [official Codex CLI
 
 Keep the absolute path printed by the last command. After launching the editor, open **Settings** with **Command+,**, paste it into **Codex executable**, and choose **Check setup → Save settings**. For an existing CLI available as `codex`, `command -v codex` shows its path; check and authenticate that same executable. The default `/Applications/ChatGPT.app/Contents/Resources/codex` works only when it exists and reports the supported version. No source-code edit or rebuild is needed for a path change.
 
+You can configure Codex and TeX independently. Leave the other path unchanged if that tool is not installed; saving validates the paths you changed. **Check setup** still reports unavailable tools: Codex is needed for AI requests, and TeX for compilation.
+
 Settings also lets you choose a nonstandard **latexmk** path. The compiler expects the TeX engines, `kpsewhich`, and `synctex` beside it. Standard MacTeX supplies these. Check setup reads local executable versions; it does not authenticate or make an AI request. The stricter review checks still run before paper text is sent; do not remove the supported-version guard to bypass an error.
 
 ## 4. Install, build, and launch
@@ -69,7 +71,7 @@ These commands install the locked dependencies, prepare esbuild and the Electron
 
 Open **Settings**, choose the paths described above, and run **Check setup**. Then choose **Try the working sample**. Compile it with **Command+T** or **Command+B**, inspect a comment, accept a suggestion, and Undo. Prepared comments and compilation need no Codex account. To check the AI connection, choose **Review with Codex** and request a short language review of the sample; this uses your account.
 
-Help, Settings and **Modern Codex Editor → About** show the editor version, **0.2.0** for this release. For setup troubleshooting, **Settings → Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It makes no AI request and excludes paper text, file paths and account details. The **Changelog** tab in Help summarizes the release.
+Help, Settings and **Modern Codex Editor → About** show the editor version, **0.2.1** for this release. For setup troubleshooting, **Settings → Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It makes no AI request and excludes paper text, file paths and account details. The **Changelog** tab in Help summarizes the release.
 
 Keep real papers in their own folders with their bibliography, figures, and local styles. Start with a copy while learning the editor. **Use this wording** changes a proposal; **Accept** changes the draft; **Save** writes the `.tex` file. The [user guide](USER_GUIDE.md) covers the next steps, and the [FAQ](FAQ.md) covers setup errors and recovery.
 

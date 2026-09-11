@@ -2,7 +2,7 @@
 
 A local desktop editor for LaTeX source, compiled PDF reading, and Codex-assisted review. It uses Electron, React, CodeMirror, and PDF.js.
 
-**Version 0.2.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
+**Version 0.2.1.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
 
 This is a personal project, kept lean for individual use. **macOS is the currently validated platform. Windows is not yet supported.** The repository contains development source; there is no packaged application or installer.
 
@@ -41,7 +41,7 @@ After the first build, `npm start` launches the editor again. **Try the working 
 
 For troubleshooting, **Settings → Copy setup details** copies editor, operating system, Codex and TeX versions with check status. It excludes paper text, file paths and account details.
 
-The editor stores document recovery, reviews, settings, and saved source versions in a `.modern-editor` folder beside the paper. Application state and build snapshots live outside the checkout, in the OS application-data folder. **New draft asks where to save the paper.** Existing managed drafts are copied from legacy `.runtime/` storage with verification; originals are preserved. Export source creates a new source-only file; open that copy to continue working there. See [PRIVACY.md](PRIVACY.md) and the [recovery FAQ](docs/FAQ.md#how-do-i-recover-after-a-crash-or-an-external-edit).
+The editor stores document recovery, reviews, paper settings, and saved source versions in a `.modern-editor` folder beside the paper. Application state and build snapshots live outside the checkout, in the OS application-data folder. **New draft asks where to save the paper.** Existing managed drafts are copied from legacy `.runtime/` storage with verification; originals are preserved. Export source creates a new source-only file; open that copy to continue working there. See [PRIVACY.md](PRIVACY.md) and the [recovery FAQ](docs/FAQ.md#how-do-i-recover-after-a-crash-or-an-external-edit).
 
 ## Development and licensing
 

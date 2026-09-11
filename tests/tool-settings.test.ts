@@ -40,6 +40,32 @@ test('corrupt settings are preserved and surfaced, and linked TeX binaries keep 
   assert.equal((await f.service.load()).settings.latexmkPath, link);
 });
 
+test('TeX settings can be corrected when the unchanged Codex executable is unavailable', async () => {
+  const f = await fixture(); await f.service.save(f.settings);
+  await fs.unlink(f.settings.codexPath);
+  const moved = path.join(f.bin, 'moved-latexmk'); await fs.copyFile(f.settings.latexmkPath, moved); await fs.chmod(moved, 0o700);
+  const next = { ...f.settings, latexmkPath: moved };
+  assert.deepEqual(await f.service.save(next), next);
+  assert.deepEqual((await f.service.load()).settings, next);
+  await assert.rejects(fs.access(path.join(f.runtime, 'setup-check'))); // Saving launches no executable.
+  const before = await fs.readFile(f.service.file);
+  await assert.rejects(f.service.save({ ...next, codexPath: path.join(f.bin, 'another-missing-codex') }));
+  assert.deepEqual(await fs.readFile(f.service.file), before);
+});
+
+test('Codex settings can be corrected when the unchanged TeX executable is unavailable', async () => {
+  const f = await fixture(); await f.service.save(f.settings);
+  await fs.unlink(f.settings.latexmkPath);
+  const moved = path.join(f.bin, 'moved-codex'); await fs.copyFile(f.settings.codexPath, moved); await fs.chmod(moved, 0o700);
+  const next = { ...f.settings, codexPath: moved };
+  assert.deepEqual(await f.service.save(next), next);
+  assert.deepEqual((await f.service.load()).settings, next);
+  await assert.rejects(fs.access(path.join(f.runtime, 'setup-check')));
+  const before = await fs.readFile(f.service.file);
+  await assert.rejects(f.service.save({ ...next, latexmkPath: path.join(f.bin, 'another-missing-latexmk') }));
+  assert.deepEqual(await fs.readFile(f.service.file), before);
+});
+
 test('Check setup runs only bounded version commands with no inherited account or secret environment', async () => {
   const f = await fixture(), previous = process.env.TEST_SETUP_SECRET; process.env.TEST_SETUP_SECRET = 'synthetic-do-not-inherit';
   try {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 — Independent tool setup
+
+- Save a Codex or TeX executable path even when the unchanged other tool is unavailable. Changed paths are still validated before saving.
+- Update the desktop discussion check for the visible Reject button.
+
 ## 0.2.0 — Reading, references and setup
 
 - Continuous PDF reading and text search across the compiled paper.

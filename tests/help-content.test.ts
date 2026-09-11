@@ -28,10 +28,13 @@ test('the current release is identifiable in the package and searchable changelo
   const info = JSON.parse(await fs.readFile('package.json', 'utf8'));
   const lock = JSON.parse(await fs.readFile('package-lock.json', 'utf8'));
   const sections = helpSections(await fs.readFile('CHANGELOG.md', 'utf8'), 'changelog');
-  assert.equal(info.version, '0.2.0');
+  assert.match(info.version, /^\d+\.\d+\.\d+$/);
   assert.equal(lock.version, info.version); assert.equal(lock.packages[''].version, info.version);
   assert.match(sections[0].title, new RegExp(`^${info.version.replaceAll('.', '\\.')} `));
   for (const query of ['continuous PDF', 'search read on demand', 'large folders', 'Command+T', 'dismiss pending', 'relink question', 'setup details']) {
-    assert(findHelpSections(sections, query).some(section => section.id === sections[0].id), `Current release is missing searchable topic: ${query}`);
+    assert(findHelpSections(sections, query).length, `Release history is missing searchable topic: ${query}`);
+  }
+  for (const document of ['README.md', 'docs/SETUP.md', 'docs/USER_GUIDE.md', 'docs/FAQ.md', 'TESTING.md']) {
+    assert((await fs.readFile(document, 'utf8')).includes(info.version), `${document} must identify the current release`);
   }
 });

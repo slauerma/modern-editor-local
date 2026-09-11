@@ -13,8 +13,12 @@ export const defaultToolSettings: ToolSettings = {
   latexmkPath: '/Library/TeX/texbin/latexmk'
 };
 
-export async function validateExecutable(file: string): Promise<string> {
+function validateExecutablePath(file: string) {
   if (!path.isAbsolute(file) || /[\0\r\n]/.test(file)) throw new Error('Choose an absolute executable path.');
+}
+
+export async function validateExecutable(file: string): Promise<string> {
+  validateExecutablePath(file);
   const stat = await fs.stat(file);
   if (!stat.isFile()) throw new Error(`Choose an executable file: ${file}`);
   await fs.access(file, fs.constants.X_OK);
@@ -36,8 +40,14 @@ export class ToolSettingsService {
     }
   }
   async save(input: unknown): Promise<ToolSettings> {
-    const settings = toolSettingsSchema.parse(input);
-    await validateExecutable(settings.codexPath); await validateExecutable(settings.latexmkPath);
+    const settings = toolSettingsSchema.parse(input), current = (await this.load()).settings;
+    // An unavailable, unchanged tool must not prevent configuring the other.
+    // Changed paths are checked before either setting is written; availability
+    // and supported versions are still checked when the tool is used.
+    for (const key of ['codexPath', 'latexmkPath'] as const) {
+      validateExecutablePath(settings[key]);
+      if (settings[key] !== current[key]) await validateExecutable(settings[key]);
+    }
     await writeJSON(this.file, settings, 16000);
     return settings;
   }
