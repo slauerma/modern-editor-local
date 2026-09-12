@@ -63,12 +63,12 @@ After `npm run build` and `npm start`, choose **Try the working sample**. It has
 5. Try **Accept without compiling** for an individual suggestion and confirm that the PDF is marked older. Compile again, then use Source/PDF navigation.
 6. Put one pending comment in Later. Use **More → Dismiss pending comments**, inspect History, and Undo once. Confirm the pending batch returns, Later remains set, and source text and discussions are unchanged.
 7. Add an author question to a source selection and rewrite that passage. Use **Link question to current selection** and verify that the card retains Earlier wording beside the Linked current passage. Undo the link and confirm the source stays unchanged by linking. Replacement suggestions must still require exact original text for reattachment.
-8. Open Help and Settings, verify version **0.3.0**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
+8. Open Help and Settings, verify version **0.3.1**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
 9. Save, compare with the retained original, and reopen the sample to check saved comments and source. Test Undo before quitting; its history is session-only.
 
 This check needs the local TeX toolchain but no model/account call. Source remains in the generated sample folder. See the [user guide](docs/USER_GUIDE.md) for the controls and [FAQ](docs/FAQ.md) for recovery.
 
-### Help me chat checks
+### Codex Side Chat checks
 
 After building, `node scripts/check-help-chat.mjs` runs an isolated Electron check with synthetic papers, screenshots and controlled replies. If Playwright is installed elsewhere, pass `--playwright-package /absolute/path/to/playwright/package.json`. It checks context/version, image attachment and normalization, cancellation/retry, proposal conversion with Undo, changed-source guards, drawer layout, and conversation persistence. It uses a simulated paste event; physical operating-system clipboard delivery is a separate manual check. It makes no model request.
 
@@ -88,7 +88,7 @@ Live requests use your separately configured CLI and account and may consume ser
 node --experimental-strip-types scripts/check-codex-isolation.mjs
 ```
 
-Use `--codex /absolute/path/to/codex` for another executable location. The currently supported runtime is **0.153.4**; an unknown version must fail closed. The script uses a disposable Codex home and synthetic trusted project under `.test-runs/`, without copying credentials or changing your normal configuration. It never starts a model turn.
+Use `--codex /absolute/path/to/codex` for another executable location. The currently supported runtimes are **0.153.4** and **0.154.0-alpha.6.2**; an unknown version must fail closed. The script uses a disposable Codex home and synthetic trusted project under `.test-runs/`, without copying credentials or changing your normal configuration. It never starts a model turn.
 
 The positive control demonstrates that the old empty-table override starts a harmless MCP server and exposes its tool. The corrected cases use the actual editor client, with inherited home configuration, home plus trusted-project configuration, and an inherited desktop-launcher identity. All must report every server disabled, expose no MCP tools/resources, and leave the startup markers absent. The probe uses automatic tool approval settings to ensure that rejecting approval callbacks is not mistaken for disabling a server. It records CLI version and tested source hashes in ignored `test-evidence/`.
 

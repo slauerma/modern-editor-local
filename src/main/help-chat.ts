@@ -67,7 +67,7 @@ export class HelpChat {
     return { id, context: turn.context, labels: turn.labels, images: turn.images };
   }
   send(scope: ChatScope, previewId: string, progress: (message: string) => void): Promise<ChatTurn> {
-    if (this.operation || this.client.isBusy) return Promise.reject(new Error('Finish or stop the current Codex request before asking Help me.'));
+    if (this.operation || this.client.isBusy) return Promise.reject(new Error('Finish or stop the current Codex request before asking Codex Side Chat.'));
     const generation = this.generation;
     const operation = this.sendOperation(scope, previewId, progress, generation); this.operation = operation;
     void operation.then(() => { if (this.operation === operation) this.operation = null; }, () => { if (this.operation === operation) this.operation = null; });
@@ -119,5 +119,5 @@ export class HelpChat {
     } finally { if (session) await this.references!.finish(session, complete); }
   }
   cancel() { this.generation++; this.previews.clear(); return this.client.cancel(); }
-  async settle() { if (this.operation) await Promise.allSettled([this.operation]); if (this.unsaved.size) throw new Error('A chat reply has not been saved. Open Help me and retry saving the chat or copy the answer before clearing it.'); }
+  async settle() { if (this.operation) await Promise.allSettled([this.operation]); if (this.unsaved.size) throw new Error('A chat reply has not been saved. Open Codex Side Chat and retry saving the chat or copy the answer before clearing it.'); }
 }

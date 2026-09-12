@@ -25,7 +25,7 @@ input.on('line', line => {
   }
   if (!method && referenceMode && id === 'ref-read') setTimeout(referenceFinal, 10);
   if (method && has('pause-' + method.replaceAll('/', '-'))) { notification('fixture/paused', { method }); return; }
-  if (method === 'initialize') send({ id, result: { userAgent: `${process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? params.clientInfo.name}/${has('unknown-version') ? '0.999.0' : '0.153.4'} (fixture)` } });
+  if (method === 'initialize') send({ id, result: { userAgent: `${process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? params.clientInfo.name}/${has('unknown-version') ? '0.999.0' : has('prerelease-version') ? '0.154.0-alpha.6.2' : '0.153.4'} (fixture)` } });
   if (method === 'config/read') {
     if (has('config-unavailable')) send({id,error:{code:-32601,message:'Unsupported config/read'}});
     else send({id,result:{config:{features:{...features,...(has('unsafe-feature')?{plugins:true}:{}),...(has('unsafe-code-host')?{code_mode_host:!features.code_mode_host}:{}),...(has('unsafe-skill-discovery')?{skip_host_skill_discovery:false}:{})},...(has('agents-unavailable')?{}:{agents:{enabled:has('agents-enabled')||!flags.includes('agents.enabled=false')}}),web_search:'disabled',project_doc_max_bytes:0,mcp_servers:{'probe.with.dots':{command:'unused',enabled:true},'probe-two':{command:'unused',enabled:true}}}}});

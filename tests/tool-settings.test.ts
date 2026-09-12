@@ -91,6 +91,16 @@ test('unsupported Codex versions remain blocked; missing optional engines are di
   result = await f.service.check(f.settings); assert.equal(result.ready, false);
 });
 
+test('setup and copied diagnostics preserve a supported prerelease even after a CLI startup warning', async () => {
+  const f = await fixture();
+  await fs.writeFile(f.settings.codexPath, '#!/usr/bin/env node\nconsole.log("Startup warning\\ncodex-cli 0.154.0-alpha.6.2");\n', { mode: 0o700 });
+  const result = await f.service.check(f.settings);
+  assert.equal(result.ready, true); assert.equal(result.checks[0].version, 'codex-cli 0.154.0-alpha.6.2');
+  const details = formatSetupDetails({ editorVersion: '0.3.1', platform: 'darwin', osVersion: '26.0' }, result);
+  assert.match(details, /Codex CLI: 0\.154\.0-alpha\.6\.2; version check passed/);
+  assert.doesNotMatch(details, /Startup warning/);
+});
+
 test('copied setup details include recognisable tool versions and exclude free-form output, paths and account data', () => {
   const outputs: Record<SetupTool, string> = {
     codex: 'codex-cli 0.114.0',

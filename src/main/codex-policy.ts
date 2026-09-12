@@ -1,7 +1,8 @@
 import path from 'node:path';
+import { codexVersion } from '../shared/codex-version.ts';
 
 // Personal editor: keep this policy small and verify it with the real CLI probe before adding versions.
-export const verifiedCodexVersions = ['0.153.4'] as const;
+export const verifiedCodexVersions = ['0.153.4', '0.154.0-alpha.6.2'] as const;
 export const disabledCodexFeatures = ['apps', 'plugins', 'remote_plugin', 'enable_mcp_apps', 'shell_tool', 'unified_exec', 'multi_agent', 'multi_agent_v2', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'hooks', 'code_mode', 'skill_mcp_dependency_install', 'skill_search', 'tool_suggest', 'workspace_dependencies'];
 
 export class CodexPolicyError extends Error {
@@ -9,8 +10,8 @@ export class CodexPolicyError extends Error {
 }
 function object(value: unknown): value is Record<string, any> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 export function verifyCodexVersion(userAgent: unknown): string {
-  const version = typeof userAgent === 'string' ? /^modern_codex_editor\/(\d+\.\d+\.\d+)(?:\s|$)/.exec(userAgent)?.[1] : undefined;
-  if (!version || !verifiedCodexVersions.some(v => v === version)) throw new CodexPolicyError(`This build supports tested Codex CLI ${verifiedCodexVersions.join(', ')}; run the configuration probe before updating support.`);
+  const version = codexVersion(userAgent, 'server');
+  if (!version || !verifiedCodexVersions.some(v => v === version)) throw new CodexPolicyError(`${version ? `Detected Codex CLI ${version}. ` : 'The CLI version was not recognized. '}This build supports tested Codex CLI ${verifiedCodexVersions.join(', ')}. Update Modern Editor or select a supported CLI in Setup. Adding another version requires the configuration probe.`);
   return version;
 }
 export function reviewThreadConfig(result: unknown, fastMode: boolean, withReferences = false) {

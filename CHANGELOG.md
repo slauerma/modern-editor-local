@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.3.0 — Help me chat
+## 0.3.1 — Codex and SWP compatibility
+
+- Support the tested Codex CLI 0.154.0-alpha.6.2 alongside 0.153.4, retaining the full version and all pre-request restrictions. Setup reports the detected version clearly.
+- Large-folder compilation recognizes an unchanged bundled TCI support file, keeps local graphics alternatives for TeX to choose, and tolerates Windows drive fallbacks when local figures resolve on macOS.
+- Manuscript contents, build budgets and input freshness checks remain unchanged.
+
+## 0.3.0 — Codex Side Chat
 
 - Prominent review progress in the Comments pane, including section progress and pause/stop controls.
 - Hide Comments for more writing space; restore with the source-heading button or Command+2. The choice is saved per paper and background arrivals respect it.

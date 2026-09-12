@@ -30,8 +30,8 @@ async function imageFile(file: File): Promise<ChatImage> {
 export function HelpChatDrawer(props: Props) {
   const [editorOnly, setEditorOnly] = useState(false);
   const paper = !!props.projectId && !editorOnly;
-  return <aside className="help-chat-drawer" aria-label="Help me chat" hidden={!props.open} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); props.close(); } }}>
-    <header className="chat-heading"><div><strong>Help me</strong><span>Ask Codex about the editor or your paper</span></div><button aria-label="Close Help me chat" onClick={props.close}>×</button></header>
+  return <aside className="help-chat-drawer" aria-label="Codex Side Chat" hidden={!props.open} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); props.close(); } }}>
+    <header className="chat-heading"><div><strong>Codex Side Chat</strong><span>Ask Codex about the editor or your paper</span></div><button aria-label="Close Codex Side Chat" onClick={props.close}>×</button></header>
     <div className="chat-scope"><label>Conversation<select aria-label="Chat conversation" value={paper ? 'paper' : 'editor'} disabled={props.blocked} onChange={e => setEditorOnly(e.target.value === 'editor')}><option value="editor">Editor help · no paper context</option>{props.projectId && <option value="paper">This paper · {props.paperName}</option>}</select></label></div>
     <Conversation key={paper ? props.paperPath : 'editor-help'} {...props} paper={paper} />
   </aside>;
@@ -118,7 +118,7 @@ function Conversation(props: Props & { paper: boolean }) {
       {previewOpen && preview && <details className="chat-prepared" open><summary>Prepared context · {preview.labels.join(' · ')}</summary><pre tabIndex={0}>{preview.context}</pre><button onClick={() => setPreviewOpen(false)}>Hide preview</button></details>}
       {!!images.length && <div className="chat-thumbnails">{images.map(image => <div key={image.id}><button title="Enlarge attached screenshot" onClick={() => setExpandedImage(image)}><img src={image.dataUrl} alt={image.name} /></button><button disabled={busy} aria-label={`Remove ${image.name}`} onClick={() => changed(() => setImages(current => current.filter(i => i.id !== image.id)))}>×</button></div>)}</div>}
       <label className="chat-message-label" htmlFor={`chat-message-${id ?? 'help'}`}>Your question</label>
-      <textarea ref={entry} id={`chat-message-${id ?? 'help'}`} aria-label="Message to Help me" maxLength={10000} rows={3} placeholder="Ask about the editor, a proof, or a suggestion…" value={message} disabled={working} onChange={e => changed(() => setMessage(e.target.value))} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }} />
+      <textarea ref={entry} id={`chat-message-${id ?? 'help'}`} aria-label="Message to Codex Side Chat" maxLength={10000} rows={3} placeholder="Ask about the editor, a proof, or a suggestion…" value={message} disabled={working} onChange={e => changed(() => setMessage(e.target.value))} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }} />
       <input ref={picker} aria-label="Choose chat screenshots" hidden type="file" accept="image/png,image/jpeg" multiple onChange={e => { void attach([...e.target.files ?? []]); e.target.value = ''; }} />
       <div className="chat-send-actions"><button className="primary" disabled={busy || failedLoad || !message.trim()} title="Send · Command/Ctrl+Enter" onClick={() => void send()}>Ask Codex</button><button disabled={busy || images.length >= 3} onClick={() => picker.current?.click()}>Attach screenshot…</button>{sending && <button onClick={() => void window.editor.cancelCodex().catch(e => setError(messageOf(e)))}>Stop</button>}</div>
       {working && <p role="status">{sending ? props.status : 'Preparing chat context…'}</p>}

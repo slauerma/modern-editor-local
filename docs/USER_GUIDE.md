@@ -76,7 +76,7 @@ To focus a request, expand **Choose exact excerpts (optional)**. Select files an
 
 ## Compile a paper in a larger folder
 
-Press **Compile** normally. Above **50 MB or 500 files**, the editor starts deterministic dependency discovery: it follows recognizable source, figure, bibliography and local-style references and prepares a smaller snapshot automatically. This is the discovery threshold; the cap on actual required inputs is **200 MB / 2,000 files**. Standard installed packages remain in the TeX installation.
+Press **Compile** normally. Above **50 MB or 500 files**, the editor starts deterministic dependency discovery: it follows recognizable source, figure, bibliography and local-style references and prepares a smaller snapshot automatically. This is the discovery threshold; the cap on actual required inputs is **200 MB / 2,000 files**. Standard installed packages remain in the TeX installation. Local figure alternatives (such as both PDF and PNG) are kept together so TeX chooses normally. An unchanged copy of the bundled `tcilatex.tex` is recognized as support code. Windows drive fallbacks in `\graphicspath` do not block macOS discovery when the figures are also available locally; the source is not rewritten.
 
 If the local check cannot establish the inputs, inspect **Local check details**. **Prepare Codex request…** creates a local preview; **Ask Codex to help** sends it only when clicked. Inspect the returned file list, then choose **Compile selected files**. Codex does not change the manuscript. A specific unresolved question may require correcting a path or making a self-contained paper copy manually.
 
@@ -132,9 +132,9 @@ Choose **Actions → New draft**, select a new `.tex` filename in your paper fol
 
 Supply the original definitions of custom mathematical commands. This action preserves the body and makes additions only, so conflicting packages or errors in the paragraph may need manual correction. It accepts up to 120,000 characters and has no unchecked acceptance option. **Cancel preamble** stops the attempt. See [where new drafts are saved](FAQ.md#where-is-my-new-draft).
 
-## Ask Help me about the editor or paper
+## Ask Codex Side Chat about the editor or paper
 
-Open **Help me** in the top bar, or press **Command+Shift+H**. The drawer leaves your workspace in place. Closing it keeps the conversation and unsent question in this window. Select **Editor help** for program questions, even without an open paper, or **This paper** for its own conversation.
+Open **Codex Side Chat** in the top bar, or press **Command+Shift+H**. The drawer leaves your workspace in place. Closing it keeps the conversation and unsent question in this window. Select **Editor help** for program questions, even without an open paper, or **This paper** for its own conversation.
 
 Ask, for example, “Why did compilation fail?”, “Explain this lemma”, or “Make this suggestion more compact.” The installed editor version and bundled guides accompany every question. Expand **Context** to choose the current draft, selected passage, current comment, latest error/build details, or enabled reference folders. **Preview what is sent** shows the request; sent messages retain that context for inspection. The current draft can include unsaved changes. Long drafts include only their first 120,000 characters, with an explicit notice; select a later passage when needed.
 
@@ -168,8 +168,8 @@ The buttons visibly show **Shift+A** for checked acceptance, **Shift+R** for rej
 | **Command+1**, **Command+2** | Focus source / comments |
 | **Command+Shift+P** | Show/hide PDF |
 | **Command+Shift+M** | Show/hide toolbar |
-| **Command+Shift+H** | Open Help me chat |
-| **Command+Enter** in Help me | Send the question |
+| **Command+Shift+H** | Open Codex Side Chat |
+| **Command+Enter** in Codex Side Chat | Send the question |
 | **Command+,** | Settings |
 
 While typing in a text field, Undo follows that field's text history. The native menus also list application shortcuts. If the toolbar is hidden, **Show controls ▾** brings it back.
@@ -180,4 +180,4 @@ Open **Actions → Settings and Check setup…** or press **Command+,** to choos
 
 **Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It excludes manuscript text, file paths and account details. Expand **Copied setup details** to inspect the copied summary.
 
-**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **0.3.0**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
+**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **0.3.1**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.

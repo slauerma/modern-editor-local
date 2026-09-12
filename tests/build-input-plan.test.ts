@@ -63,20 +63,68 @@ test('more than 500 literal required files fit the automatic 2,000-file budget a
     assert.equal(plan.mode, 'dependencies'); assert.equal(plan.files.length, 506); assert.equal(plan.limits.maxFiles, 2000);
   } finally { await f.remove(); }
 });
-test('ambiguous extensionless graphic requires exactly one explicit candidate and keeps root mandatory', async () => {
+test('graphics alternatives are retained for TeX to choose; an explicit list keeps the root mandatory', async () => {
   const f = await fixture(String.raw`\includegraphics{plot}`);
   try {
     await f.put('plot.pdf', 'PDF'); await f.put('plot.png', 'PNG');
+    await f.put('unrelated.pdf', ''); await fs.truncate(path.join(f.root, 'unrelated.pdf'), 60_000_000);
+    const automatic = await planBuildInputs(f.settings);
+    assert.equal(automatic.status, 'ready', JSON.stringify(automatic)); if (automatic.status !== 'ready') return;
+    assert.equal(automatic.mode, 'dependencies');
+    assert.deepEqual(automatic.files.map(file => file.relative), ['main.tex', 'plot.pdf', 'plot.png']);
     const blocked = await planBuildInputs({ ...f.settings, limits: narrow });
     assert.equal(blocked.status, 'needs-selection'); if (blocked.status !== 'needs-selection') return;
-    assert(blocked.issues.some(issue => issue.includes('Ambiguous')));
-    assert.deepEqual(blocked.requiredPaths, ['main.tex']);
+    assert.equal(blocked.requiredFiles, 3);
+    assert.deepEqual(blocked.requiredPaths, ['main.tex', 'plot.pdf', 'plot.png']);
     const chosen = await validateBuildInputSelection({ ...f.settings, selectedPaths: ['main.tex', 'plot.pdf'] });
     assert.equal(chosen.status, 'ready', JSON.stringify(chosen));
     const both = await validateBuildInputSelection({ ...f.settings, selectedPaths: ['main.tex', 'plot.pdf', 'plot.png'] });
-    assert.equal(both.status, 'needs-selection');
+    assert.equal(both.status, 'ready');
     const omitted = await validateBuildInputSelection({ ...f.settings, selectedPaths: ['plot.pdf'] });
     assert.equal(omitted.status, 'needs-selection'); if (omitted.status === 'needs-selection') assert(omitted.issues.some(issue => issue.includes('omits required input: main.tex')));
+  } finally { await f.remove(); }
+});
+test('only the exact bundled TCI copy skips library definitions; caller graphics and modified copies remain checked', async () => {
+  const f = await fixture(String.raw`\input{tcilatex}`);
+  try {
+    const support = await fs.readFile('resources/tex-support/tcilatex.tex');
+    await fs.writeFile(path.join(f.root, 'tcilatex.tex'), support);
+    await f.put('unrelated.pdf', ''); await fs.truncate(path.join(f.root, 'unrelated.pdf'), 60_000_000);
+    const plan = await planBuildInputs(f.settings);
+    assert.equal(plan.status, 'ready', JSON.stringify(plan)); if (plan.status !== 'ready') return;
+    assert.equal(plan.mode, 'dependencies'); assert.deepEqual(plan.unresolvedIssues, []);
+    assert.deepEqual(plan.files.map(file => file.relative), ['main.tex', 'tcilatex.tex']);
+    assert.match(plan.files[1].hash ?? '', /^[a-f0-9]{64}$/);
+    for (const command of ['FRAME', 'GRAPHIC', 'IFRAME', 'graffile']) {
+      const legacy = await planBuildInputs({ ...f.settings, text: f.settings.text + '\n\\' + command + '{picture.png}' });
+      assert.equal(legacy.status, 'needs-selection'); if (legacy.status === 'needs-selection') assert(legacy.issues.some(issue => issue.includes(command)));
+    }
+    await fs.appendFile(path.join(f.root, 'tcilatex.tex'), '\n\\input{another-input}');
+    const modified = await planBuildInputs(f.settings);
+    assert.equal(modified.status, 'needs-selection'); if (modified.status === 'needs-selection') {
+      assert(modified.issues.some(issue => issue.includes('another-input')));
+      assert(modified.issues.some(issue => issue.includes('catcode')));
+    }
+  } finally { await f.remove(); }
+});
+test('foreign Windows graphics fallbacks do not block local files; missing or outside inputs still block', { skip: process.platform === 'win32' }, async () => {
+  const f = await fixture(String.raw`\graphicspath{{./}{figures/}{X:/paper/figures/}}\includegraphics{plot}`);
+  try {
+    await f.put('figures/plot.pdf', 'PDF'); await f.put('figures/plot.png', 'PNG');
+    await f.put('unrelated.pdf', ''); await fs.truncate(path.join(f.root, 'unrelated.pdf'), 60_000_000);
+    const plan = await planBuildInputs(f.settings);
+    assert.equal(plan.status, 'ready', JSON.stringify(plan)); if (plan.status !== 'ready') return;
+    assert.deepEqual(plan.files.map(file => file.relative), ['figures/plot.pdf', 'figures/plot.png', 'main.tex']);
+    for (const text of [
+      String.raw`\graphicspath{{X:/paper/figures/}}\includegraphics{missing}`,
+      String.raw`\includegraphics{X:/paper/figures/plot.pdf}`,
+      String.raw`\graphicspath{{/private/figures/}}\includegraphics{figures/plot.pdf}`,
+      String.raw`\graphicspath{{../figures/}}\includegraphics{figures/plot.pdf}`,
+      String.raw`\input{X:/paper/part}`
+    ]) {
+      const blocked = await planBuildInputs({ ...f.settings, text });
+      assert.equal(blocked.status, 'needs-selection', text);
+    }
   } finally { await f.remove(); }
 });
 test('computed references require an explicit preview and retain their uncertainty; missing literals still block', async () => {

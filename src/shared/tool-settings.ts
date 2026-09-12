@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { codexVersion } from './codex-version.ts';
 
 export const toolSettingsSchema = z.object({
   codexPath: z.string().trim().min(1).max(4096),
@@ -29,12 +30,11 @@ export function setupOperatingSystem(identity: SetupIdentity): string {
 // diagnostics, account information, or data from the open paper.
 function copyableToolVersion(check: ToolCheck): string | null {
   const output = check.version ?? '';
-  const match = check.tool === 'codex'
-    ? /\bcodex(?:-cli)?\s+(\d+\.\d+\.\d+)(?=\s|$)/i.exec(output)
-    : /\bversion\s+(\d+(?:[.-]\d+)*[a-z]?)(?=\s|$|[(),])/i.exec(output)
+  if (check.tool === 'codex') return codexVersion(output, 'cli') ?? null;
+  const match = /\bversion\s+(\d+(?:[.-]\d+)*[a-z]?)(?=\s|$|[(),])/i.exec(output)
       ?? /\b(?:pdfTeX|XeTeX|LuaHBTeX|LuaTeX)\s*,?\s*(\d+(?:[.-]\d+)*[a-z]?)(?=\s|$|[(),])/i.exec(output);
   if (!match) return null;
-  const texLive = check.tool === 'codex' ? null : /\bTeX Live (20\d\d)\b/.exec(output)?.[1];
+  const texLive = /\bTeX Live (20\d\d)\b/.exec(output)?.[1];
   return match[1] + (texLive ? ` (TeX Live ${texLive})` : '');
 }
 

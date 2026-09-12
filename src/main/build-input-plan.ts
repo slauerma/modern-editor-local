@@ -23,6 +23,9 @@ const allowed = new Set(['.tex', '.bib', '.bst', '.cls', '.sty', '.png', '.jpg',
 const ignoredDirectories = new Set(['node_modules', 'dist', 'build', 'output', 'out', 'releases']);
 const texExtensions = new Set(['.tex', '.sty', '.cls', '.def', '.cfg', '.clo', '.fd', '.ltx', '.tikz', '.pgf', '.bbl']);
 const companionExtensions = new Set(['.sty', '.cls', '.def', '.cfg', '.clo', '.fd', '.ltx']);
+// Only this exact bundled support library is known to define SWP commands without
+// loading paper inputs. Caller-side legacy graphics commands still need review.
+const bundledTciHash = '18a30fde335b55c0e251f95b69c433d70e8d04cf88b7e3cfad42211a9a40a02b';
 type Settings = {
   rootDir: string; rootName: string; text: string; selectedPaths?: string[]; limits?: BuildInputLimits;
   expectedIdentity?: BuildDirectoryIdentity;
@@ -237,6 +240,7 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
       required.set(file.relative, { relative: file.relative, size: bytes.length, hash: digest(bytes) });
       graphBytes += bytes.length;
       if (graphBytes > MAX_GRAPH_TEXT_BYTES) { problem('Dependency source text exceeds the 30 MB analysis limit; its list is incomplete.'); return; }
+      if (file.relative !== rootInfo.relative && path.posix.basename(file.relative).toLowerCase() === 'tcilatex.tex' && digest(bytes) === bundledTciHash) return;
       text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
     } catch (error) { problem(`Cannot analyze ${file.relative}: ${String(error).slice(0, 200)}`); return; }
     await scanSource(text, file.relative, base);
@@ -264,6 +268,12 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
     }
     let chosen = matches;
     if (matches.length > 1 && selected) chosen = matches.filter(f => selected.has(f.relative));
+    // Preserve normal TeX lookup when several local image formats/paths exist.
+    // Copy the bounded superset instead of guessing the engine's preferred file.
+    if (graphics && chosen.length) {
+      for (const file of chosen) await add(file, scan, base);
+      return;
+    }
     if (chosen.length !== 1) {
       problem(`Ambiguous dependency ${at}; choose exactly one of: ${matches.map(f => f.relative).join(', ')}`);
       return;
@@ -277,7 +287,7 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
       cancelled(settings.signal);
       if (++commands > 100_000) { problem('The dependency scan exceeded its command limit; its list is incomplete.'); return; }
       const name = match[1], offset = afterOptions(text, command.lastIndex);
-      if (['csname', 'catcode', 'openin', 'read', 'directlua', 'latelua', 'scantokens', 'input@path', 'DeclareGraphicsRule', 'DeclareGraphicsExtensions', 'externaldocument', 'includeinkscape', 'includestandalone', 'pgfplotstableread', 'DTLloaddb', 'addplot', 'addplotthree', 'tikzexternalize', 'setmainfont', 'setsansfont', 'setmonofont', 'newfontfamily', 'newfontface', 'font', 'csvreader', 'csvautotabular'].includes(name)) {
+      if (['csname', 'catcode', 'openin', 'read', 'directlua', 'latelua', 'scantokens', 'input@path', 'DeclareGraphicsRule', 'DeclareGraphicsExtensions', 'externaldocument', 'includeinkscape', 'includestandalone', 'pgfplotstableread', 'DTLloaddb', 'addplot', 'addplotthree', 'tikzexternalize', 'setmainfont', 'setsansfont', 'setmonofont', 'newfontfamily', 'newfontface', 'font', 'csvreader', 'csvautotabular', 'FRAME', 'IFRAME', 'DFRAME', 'FFRAME', 'GRAPHIC', 'GRAPHICSPS', 'GRAPHICSHP', 'graffile', 'epsfig', 'psfig'].includes(name)) {
         uncertain(`Dependency command \\${name} in ${source} requires an explicit decision.`); continue;
       }
       if (name === 'graphicspath') {
@@ -287,6 +297,9 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
         while ((next = group(arg.value, pos))) {
           const directory = literal(next.value);
           if (!isLiteral(directory)) uncertain(`Computed graphics path in ${source}: ${directory}`);
+          // SWP often retains a Windows drive fallback alongside local paths.
+          // It cannot resolve on this host; do not rewrite it or grant access.
+          else if (process.platform !== 'win32' && /^[a-z]:\//i.test(directory)) { /* Local matches are still required below. */ }
           else if (path.posix.isAbsolute(directory) || directory.includes(':')) problem(`Outside graphics path in ${source}: ${directory}`);
           else {
             const joined = path.posix.normalize(path.posix.join(base, directory));

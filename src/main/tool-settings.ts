@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { toolSettingsSchema, type ToolSettings, type SetupCheck, type ToolCheck, type SetupTool } from '../shared/tool-settings.ts';
 import { readJSON, writeJSON } from './files.ts';
 import { verifiedCodexVersions, verifyCodexVersion } from './codex-policy.ts';
+import { codexVersion } from '../shared/codex-version.ts';
 
 const execute = promisify(execFile);
 export const defaultToolSettings: ToolSettings = {
@@ -72,7 +73,8 @@ export class ToolSettingsService {
         version = output.split(/\r?\n/).find(line => line.trim())?.slice(0, 500) ?? null;
         if (!version) throw new Error('The executable returned no version information.');
         if (spec.tool === 'codex') {
-          const number = /\bcodex(?:-cli)?\s+(\d+\.\d+\.\d+)(?:\s|$)/.exec(output)?.[1];
+          const number = codexVersion(output, 'cli');
+          if (number) version = `codex-cli ${number}`;
           verifyCodexVersion(number ? `modern_codex_editor/${number}` : undefined);
         }
         checks.push({ tool: spec.tool, path: spec.file, required: spec.required, ok: true, version, message: spec.tool === 'codex' ? `Supported CLI version. Review restrictions are verified again before every review. Tested version: ${verifiedCodexVersions.join(', ')}.` : 'Local executable responded. Compilation is checked separately when you compile a paper.' });

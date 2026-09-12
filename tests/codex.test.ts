@@ -14,6 +14,16 @@ async function fixture() {
   return { directory, client: new CodexClient(directory, binary) };
 }
 
+test('the tested prerelease completes a reply with all normal preflight checks', async () => {
+  const { client, directory } = await fixture();
+  await fs.mkdir(directory, { recursive: true });
+  await fs.writeFile(path.join(directory, 'prerelease-version'), '');
+  await client.run('normal', replyOutputSchema, () => {});
+  const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  for (const method of ['config/read', 'skills/list', 'mcpServerStatus/list', 'turn/start']) assert(requests.some((r: any) => r.method === method));
+  await assertExited(directory);
+});
+
 test('help chat sends screenshots as typed image inputs and preserves the restrictive runtime policy', async () => {
   const { client, directory } = await fixture();
   const screenshot = 'data:image/png;base64,iVBORw0KGgo=';

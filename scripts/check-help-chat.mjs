@@ -37,9 +37,9 @@ const receipt = { version, source:'synthetic', model:'controlled; no account req
 let application, page;
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function poll(fn,label,timeout=20000){const end=Date.now()+timeout;while(Date.now()<end){if(await fn())return;await pause(60);}throw new Error('Timed out: '+label);}
-const drawer=()=>page.getByRole('complementary',{name:'Help me chat'});
+const drawer=()=>page.getByRole('complementary',{name:'Codex Side Chat'});
 const button=name=>drawer().getByRole('button',{name,exact:true});
-const question=()=>page.getByLabel('Message to Help me');
+const question=()=>page.getByLabel('Message to Codex Side Chat');
 const scope=()=>page.getByLabel('Chat conversation');
 async function probe(){return application.evaluate(()=>({requests:globalThis.__chatProbe.requests,pending:!!globalThis.__chatProbe.pending,compileAttempts:globalThis.__chatProbe.compileAttempts}));}
 async function ask(text){const count=(await probe()).requests.length;await question().fill(text);await button('Ask Codex').click();await poll(async()=>{const p=await probe();return p.pending&&p.requests.length===count+1;},'chat request');}
@@ -53,7 +53,7 @@ async function openPaper(){await application.evaluate(({dialog},file)=>{dialog.s
 async function pasteScreenshot(dataUrl,name){await question().evaluate((el,{dataUrl,name})=>{const bytes=Uint8Array.from(atob(dataUrl.split(',')[1]),c=>c.charCodeAt(0));const dt=new DataTransfer();dt.items.add(new File([bytes],name,{type:'image/png'}));el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}));},{dataUrl,name});}
 const answer={reply:'Allocation is singular. The proposed sentence keeps the meaning.',suggestion:{title:'Correct the verb',explanation:'Use a singular verb.',original:'The allocation are monotone.',before:'',after:'',replacement:'The allocation is monotone.',packages:[]}};
 try{
-  await launch();await page.getByRole('button',{name:'Help me',exact:true}).click();await question().waitFor();
+  await launch();await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();await question().waitFor();
   await ask('Which version is running, and how can I compile?');let request=(await probe()).requests.at(-1);assert.equal(request.prompt.application.version,version);assert(request.prompt.application.documentation.includes('Command+T'));assert(!request.prompt.source);assert.equal(request.effort,'medium');
   await complete({reply:`This is Modern Editor ${version}. Command+T compiles the current draft.`,suggestion:null});await shot('01-editor-help');await check('Editor help without a paper uses bundled docs and actual version');
   const image=await application.evaluate(({nativeImage})=>'data:image/png;base64,'+nativeImage.createFromBitmap(Buffer.alloc(240*120*4,180),{width:240,height:120}).toPNG().toString('base64'));
@@ -67,18 +67,18 @@ try{
   await ask('Explain this screenshot.');request=(await probe()).requests.at(-1);assert.equal(request.images.length,1);assert(!Buffer.from(request.images[0].split(',')[1],'base64').includes(Buffer.from('SYNTHETIC_METADATA_TO_REMOVE')));assert(!JSON.stringify(request.prompt).includes('data:image'));
   await complete({reply:'The attached synthetic image is available as an image input.',suggestion:null});await shot('02-screenshot-message');await check('Paste, drop, enlarge, remove, file attachment and main-process image normalization');
   await ask('Retry this same question after stopping.');await button('Stop').click();await poll(()=>question().isEnabled(),'cancel completion');assert.equal(await question().inputValue(),'Retry this same question after stopping.');await ask('Retry this same question after stopping.');await complete({reply:'The unchanged question can be retried after Stop.',suggestion:null});await check('Stop retains question and unchanged retry uses a fresh preview');
-  await question().fill('Keep this unsent question.');await button('Close Help me chat').click();await page.getByRole('button',{name:'Help me',exact:true}).click();assert.equal(await question().inputValue(),'Keep this unsent question.');await button('Close Help me chat').click();
-  await openPaper();await page.getByRole('button',{name:'Help me',exact:true}).click();assert.equal(await scope().inputValue(),'paper');assert.equal(await drawer().locator('.chat-turn').count(),0);
+  await question().fill('Keep this unsent question.');await button('Close Codex Side Chat').click();await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert.equal(await question().inputValue(),'Keep this unsent question.');await button('Close Codex Side Chat').click();
+  await openPaper();await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert.equal(await scope().inputValue(),'paper');assert.equal(await drawer().locator('.chat-turn').count(),0);
   await ask('Improve the grammar of the first sentence.');request=(await probe()).requests.at(-1);assert.equal(request.prompt.source.text,source);assert(!request.prompt.diagnostics);await complete(answer);assert.equal(await buffer(),source);assert.equal(await drawer().locator('.chat-suggestion').count(),1);await shot('03-paper-proposal');
   await button('Turn into comment').click();await poll(()=>drawer().isHidden(),'drawer closes for review');assert.equal(await buffer(),source);assert.equal(await page.getByLabel('Proposed replacement',{exact:true}).inputValue(),answer.suggestion.replacement);
   await application.evaluate(({Menu,BrowserWindow})=>{const item=Menu.getApplicationMenu().items.find(x=>x.label==='Edit').submenu.items.find(x=>x.label==='Undo');item.click(item,BrowserWindow.getAllWindows()[0],{});});await poll(()=>page.getByLabel('Proposed replacement',{exact:true}).count().then(n=>n===0),'undo added comment');await check('Adding a visible proposal is undoable and never changes source');
-  await page.getByRole('button',{name:'Help me',exact:true}).click();await ask('Improve that sentence again while I edit.');
+  await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();await ask('Improve that sentence again while I edit.');
   await page.getByLabel('LaTeX source',{exact:true}).evaluate(el=>{const view=window.editorViewForTest(el);view.dispatch({changes:{from:0,insert:'% synthetic edit\n'}});});
   await complete({...answer,reply:'This answer was prepared against the earlier source.'});await button('Turn into comment').last().click();await poll(()=>drawer().isHidden(),'stale addition returns to review');await page.getByText(/passage needs confirmation|passage is unconfirmed|Confirm this passage|placement needs confirmation/).first().waitFor().catch(async()=>{assert(await page.getByText('Attach to selected text',{exact:true}).isVisible());});
   assert((await buffer()).startsWith('% synthetic edit'));await check('Source changes during chat require proposal attachment confirmation');
-  await page.getByRole('button',{name:'Help me',exact:true}).click();await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(960,640));await question().scrollIntoViewIfNeeded();await shot('04-minimum-window');
+  await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(960,640));await question().scrollIntoViewIfNeeded();await shot('04-minimum-window');
   const bounds=await question().boundingBox();assert(bounds&&bounds.y>=0&&bounds.y+bounds.height<=640);await check('Question remains accessible at minimum window size');
-  await close();await launch();await page.getByRole('button',{name:'Help me',exact:true}).click();await poll(()=>drawer().locator('.chat-turn').count().then(n=>n===2),'paper chat restored');
+  await close();await launch();await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();await poll(()=>drawer().locator('.chat-turn').count().then(n=>n===2),'paper chat restored');
   await scope().selectOption('editor');await drawer().getByText('The unchanged question can be retried after Stop.',{exact:true}).waitFor();assert.equal(await drawer().getByAltText('Synthetic warning.png').count(),1);await shot('05-reopened-editor-conversation');await check('Restart restores separate paper/editor conversations and screenshots');
   await button('Clear chat…').click();await button('Keep').click();assert.equal(await drawer().locator('.chat-turn').count(),4);await button('Clear chat…').click();await button('Clear conversation').click();await poll(()=>drawer().locator('.chat-turn').count().then(n=>n===0),'editor chat cleared');await scope().selectOption('paper');await poll(()=>drawer().locator('.chat-turn').count().then(n=>n===2),'paper chat preserved');await check('Confirmed clearing deletes only the chosen conversation');
   await close();assert.deepEqual(receipt.errors,[]);receipt.passed=true;

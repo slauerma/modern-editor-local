@@ -38,6 +38,35 @@ test('actual LaTeX compiles a small literal dependency set inside an oversized f
     assert.equal(await fs.readFile(path.join(f.paper, 'main.tex'), 'utf8'), f.text);
   } finally { await f.remove(); }
 });
+test('SWP support and alternative local graphics compile unchanged with foreign drive fallbacks', { timeout: 60_000, skip: process.platform === 'win32' }, async () => {
+  const f = await fixture();
+  try {
+    await fs.mkdir(path.join(f.paper, 'figures'));
+    await fs.copyFile('resources/tex-support/tcilatex.tex', path.join(f.paper, 'tcilatex.tex'));
+    await fs.copyFile('fixtures/audit-paper/figures/allocation.pdf', path.join(f.paper, 'figures/plot.pdf'));
+    await fs.copyFile('fixtures/texpile/allocation.jpg', path.join(f.paper, 'figures/plot.jpg'));
+    const frozen = f.text.replace('\\begin{document}', String.raw`\usepackage{graphicx}
+\input{tcilatex}
+\graphicspath{{./}{figures/}{X:/old-workstation/figures/}}
+\begin{document}
+\includegraphics[width=2cm]{plot}`);
+    const plan = await f.compiler.planInputs(f.project.id, frozen);
+    assert.equal(plan.status, 'ready', JSON.stringify(plan)); if (plan.status !== 'ready') return;
+    assert.equal(plan.mode, 'dependencies'); assert.equal(plan.files.length, 5);
+    const build = await f.compiler.compile(f.project.id, frozen, 'pdflatex');
+    assert.equal(build.success, true, build.log); assert.equal(build.dependenciesVerified, true, JSON.stringify(build.diagnostics));
+    assert.equal(await f.compiler.validate(f.project.id, build.id, frozen), true);
+    const directory = path.join(f.root, 'builds', build.id);
+    const recorded = await fs.readFile(path.join(directory, 'main.fls'), 'utf8');
+    assert.match(recorded, /^INPUT .*figures\/plot\.pdf$/m);
+    assert.doesNotMatch(recorded, /^INPUT .*figures\/plot\.jpg$/m);
+    for (const image of ['plot.pdf', 'plot.jpg']) assert.deepEqual(await fs.readFile(path.join(directory, 'figures', image)), await fs.readFile(path.join(f.paper, 'figures', image)));
+    assert.equal(await fs.readFile(path.join(directory, 'main.tex'), 'utf8'), frozen);
+    await fs.appendFile(path.join(f.paper, 'tcilatex.tex'), '\n% changed support copy');
+    assert.equal(await f.compiler.validate(f.project.id, build.id, frozen), false);
+    assert.equal(await fs.readFile(path.join(f.paper, 'main.tex'), 'utf8'), f.text);
+  } finally { await f.remove(); }
+});
 test('computed dependencies require an explicit unverified preview, and preparation failure preserves the previous PDF', { timeout: 60_000 }, async () => {
   const f = await fixture();
   try {
