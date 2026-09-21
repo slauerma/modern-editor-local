@@ -7,11 +7,17 @@
 1. Choose **Try the working sample** for synthetic source and prepared comments, or **Open a LaTeX paper** for your paper's root `.tex` file. Keep the paper with its bibliography, figures, and local style files.
 2. Press **Compile**, **Command+T** or **Command+B** to show the PDF. This uses the current editor text, including unsaved edits. Choose the paper's LaTeX engine in **Actions → Compile & layout** when necessary.
 3. Read a comment's **Original**, **Proposed replacement**, and **Show changes**. You can edit the proposed replacement before accepting it.
-4. Choose **Accept and next** for a compilation check followed by application, or **Skip** to read the next comment. Press **Save** when you want to write the changed `.tex` file.
+4. Choose **Accept** to apply without compiling and advance, or **Skip** to read the next comment. Choose **Accept & compile** when you want a compilation check before applying. Press **Save** when you want to write the changed `.tex` file.
 
 Open a UTF-8 `.tex` file of at most 2,000,000 bytes. Convert older encodings in a separate copy before opening.
 
 Prepared comments need no Codex account. Generating reviews, asking questions, and creating a preamble use your configured Codex connection.
+
+## Close a project and return home
+
+Choose **Close project** beside the filename, in **Actions → Paper**, or in the **File** menu. It stops pending review/compilation, records the current draft and comments in recovery, and returns to the home screen. **Save** remains the action that writes the `.tex` file. If recovery cannot be recorded, the project stays open so you can retry or export your source.
+
+The next launch also starts at Home. Use **Open a LaTeX paper** to reopen the document and restore its recoverable unsaved text, comments, saved versions and reading position. Unsent Side Chat drafts and unsaved review instructions are session-only; keep those before closing. Undo history is also session-only.
 
 ## Ask for the review you need
 
@@ -35,9 +41,9 @@ To start a note without Codex, select source text and choose **Actions → Add c
 
 | Action | Result |
 | --- | --- |
-| **Accept and next** | Checks a candidate compilation, applies a passing proposal to the editor, then advances. Warnings can pause acceptance for inspection. Save is still separate. |
+| **Accept** / **Shift+A** | Applies the proposal and any listed packages without compiling, then advances. The PDF may now be older. Save is still separate. |
+| **Accept & compile** | Checks a candidate compilation, applies a passing proposal to the editor, then advances. Warnings can pause acceptance for inspection. |
 | **More → Accept all applicable suggestions (N)** | Compiles one combined candidate for the eligible pending replacements, then applies them together as one undoable change. |
-| **Accept without compiling** | Applies the proposal and any listed packages, then advances. The PDF may now be older. |
 | **Skip** / **Next** | Advances without making a decision or setting a persistent skipped status. |
 | **Later** | Sets an open comment aside, retaining its proposal and discussion across reopening. Use **Later (n)** and **Return to pending** to revisit it. |
 | **Reject** / **Shift+R** | Moves the current comment into History without changing the source. Undo restores it. |
@@ -48,7 +54,7 @@ To start a note without Codex, select source text and choose **Actions → Add c
 
 **More → Accept all applicable suggestions (N)** shows how many pending replacements can be applied together. It includes only current suggestions whose original text still matches exactly and whose changes do not overlap. Questions, stale or ambiguous suggestions, overlapping proposals and Later comments remain for individual review. The editor compiles the combined draft once; after acceptance, one **Undo** restores the batch's source changes and decisions. Save is still separate.
 
-If the candidate produces a PDF with verified inputs but acceptance warnings, the editor explains the issue, such as undefined citations or references, duplicate labels, or missing characters (glyphs). Inspect **View candidate PDF** and **Build details**, then choose **Apply despite warnings** to proceed deliberately. Before applying, the editor rechecks the source, suggestions and compilation inputs; changed inputs require a new compile. Failed compilation or unverified inputs never offer this override. **Accept without compiling** remains available for individual suggestions with valid source placement.
+With **Accept & compile** or **Accept all**, if the candidate produces a PDF with verified inputs but acceptance warnings, the editor explains the issue, such as undefined citations or references, duplicate labels, or missing characters (glyphs). Inspect **View candidate PDF** and **Build details**, then choose **Apply despite warnings** to proceed deliberately. Before applying, the editor rechecks the source, suggestions and compilation inputs; changed inputs require a new compile. Failed compilation or unverified inputs never offer this override. Ordinary **Accept** skips compilation for an individual suggestion while retaining source-placement guards.
 
 The Comments pane's **More → Dismiss pending comments** affects the pending comments present when clicked. One **Undo** restores that batch. Comments that arrive afterward retain their own status when you Undo or Redo the dismissal.
 
@@ -148,13 +154,13 @@ Chats are saved in application storage, separately from source and review sideca
 
 To write with more room, click **×** in the Comments heading or turn off **Actions → Show comments**. The source and PDF expand into the available space. **Show comments** above the source, **Command+2**, or **View → Show/hide comments** brings the pane back. The choice is remembered for this paper; comments, discussions and pane widths are retained. A new review deliberately opens the pane, but background comments arriving after you hide it leave it hidden.
 
-During a review, a prominent progress card appears in the Comments pane. Section reviews show the current section and completed-section count, with Pause/Continue and Stop. Existing comments remain usable while later sections are prepared. **Accept without compiling** is the smaller text action beneath Accept/Reject/Skip; it keeps the same placement guards and Undo behavior.
+During a review, a prominent progress card appears in the Comments pane. Section reviews show the current section and completed-section count, with Pause/Continue and Stop. Existing comments remain usable while later sections are prepared. **Accept & compile** is a compact button beneath Accept/Reject/Skip. Both acceptance actions keep placement guards and Undo.
 
-The buttons visibly show **Shift+A** for checked acceptance, **Shift+R** for rejection and **Shift+S** for skipping. These review shortcuts work while focus is in the comments controls, outside typing fields. Click a comment control such as **Next** to return focus there. They do not intercept uppercase letters in the source, replacement, note, or Find field.
+The buttons visibly show **Shift+A** for acceptance without compiling, **Shift+R** for rejection and **Shift+S** for skipping. These review shortcuts work while focus is in the comments controls, outside typing fields. Click a comment control such as **Next** to return focus there. They do not intercept uppercase letters in the source, replacement, note, or Find field.
 
 | Shortcut | Action |
 | --- | --- |
-| **Shift+A** or **Option+Enter** | Accept with compilation check and advance |
+| **Shift+A** or **Option+Enter** | Accept without compiling and advance |
 | **Shift+R** | Reject the current comment into History; Undo restores it |
 | **Shift+N**, **Shift+S**, or **Option+Right** | Skip / next comment |
 | **Shift+P** or **Option+Left** | Previous comment |
@@ -180,4 +186,4 @@ Open **Actions → Settings and Check setup…** or press **Command+,** to choos
 
 **Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It excludes manuscript text, file paths and account details. Expand **Copied setup details** to inspect the copied summary.
 
-**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **0.3.1**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
+**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **0.3.2**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.

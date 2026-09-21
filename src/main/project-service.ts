@@ -184,6 +184,14 @@ export class ProjectService {
     const saved = await readJSON(file) as { path?: string };
     return typeof saved.path === 'string' ? this.open(saved.path) : null;
   }
+  async close(projectId: string) { return this.serial(async () => {
+    this.get(projectId);
+    // Forget only automatic reopening, after recovery has been flushed by the
+    // renderer. Keep every source, review, version and recovery record in place.
+    await this.writeAtomic(path.join(this.cache, 'last-project.json'), serializeJSON({ path: null }));
+    this.current = null; this.openedDirectory = null;
+    this.lineEnding = '\n'; this.bom = ''; this.recoveryRevision = 0;
+  }); }
   private checked(input: BufferInput) {
     const parsed = bufferSchema.parse(input), p = this.get(parsed.projectId);
     if (parsed.review.rootFile !== p.name) throw new Error('The review belongs to a different document.');

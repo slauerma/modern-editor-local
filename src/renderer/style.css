@@ -20,6 +20,7 @@ textarea:disabled { color:#708074; background:#f5f6f3; }
 .unified-toolbar button,.unified-toolbar select,.actions-menu { -webkit-app-region:no-drag; }
 .brand-mark { display:grid; place-items:center; flex-shrink:0; width:28px; height:28px; border-radius:7px; background:var(--green); color:white; font-family:Georgia,serif; font-size:21px; }
 .file-name { display:flex; gap:8px; align-items:center; min-width:80px; flex:1; }
+.close-project { flex-shrink:0; font-size:11px; padding:4px 7px; }
 .file-name strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
 .saved,.unsaved { font-size:10px; border-radius:12px; padding:3px 7px; }
 .saved { color:#536658; background:#f0f4ee; }.unsaved { color:#8b6231; background:#faf1df; }
@@ -117,7 +118,7 @@ textarea:disabled { color:#708074; background:#f5f6f3; }
 .reply-packages,.reply-current { font-size:11px; color:#617358; }
 .reply-current { display:block; margin-top:6px; }
 .empty-comments { padding:20px 7px; color:#74816f; line-height:1.7; }.empty-comments h2 { font-size:16px; color:#40543e; }.empty-comments p { font-size:12px; }
-.comment-card .accept-unchecked { font-size:11px; padding:5px 0; margin-top:4px; text-decoration:underline; text-underline-offset:3px; color:#647869; }
+.comment-card .accept-compile { font-size:11px; padding:6px 10px; margin-top:4px; }
 .comment-overview { border:1px solid #dce4d7; border-radius:6px; background:white; padding:8px; margin-bottom:12px; }.comment-overview>div:first-child { display:flex; gap:6px; }.comment-overview select { min-width:0; max-width:52%; font-size:11px; padding:5px; }.overview-items { max-height:240px; overflow:auto; }.overview-items button { display:block; width:100%; white-space:normal; text-align:left; border:0; margin-top:5px; font-size:12px; }.overview-items small { display:block; color:var(--muted); margin-top:4px; }.overview-items [aria-current=true] { background:#e7f0e1; }
 .pdf-pane { display:flex; flex-direction:column; min-height:0; min-width:0; background:#e9ece7; }
 .pdf-controls { height:36px; flex-shrink:0; display:flex; align-items:center; gap:6px; padding:0 10px; font-size:11px; background:#f5f7f2; border-bottom:1px solid #dce2d6; }

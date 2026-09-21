@@ -30,7 +30,9 @@ test('the current release is identifiable in the package and searchable changelo
   const sections = helpSections(await fs.readFile('CHANGELOG.md', 'utf8'), 'changelog');
   assert.match(info.version, /^\d+\.\d+\.\d+$/);
   assert.equal(lock.version, info.version); assert.equal(lock.packages[''].version, info.version);
-  assert.match(sections[0].title, new RegExp(`^${info.version.replaceAll('.', '\\.')} `));
+  const releases = sections.filter(section => /^\d+\.\d+\.\d+ /.test(section.title));
+  assert(releases.length, 'The changelog must contain a released version');
+  assert.match(releases[0].title, new RegExp(`^${info.version.replaceAll('.', '\\.')} `));
   for (const query of ['continuous PDF', 'search read on demand', 'large folders', 'Command+T', 'dismiss pending', 'relink question', 'setup details']) {
     assert(findHelpSections(sections, query).length, `Release history is missing searchable topic: ${query}`);
   }

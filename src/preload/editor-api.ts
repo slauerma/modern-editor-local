@@ -24,6 +24,7 @@ const api: EditorAPI = {
   savedFeedback: projectId => ipcRenderer.invoke('feedback:list', projectId),
   openProject: () => ipcRenderer.invoke('project:open'),
   resumeProject: () => ipcRenderer.invoke('project:resume'),
+  closeProject: projectId => ipcRenderer.invoke('project:close', projectId),
   openDemo: () => ipcRenderer.invoke('project:demo'),
   openDraft: () => ipcRenderer.invoke('project:draft'),
   exportSource: input => ipcRenderer.invoke('source:export', input),

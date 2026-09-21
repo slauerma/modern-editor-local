@@ -13,6 +13,6 @@ export function ProposalPreview({ text, comment: c }: { text: string; comment: C
   }
   return <>
     <details key={c.id} open className="proposal-diff" aria-label="Proposed change"><summary>Show changes</summary><ReadableArea label="changes" resetKey={c.id}><p>{tokenDiff(c.original, replacement).map((part, i) => part.kind === 'removed' ? <del key={i}>{part.text}</del> : part.kind === 'added' ? <ins key={i}>{part.text}</ins> : <span key={i}>{part.text}</span>)}</p></ReadableArea></details>
-    {!!c.packages.length && c.decision === 'open' && <div className="preamble-note"><strong>Preamble changes</strong>{preambleNotice ? <p>{preambleNotice}</p> : preamble ? <pre>{preamble}</pre> : <p>No package insertion needed; the listed packages are already present.</p>}<p>Included with the replacement. Accept and next checks both.</p></div>}
+    {!!c.packages.length && c.decision === 'open' && <div className="preamble-note"><strong>Preamble changes</strong>{preambleNotice ? <p>{preambleNotice}</p> : preamble ? <pre>{preamble}</pre> : <p>No package insertion needed; the listed packages are already present.</p>}<p>Included with the replacement. Accept &amp; compile checks both first.</p></div>}
   </>;
 }

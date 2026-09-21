@@ -212,10 +212,18 @@ handle('codex:chat', input => {
 handle('codex:acknowledge', input => { const p = z.object({ projectId: z.string(), resultId: z.string().uuid(), outcome: z.enum(['adopted', 'dismissed']) }).parse(input); return codex.results.acknowledge(p.projectId, p.resultId, p.outcome); });
 handle('codex:cancel', () => { buildHelp.cancel(); return Promise.all([helpChat.cancel(), codex.cancel()]); });
 handle('codex:preamble', input => codex.preamble(preambleRequestSchema.parse(input), message => window?.webContents.send('codex:progress', message)));
-async function finishClose() {
+async function settleWindowWork() {
   await Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), attachments.stop()]);
   // A finished model process can still have an answer being validated/written.
   await Promise.all([codex.settle(), helpChat.settle()]); await projects.settle();
+}
+handle('project:close', async id => {
+  const projectId = z.string().parse(id); projects.get(projectId);
+  await settleWindowWork();
+  await projects.close(projectId);
+});
+async function finishClose() {
+  await settleWindowWork();
   closing = true; window?.close();
 }
 handle('window:close-ready', finishClose);
@@ -241,7 +249,7 @@ if (primaryInstance) app.whenReady().then(async () => {
   app.setAboutPanelOptions({ applicationName: 'Modern Codex Editor', applicationVersion: app.getVersion() });
   const menu: Electron.MenuItemConstructorOptions[] = [
     { label: 'Modern Codex Editor', submenu: [{ role: 'about' }, { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('settings') }, { type: 'separator' }, { label: 'Quit', accelerator: 'CmdOrCtrl+Q', click: () => window?.close() }] },
-    { label: 'File', submenu: [{ label: 'Open paper…', accelerator: 'CmdOrCtrl+O', click: () => send('open') }, { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => send('save') }, { label: 'Compile', accelerator: 'CmdOrCtrl+B', click: () => send('compile') }, { label: 'Compile (alternate shortcut)', accelerator: 'CmdOrCtrl+T', click: () => send('compile') }, { type: 'separator' }, { role: 'close' }] },
+    { label: 'File', submenu: [{ label: 'Open paper…', accelerator: 'CmdOrCtrl+O', click: () => send('open') }, { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => send('save') }, { label: 'Compile', accelerator: 'CmdOrCtrl+B', click: () => send('compile') }, { label: 'Compile (alternate shortcut)', accelerator: 'CmdOrCtrl+T', click: () => send('compile') }, { type: 'separator' }, { label: 'Close project', click: () => send('close-project') }, { role: 'close' }] },
     { label: 'Edit', submenu: [
       // Source edits and review decisions share CodeMirror history, including menu shortcuts.
       { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('undo') },

@@ -81,6 +81,32 @@ function fixture(text = quote) {
 
 // Exercise the real key bindings and final dispatch boundary, including history
 // transactions marked filter:false. Each large synthetic case runs serially.
+test('Close project waits for cancelled work and final recovery before clearing the project and returning home', async () => {
+  const f = fixture(), done = f.gate.begin('codex')!;
+  f.editor.dispatch({ changes: { from: 0, insert: 'Unsaved introduction. ' } });
+  const text = f.editor.state.doc.toString();
+  f.api.closeProject = async (id: string) => {
+    assert.equal(id, 'p1'); assert.equal(f.states.writes.at(-1).text, text);
+    assert(f.states.workspace); f.states.events.push('project cleared');
+  };
+  f.scope.window.location = { reload: () => f.states.events.push('home') };
+  const closing = f.scope.close(true); await turns();
+  assert(f.gate.locked); assert.deepEqual(f.states.events, ['cancel build', 'cancel codex']);
+  done(); await closing;
+  assert.deepEqual(f.states.events, ['cancel build', 'cancel codex', 'project cleared', 'home']);
+  assert.equal(f.states.saved, undefined); assert.equal(f.editor.state.doc.toString(), text);
+});
+for (const phase of ['recovery', 'workspace', 'close']) test(`Close project keeps the buffer available when ${phase} persistence fails`, async () => {
+  const f = fixture(); let reloads = 0;
+  f.scope.window.location = { reload: () => reloads++ };
+  f.api.closeProject = async () => { if (phase === 'close') throw new Error('Storage unavailable'); };
+  if (phase === 'recovery') f.api.persist = async () => { throw new Error('Storage unavailable'); };
+  if (phase === 'workspace') f.scope.workspaceWriter.current = new RecoveryWriter(async () => { throw new Error('Storage unavailable'); }, () => {});
+  await f.scope.close(true);
+  assert.equal(reloads, 0); assert.equal(f.gate.locked, false);
+  assert.equal(f.scope.projectRef.current.id, 'p1'); assert.equal(f.editor.state.doc.toString(), quote);
+  assert(f.states.errors.at(-1).includes('project stayed open'));
+});
 for (const route of ['undo', 'redo', 'undo-selection', 'redo-selection'] as const) test(`${route} cannot restore an oversized draft or consume its history entry`, () => {
   const forward = route.startsWith('redo'), full = quote + 'x'.repeat(20000 - quote.length), short = full.slice(0, 10000), f = fixture(forward ? short : full);
   const c = { ...f.editor.state.field(stateTools.commentsField)[0], messages: Array.from({ length: 107 }, () => ({ role: 'assistant' as const, text: '', createdAt: '2026-01-01T00:00:00.000Z' })) };

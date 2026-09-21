@@ -2,7 +2,7 @@ import path from 'node:path';
 import { codexVersion } from '../shared/codex-version.ts';
 
 // Personal editor: keep this policy small and verify it with the real CLI probe before adding versions.
-export const verifiedCodexVersions = ['0.153.4', '0.154.0-alpha.6.2'] as const;
+export const verifiedCodexVersions = ['0.153.4', '0.154.0-alpha.6.2', '0.155.0-alpha.2.6'] as const;
 export const disabledCodexFeatures = ['apps', 'plugins', 'remote_plugin', 'enable_mcp_apps', 'shell_tool', 'unified_exec', 'multi_agent', 'multi_agent_v2', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'hooks', 'code_mode', 'skill_mcp_dependency_install', 'skill_search', 'tool_suggest', 'workspace_dependencies'];
 
 export class CodexPolicyError extends Error {

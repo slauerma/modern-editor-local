@@ -59,7 +59,7 @@
       "id": "c4",
       "category": "Notation",
       "title": "Use a definition symbol",
-      "explanation": "This optional notation change also requires the mathtools package. Both edits are checked together.",
+      "explanation": "This optional notation change also requires the mathtools package. Both edits are applied together; Accept & compile checks them first.",
       "original": "The objective is $u(x,\\theta)=-(x-\\theta)^2$.",
       "replacement": "The objective is $u(x,\\theta)\\coloneqq -(x-\\theta)^2$.",
       "packages": [

@@ -97,6 +97,7 @@ export type EditorAPI = {
   sendChat(scope: import('./help-chat.ts').ChatScope, previewId: string): Promise<import('./help-chat.ts').ChatTurn>;
   openProject(): Promise<Project | null>;
   resumeProject(): Promise<Project | null>;
+  closeProject(projectId: string): Promise<void>;
   openDemo(): Promise<Project>;
   openDraft(): Promise<Project | null>;
   getSetup(): Promise<ToolSettingsState>;

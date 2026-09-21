@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 — Faster acceptance and Close project
+
+- Support the tested Codex CLI 0.155.0-alpha.2.6 for reviews and Codex Side Chat, retaining the existing configuration, skill and tool restrictions. Other untested versions still require verification.
+- **Close project** returns to a clean home screen, preserving source recovery, comments and reading position. Closing a project also clears automatic reopening; opening the paper again restores its saved state.
+- **Accept**, **Shift+A** and **Option+Enter** apply a suggestion without compiling and advance to the next comment. **Accept & compile** is a separate button for checking the candidate first. Both remain undoable; Save is separate. **Accept all** continues to compile its combined candidate once.
+
 ## 0.3.1 — Codex and SWP compatibility
 
 - Support the tested Codex CLI 0.154.0-alpha.6.2 alongside 0.153.4, retaining the full version and all pre-request restrictions. Setup reports the detected version clearly.

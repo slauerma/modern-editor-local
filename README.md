@@ -2,7 +2,7 @@
 
 A local desktop editor for LaTeX source, compiled PDF reading, and Codex-assisted review. It uses Electron, React, CodeMirror, and PDF.js.
 
-**Version 0.3.1.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
+**Version 0.3.2.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
 
 This is a personal project, kept lean for individual use. **macOS is the currently validated platform. Windows is not yet supported.** The repository contains development source; there is no packaged application or installer.
 
@@ -37,7 +37,7 @@ npm start
 
 The rebuild step prepares esbuild. The explicit Electron installer downloads or retrieves the pinned platform runtime and its licences. The build is local and writes `dist/`. `npm start` launches the desktop application without an HTTP server.
 
-After the first build, `npm start` launches the editor again. **Try the working sample** provides prepared comments without calling Codex; compilation needs TeX. **Command+T** or **Command+B** compiles the current draft. **Shift+A** accepts after a compilation check and **Shift+S** skips while focused on the comments controls, outside typing fields. See the [shortcut reference](docs/USER_GUIDE.md#keyboard-shortcuts-on-mac).
+After the first build, `npm start` launches the editor again. **Try the working sample** provides prepared comments without calling Codex; compilation needs TeX. **Command+T** or **Command+B** compiles the current draft. **Accept** or **Shift+A** applies without compiling and advances; **Accept & compile** checks compilation first. **Shift+S** skips. Review shortcuts work while focused on the comments controls, outside typing fields. See the [shortcut reference](docs/USER_GUIDE.md#keyboard-shortcuts-on-mac).
 
 For troubleshooting, **Settings → Copy setup details** copies editor, operating system, Codex and TeX versions with check status. It excludes paper text, file paths and account details.
 

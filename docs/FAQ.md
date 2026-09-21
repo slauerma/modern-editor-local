@@ -18,7 +18,7 @@ Run `node node_modules/electron/install.js` from the repository folder, then reb
 
 The editor may be launching a different executable. Open **Settings** with **Command+,**, choose that same absolute path, run **Check setup**, and **Save settings**. Authenticate the executable separately as described in [Codex setup](SETUP.md#3-configure-codex-if-you-want-ai-review). Path changes need no rebuild; a successful version check does not establish sign-in or account access.
 
-If the error says **Codex review restrictions could not be verified**, no paper text was sent by that attempt. This build supports CLI **0.153.4** and **0.154.0-alpha.6.2** and verifies that inherited MCP servers are disabled before sending the request. Check the executable version and report a synthetic reproduction if that supported version still fails. A maintainer must rerun the configuration probe and review compatibility before enabling another version; removing the guard is not a setup fix. The check does not change your saved Codex settings.
+If the error says **Codex review restrictions could not be verified**, no paper text was sent by that attempt. This build supports CLI **0.153.4**, **0.154.0-alpha.6.2** and **0.155.0-alpha.2.6** and verifies that inherited MCP servers are disabled before sending the request. Check the executable version and report a synthetic reproduction if that supported version still fails. A maintainer must rerun the configuration probe and review compatibility before enabling another version; removing the guard is not a setup fix. The check does not change your saved Codex settings.
 
 If the error names an unsupported effort, choose an effort listed as supported in that error. If Fast mode was refused, turn **Fast mode** off in Actions or check the model's access before retrying. The app reports an unsupported setting instead of silently substituting one. Authentication details belong in your own CLI configuration, never in a paper or shared bug report.
 
@@ -65,6 +65,10 @@ Up to 12 reference locations can be remembered. Reading uses at most 40 tool cal
 
 **Choose exact excerpts (optional)** retains the earlier page/line preview controls: up to eight files, 48,000 characters in total and 12,000 per file. These optional selections are session-only. They do not restrict additional reading from separately enabled remembered references; disable those locations when you want only the exact excerpts sent.
 
+## How do I return to the home screen?
+
+Choose **Close project** beside the filename or in Actions/File. It preserves the draft in recovery, comments and reading position, then clears the paper from the window and automatic reopening. Reopen the same `.tex` file to continue; unsaved source is recovered when the disk version still matches. Save writes the source separately. If closing cannot preserve recovery, it leaves the project open.
+
 ## Why does compilation ask about the paper folder?
 
 Above **50 MB or 500 files**, a deterministic local dependency check identifies the required inputs so unrelated archives need not be copied. The actual input cap is **200 MB / 2,000 files**, including explicit selections. If filenames are computed or ambiguous, **Prepare Codex request…** shows a bounded request preview and **Ask Codex to help** explicitly sends it. Inspect the proposed list before **Compile selected files**. Unknown or unsafe paths are rejected, and unresolved dependency commands prevent checked acceptance even if a PDF is produced. If the required inputs exceed the cap, reduce those resources or use another compilation route. See [large-folder compilation](USER_GUIDE.md#compile-a-paper-in-a-larger-folder).
@@ -75,7 +79,7 @@ Choose **More → Accept all applicable suggestions (N)** in the Comments pane. 
 
 ## What is the difference between Reject, Skip and Resolve?
 
-**Reject** or **Shift+R** moves the current comment into History without changing the source; Undo restores it. **Skip** or **Shift+S** advances while leaving the comment pending. **Resolve** separately records that you have addressed an author question. **Accept and next** or **Shift+A** applies a suggestion after its compile check. The buttons show these key hints; the shortcuts work from comment controls outside typing fields. **Option+Backspace** still rejects a suggestion or resolves an author question.
+**Reject** or **Shift+R** moves the current comment into History without changing the source; Undo restores it. **Skip** or **Shift+S** advances while leaving the comment pending. **Resolve** separately records that you have addressed an author question. **Accept** or **Shift+A** applies without compiling and advances. **Accept & compile** checks compilation first. The buttons show these key hints; the shortcuts work from comment controls outside typing fields. **Option+Backspace** still rejects a suggestion or resolves an author question.
 
 ## How do I dismiss pending comments together?
 
@@ -91,15 +95,15 @@ This action is available only for questions without a replacement. Replacement s
 
 Acceptance is blocked if the original passage is missing, ambiguous, or needs confirmation. Select the exact original words in the intended place and choose **Attach to selected text**, or request a fresh review if you have rewritten them.
 
-**Accept and next** and **Accept all applicable suggestions** check the candidate before changing the draft. A successfully generated PDF can still have undefined citations or references, duplicate labels, or missing characters (glyphs). The editor explains these acceptance warnings and preserves the unchanged draft while you inspect **View candidate PDF** and **Build details**.
+**Accept & compile** and **Accept all applicable suggestions** check the candidate before changing the draft. A successfully generated PDF can still have undefined citations or references, duplicate labels, or missing characters (glyphs). The editor explains these acceptance warnings and preserves the unchanged draft while you inspect **View candidate PDF** and **Build details**.
 
 When compilation succeeded and its inputs are verified, **Apply despite warnings** lets you apply the checked candidate deliberately. It rechecks the source, suggestions and compilation inputs before applying; changed state requires another compile. Failed compilation and unverified inputs never offer this override. The warning check does not compare against an earlier build, so it may pause for warnings that already existed before the suggestions.
 
-**Accept without compiling** remains a separate action for an individual suggestion. It skips the build check while retaining source-placement guards. Acceptance changes the editor buffer and is undoable; Save is separate. Neither compilation nor a Codex review establishes mathematical correctness.
+Ordinary **Accept** skips the build check for an individual suggestion while retaining source-placement guards. Acceptance changes the editor buffer and is undoable; Save is separate. Neither compilation nor a Codex review establishes mathematical correctness.
 
 ## Why is the PDF old or not jumping to my comment?
 
-Typing and unchecked acceptance do not automatically compile. An **Older PDF** reflects an earlier source snapshot. Unchanged passages can still be located when matching is unambiguous; changed passages may require **Compile and show**. A failed build preserves the previous successful PDF.
+Typing and ordinary **Accept** do not automatically compile. An **Older PDF** reflects an earlier source snapshot. Unchanged passages can still be located when matching is unambiguous; changed passages may require **Compile and show**. A failed build preserves the previous successful PDF.
 
 Open the PDF and check **PDF follows comments** in Actions. Automatic following leaves a hidden preview closed and pauses for candidate previews. Uncertain comment placement needs confirmation first. Preamble text, comments, and some macro-generated material have no useful typeset location; try nearby prose. Clicking from PDF back to source is not implemented.
 
@@ -160,6 +164,6 @@ If Save reports that version history needs attention, the source was saved but h
 
 ## How should I report a problem?
 
-Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **0.3.1**.
+Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **0.3.2**.
 
 Add the exact action and error, whether the synthetic sample reproduces it, your Node version (`node --version`), and the editor commit if known. A small synthetic `.tex` example is most useful. Inspect logs, screenshots, and `.modern-editor` records before sharing: they may contain source, discussion, or local paths. Do not include authentication tokens or account configuration. The [testing guide](../TESTING.md) separates offline checks from optional live Codex requests.

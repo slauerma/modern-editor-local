@@ -5,8 +5,8 @@ import * as fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ProjectService } from '../src/main/project-service.ts';
-import { digest } from '../src/main/files.ts';
-import { commentSchema } from '../src/shared/contracts.ts';
+import { atomicWrite, digest } from '../src/main/files.ts';
+import { commentSchema, defaultWorkspace } from '../src/shared/contracts.ts';
 import { locate, proposalChanges, reattachComment } from '../src/shared/review.ts';
 import { initialState, commentsField } from '../src/renderer/editor-state.ts';
 
@@ -22,6 +22,39 @@ test('unsaved recovery preserves original source and resumes text and comments t
   assert.equal(await fs.readFile(f.file, 'utf8'), 'Original source\n');
   const resumed = await new ProjectService(path.join(f.root, 'cache')).resume();
   assert.equal(resumed?.text, text); assert.equal(resumed?.recovered, true); assert.equal(resumed?.review.sourceHash, digest(text));
+});
+test('close clears automatic reopening while retaining recoverable draft, review and workspace', async () => {
+  const f = await fixture(), text = 'Unsaved source\n';
+  const comment = commentSchema.parse({ id: 'note', title: 'Keep this note', original: '', replacement: null, explanation: 'Retained discussion' });
+  await f.service.persist({ projectId: f.project.id, text, review: { ...f.project.review, comments: [comment] } });
+  await f.service.setWorkspace(f.project.id, { ...defaultWorkspace(), pdf: { ...defaultWorkspace().pdf, page: 2, zoom: 1.25 } });
+  const state = await f.service.stateDirectory(f.project.id);
+  const files = ['review.json', 'recovery/session.json', 'workspace.json'];
+  const before = await Promise.all(files.map(name => fs.readFile(path.join(state, name))));
+  await f.service.close(f.project.id);
+  assert.equal(f.service.current, null);
+  await assert.rejects(f.service.persist({ projectId: f.project.id, text: 'Late edit', review: f.project.review }), /no longer open/);
+  const restarted = new ProjectService(path.join(f.root, 'cache'));
+  assert.equal(await restarted.resume(), null);
+  assert.deepEqual(await Promise.all(files.map(name => fs.readFile(path.join(state, name)))), before);
+  const reopened = await restarted.open(f.file);
+  assert.equal(reopened.text, text); assert(reopened.recovered);
+  assert.equal(reopened.review.comments[0].title, 'Keep this note');
+  assert.equal(reopened.workspace?.pdf.page, 2); assert.equal(reopened.workspace?.pdf.zoom, 1.25);
+  assert.equal(await fs.readFile(f.file, 'utf8'), 'Original source\n');
+});
+test('failed or stale close keeps the current project and automatic reopening intact', async () => {
+  const f = await fixture();
+  const service = new ProjectService(path.join(f.root, 'cache'), async (file, content, beforeReplace) => {
+    if (path.basename(file) === 'last-project.json') throw new Error('Simulated close write failure');
+    await atomicWrite(file, content, beforeReplace);
+  });
+  const opened = await service.open(f.file), marker = path.join(f.root, 'cache/last-project.json');
+  const before = await fs.readFile(marker);
+  await assert.rejects(service.close('old-project'), /no longer open/);
+  await assert.rejects(service.close(opened.id), /Simulated close write failure/);
+  assert.equal(service.current?.id, opened.id); assert.deepEqual(await fs.readFile(marker), before);
+  assert.equal((await new ProjectService(path.join(f.root, 'cache')).resume())?.path, opened.path);
 });
 test('persist and reopen cannot confirm an uncertain comment at a different passage', async () => {
   const quote = 'The allocation is monotone.', source = 'Other result: ' + quote;
