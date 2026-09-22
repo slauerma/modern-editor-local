@@ -119,5 +119,8 @@
 *.woff
 *.woff2
 
-# Explicitly requested, reviewed general walkthrough only.
+# Explicitly requested, reviewed demonstrations only.
 !/demo/modern-editor-demo.mp4
+!/demo/modern-editor-side-chat-demo.mp4
+!/demo/modern-editor-twitter-full-small.mp4
+!/demo/modern-editor-twitter-short.mp4

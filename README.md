@@ -19,7 +19,7 @@ These Markdown guides can be read locally without an account or internet connect
 
 Open a root `.tex` file, review a selection or document, discuss comments, and inspect proposed replacements before applying them. The editor can compile a candidate before accepting it, preserve the last successful PDF after a failed compile, compare saved versions, and export source recovery to a new file. Discussion replies show their proposed source changes beside the explanation. The **Codex Side Chat** drawer answers editor and paper questions with optional screenshots and inspectable context. Scroll continuously through the PDF or search its text. You can also convert outside feedback into comments and attach reference files or folders that Codex can consult during reviews and discussions.
 
-[Watch the short demonstration](demo/modern-editor-demo.mp4) · [Demo credits](demo/README.md).
+[Watch the one-minute demonstration](demo/modern-editor-twitter-short.mp4) · [Full demonstration, download options and credits](demo/README.md).
 
 ## Install and run on Mac
 
@@ -49,7 +49,7 @@ The editor stores document recovery, reviews, paper settings, and saved source v
 
 [Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md) · [Changelog](CHANGELOG.md).
 
-Apart from the demonstration MP4, the repository contains text source. `scripts/build.mjs` bundles the application; `src/main` handles local files, compilation, and Codex; `src/renderer` implements the interface; `src/shared` defines contracts and pure review logic. The bundled Scientific Word support file retains its original redistribution notice; see [its provenance](resources/tex-support/README.md).
+Apart from the demonstration MP4s, the repository contains text source. `scripts/build.mjs` bundles the application; `src/main` handles local files, compilation, and Codex; `src/renderer` implements the interface; `src/shared` defines contracts and pure review logic. The bundled Scientific Word support file retains its original redistribution notice; see [its provenance](resources/tex-support/README.md).
 
 The project source and original documentation use the [MIT license](LICENSE). We acknowledge [Kevin Bryan's original ModernEditor (July 2025)](https://github.com/kevincure/ModernEditor) and the subsequent [Modern-Editor-w-Import](https://github.com/slauerma/Modern-Editor-w-Import) browser port as earlier work in this editor's history. See [third-party notices and the preserved predecessor credit](THIRD_PARTY_NOTICES.md).
 
