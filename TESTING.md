@@ -63,9 +63,10 @@ After `npm run build` and `npm start`, choose **Try the working sample**. It has
 5. Click ordinary **Accept** and confirm that the PDF is marked older and no build starts. Undo, then choose **Accept & compile** on a clean suggestion: it should compile once, apply and advance. Use Source/PDF navigation afterward.
 6. Put one pending comment in Later. Use **More → Dismiss pending comments**, inspect History, and Undo once. Confirm the pending batch returns, Later remains set, and source text and discussions are unchanged.
 7. Add an author question to a source selection and rewrite that passage. Use **Link question to current selection** and verify that the card retains Earlier wording beside the Linked current passage. Undo the link and confirm the source stays unchanged by linking. Replacement suggestions must still require exact original text for reattachment.
-8. Open Help and Settings, verify version **0.3.2**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
+8. Open Help and Settings, verify version **1.1.0**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
 9. Save, compare with the retained original, and reopen the sample to check saved comments and source. Test Undo before quitting; its history is session-only.
-10. Make an unsaved edit, then **Close project**. Confirm Home has no paper panes or old chat/error context, and restarting stays at Home. Reopen the same paper and check recovered source, comments and reading position. Try closing during a review/build; late results must not reappear on Home. A failed recovery write must keep the project open.
+10. At 1000 × 740, switch Source/PDF tabs; at a larger size, test all View arrangements. Verify source Undo, replacement edits, PDF reading position and zoom survive. Check long proofs, collapsed Changes with package additions, search/copy, and manual scrolling during a pending PDF jump.
+11. Make an unsaved edit, then **Close project**. Confirm Home has no paper panes or old chat/error context, and restarting stays at Home. Reopen the same paper and check recovered source, comments and reading position. Try closing during a review/build; late results must not reappear on Home. A failed recovery write must keep the project open.
 
 This check needs the local TeX toolchain but no model/account call. Source remains in the generated sample folder. See the [user guide](docs/USER_GUIDE.md) for the controls and [FAQ](docs/FAQ.md) for recovery.
 
@@ -81,6 +82,8 @@ For a manual chat smoke check, paste/drop an image, inspect its thumbnail and co
 
 On a synthetic paper, request a short language review. Ask one resulting comment, “Make the suggested change more compact.” Check that the reply's exact **Suggested wording** is readable separately from the explanation. **Use this wording** should update the proposal only; inspect it, accept it, then Save. Also check cancellation and any reported unsupported effort/Fast setting as needed.
 
+In Settings, load the model catalog, choose an available GPT‑6 Sol or GPT‑6 Luna, save, and verify the choice survives restart. Test each model you intend to use; catalog availability alone does not prove a completed live request. Returning to **Use Codex default** should remove the editor’s explicit choice.
+
 Live requests use your separately configured CLI and account and may consume service usage. They are not part of the automatic test commands above. Do not treat controlled model replies as evidence of live connection or model quality.
 
 ## Real Codex configuration check — no account request
@@ -89,11 +92,21 @@ Live requests use your separately configured CLI and account and may consume ser
 node --experimental-strip-types scripts/check-codex-isolation.mjs
 ```
 
-Use `--codex /absolute/path/to/codex` for another executable location. The currently supported runtimes are **0.153.4**, **0.154.0-alpha.6.2** and **0.155.0-alpha.2.6**; an unknown version must fail closed. The script uses a disposable Codex home and synthetic trusted project under `.test-runs/`, without copying credentials or changing your normal configuration. It never starts a model turn.
+Use `--codex /absolute/path/to/codex` for another executable location. The currently supported runtimes are **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6** and **0.155.0-alpha.9.2**; an unknown version must fail closed. The script uses a disposable Codex home and synthetic trusted project under `.test-runs/`, without copying credentials or changing your normal configuration. It never starts a model turn.
 
 The positive control demonstrates that the old empty-table override starts a harmless MCP server and exposes its tool. The corrected cases use the actual editor client, with inherited home configuration, home plus trusted-project configuration, and an inherited desktop-launcher identity. All must report every server disabled, expose no MCP tools/resources, and leave the startup markers absent. The probe uses automatic tool approval settings to ensure that rejecting approval callbacks is not mistaken for disabling a server. It records CLI version and tested source hashes in ignored `test-evidence/`.
 
 Run this check after changing the client policy or CLI version. A successful probe alone does not authorize adding a new supported version: review its protocol, feature defaults and configuration behavior as well. It verifies static inherited configurations and the pre-request inventory gate, not an operating-system sandbox or every built-in capability. Mocked tests additionally cover malformed configuration, unexpected/active servers, incomplete pagination, and refusal before any paper text is sent.
+
+## Real Codex reference protocol — synthetic provider
+
+```sh
+node --experimental-strip-types scripts/check-reference-protocol.mjs /absolute/path/to/codex
+```
+
+This complements the configuration probe. It runs the actual editor client and installed supported CLI against a deterministic localhost Responses provider, using disposable HOME/CODEX_HOME folders, synthetic references and no account credentials. With references enabled, list/read/search must round-trip and the complete advertised tool surface must match the allowlist. Without references, code-mode execution must be refused. It also checks that host skills, agents and the inherited synthetic MCP server are unavailable. This is transport/configuration evidence, not model-quality testing or an operating-system sandbox.
+
+Receipts contain versions, checks and source hashes, not prompts or tool output. Passing runs remove their temporary inputs and retain `results.json`. Set `MODERN_EDITOR_PROBE_OUTPUT` to an excluded scratch parent when working in a synced folder. The probe may need local-listener and process-launch permission. An unknown CLI version must fail; do not extend support based on a probe alone.
 
 ## CI and preparing a release candidate
 
@@ -113,4 +126,4 @@ npm audit --include=dev
 node --experimental-strip-types scripts/check-codex-isolation.mjs
 ```
 
-Then run the desktop regression above. Audit all dependencies, including development dependencies: Electron is a development dependency but runs the app. Review the exact Git tree and reachable history with a redacting secret scanner, and inspect binary assets separately. Do not upload private logs, scanner matches, or manuscript-derived test evidence to public CI or issues. See [SECURITY.md](SECURITY.md) for reporting guidance.
+Also run the references-on/off protocol check above, then the desktop regression above. Audit all dependencies, including development dependencies: Electron is a development dependency but runs the app. Review the exact Git tree and reachable history with a redacting secret scanner, and inspect binary assets separately. Do not upload private logs, scanner matches, or manuscript-derived test evidence to public CI or issues. See [SECURITY.md](SECURITY.md) for reporting guidance.

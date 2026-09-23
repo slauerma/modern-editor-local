@@ -44,10 +44,25 @@ function Conversation(props: Props & { paper: boolean }) {
   const [comment, setComment] = useState(props.paper), [diagnostics, setDiagnostics] = useState(false), [references, setReferences] = useState(false);
   const [preview, setPreview] = useState<ChatPreview | null>(null), [previewOpen, setPreviewOpen] = useState(false), [working, setWorking] = useState(false), [sending, setSending] = useState(false), [failedLoad, setFailedLoad] = useState(false), [error, setError] = useState(''), [clearConfirm, setClearConfirm] = useState(false);
   const list = useRef<HTMLDivElement>(null), entry = useRef<HTMLTextAreaElement>(null), picker = useRef<HTMLInputElement>(null), alive = useRef(true), operation = useRef(false);
-  const previewInput = useRef('');
+  const previewInput = useRef(''), stateRequest = useRef(0);
   const busy = props.blocked || working;
-  const refresh = async () => { const next = await window.editor.chatState({ projectId: id }); if (alive.current) { setState(next); setFailedLoad(false); } };
-  useEffect(() => { alive.current = true; void refresh().catch(e => { if (alive.current) { setError(messageOf(e)); setFailedLoad(true); } }); return () => { alive.current = false; }; }, [id]);
+  const refresh = async (reportFailure = false) => {
+    const request = ++stateRequest.current;
+    try {
+      const next = await window.editor.chatState({ projectId: id });
+      if (alive.current && request === stateRequest.current) { setState(next); setFailedLoad(false); }
+    } catch (e) {
+      if (!alive.current || request !== stateRequest.current) return;
+      if (!reportFailure) throw e;
+      setError(messageOf(e)); setFailedLoad(true);
+    }
+  };
+  useEffect(() => {
+    alive.current = true;
+    const update = () => { void refresh(true); };
+    update(); window.addEventListener('chat-persistence', update);
+    return () => { alive.current = false; stateRequest.current++; window.removeEventListener('chat-persistence', update); };
+  }, [id]);
   useEffect(() => { if (props.open) entry.current?.focus({ preventScroll: true }); }, [props.open]);
   useEffect(() => { if (props.open && list.current) list.current.scrollTop = list.current.scrollHeight; }, [state.turns.length, state.turns.at(-1)?.status]);
   function changed(action: () => void) { action(); setPreview(null); previewInput.current = ''; }
@@ -77,7 +92,7 @@ function Conversation(props: Props & { paper: boolean }) {
       setMessage(''); setImages([]); setPreview(null); setPreviewOpen(false); previewInput.current = '';
       try { await refresh(); } catch (e) { setError('The reply is shown above, but its saved state could not be checked. ' + messageOf(e)); }
     } catch (e) { if (alive.current) { setError(messageOf(e)); try { await refresh(); } catch { /* Keep the visible conversation and question. */ } } }
-    finally { operation.current = false; if (alive.current) { setWorking(false); setSending(false); } }
+    finally { operation.current = false; window.dispatchEvent(new Event('chat-persistence')); if (alive.current) { setWorking(false); setSending(false); } }
   }
   async function attach(files: File[]) {
     if (busy || operation.current) return;
@@ -89,14 +104,20 @@ function Conversation(props: Props & { paper: boolean }) {
   }
   async function clear() {
     if (busy || operation.current) return; operation.current = true; setWorking(true); setError('');
-    try { await window.editor.clearChat({ projectId: id }); if (alive.current) { setState(s => ({ ...s, turns: [], notices: [], needsSave: false })); setPreview(null); previewInput.current = ''; setClearConfirm(false); setFailedLoad(false); } }
+    try { await window.editor.clearChat({ projectId: id }); window.dispatchEvent(new Event('chat-persistence')); if (alive.current) { setPreview(null); previewInput.current = ''; setClearConfirm(false); setFailedLoad(false); } }
     catch (e) { setError(messageOf(e)); } finally { operation.current = false; setWorking(false); }
+  }
+  async function retry() {
+    if (busy || operation.current) return; operation.current = true; setWorking(true); setError('');
+    try { await window.editor.retryChat({ projectId: id }); window.dispatchEvent(new Event('chat-persistence')); }
+    catch (e) { if (alive.current) setError(messageOf(e)); }
+    finally { operation.current = false; if (alive.current) setWorking(false); }
   }
   return <>
     <div className="chat-transcript" ref={list} aria-label="Chat messages" tabIndex={0}>
       {!state.turns.length && <div className="chat-empty"><p>{props.paper ? 'Ask about a proof, a suggestion, or an error in this paper.' : 'Ask how to use Modern Editor or explain an error. Paper source and reference folders are excluded. Any screenshots or error details you choose to include are still sent.'}</p><p className="muted">Replies cannot change your source. You choose which ideas become comments.</p></div>}
       {state.notices.map((notice, i) => <p key={i} className="muted">{notice}</p>)}
-      {state.needsSave && <button disabled={busy} onClick={() => void window.editor.retryChat({ projectId: id }).then(setState).catch(e => setError(messageOf(e)))}>Retry saving chat</button>}
+      {state.needsSave && <button disabled={busy} onClick={() => void retry()}>Retry saving chat</button>}
       {state.turns.map(turn => <article className="chat-turn" key={turn.id}>
         <div className="chat-question"><strong>You</strong><p>{turn.message}</p></div>
         <details className="chat-sent-context"><summary>{turn.labels.join(' · ')}</summary><pre tabIndex={0}>{turn.context}</pre></details>

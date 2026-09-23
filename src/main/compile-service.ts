@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Build, Engine, PdfRequest, PdfLocation } from '../shared/contracts.ts';
+import type { Build, BuildValidation, Engine, PdfRequest, PdfLocation } from '../shared/contracts.ts';
 import { compiledPosition, syncTexLocation } from './pdf-navigation.ts';
 import type { ProjectService } from './project-service.ts';
 import { digest, readRegularFile, readJSON, privateDirectory, writeJSON } from './files.ts';
@@ -21,13 +21,14 @@ export class CompileService {
   private cancelled = false;
   private stopped: (() => void)[] = [];
   private records = new Map<string, Record>();
+  private validations = new Map<string, { controller: AbortController; task: Promise<BuildValidation> }>();
   private navigation = new Map<AbortController, Promise<PdfLocation>>();
   private preparation: AbortController | null = null;
   readonly projects: ProjectService;
   readonly cache: string;
   private executable: string;
   get latexmk() { return this.executable; }
-  get isBusy() { return this.busy || this.navigation.size > 0; }
+  get isBusy() { return this.busy || this.navigation.size > 0 || this.validations.size > 0; }
   setLatexmk(latexmk: string) {
     if (this.isBusy) throw new Error('Finish compilation and PDF navigation before changing TeX executables.');
     this.executable = latexmk;
@@ -64,6 +65,7 @@ export class CompileService {
   async planInputs(projectId: string, text: string, selectedPaths?: string[], limits?: BuildInputLimits): Promise<BuildInputPlan> {
     if (this.busy) throw new Error('Finish compilation before preparing a file selection.');
     if (text.length > 2_000_000) throw new Error('Source exceeds the supported size.');
+    this.cancelValidations();
     this.busy = true; this.cancelled = false; this.preparation = new AbortController();
     try {
       await this.projects.assertUnchanged(projectId);
@@ -73,6 +75,7 @@ export class CompileService {
   async compile(projectId: string, text: string, engine: Engine, selectedPaths?: string[], limits?: BuildInputLimits): Promise<Build> {
     if (this.busy) throw new Error('A compilation is already running.');
     if (text.length > 2000000) throw new Error('Source exceeds the supported size.');
+    this.cancelValidations();
     this.busy = true;
     this.cancelled = false;
     this.preparation = new AbortController();
@@ -184,27 +187,46 @@ export class CompileService {
     if (!child.pid || process.platform === 'win32') return;
     try { process.kill(-child.pid, 'SIGKILL'); } catch {}
   }
-  cancel() { this.cancelled = true; this.preparation?.abort(); if (this.running) { this.running.cancelled = true; this.terminate(this.running.child); } }
-  async stop() { this.cancel(); for (const controller of this.navigation.keys()) controller.abort(); await Promise.allSettled(this.navigation.values()); if (this.busy) await new Promise<void>(resolve => this.stopped.push(resolve)); }
+  private cancelValidations() { for (const value of this.validations.values()) value.controller.abort(); }
+  cancel() { this.cancelValidations(); this.cancelled = true; this.preparation?.abort(); if (this.running) { this.running.cancelled = true; this.terminate(this.running.child); } }
+  async stop() { this.cancel(); for (const controller of this.navigation.keys()) controller.abort(); await Promise.allSettled([...this.navigation.values(), ...[...this.validations.values()].map(value => value.task)]); if (this.busy) await new Promise<void>(resolve => this.stopped.push(resolve)); }
   async validate(projectId: string, buildId: string, text: string) {
+    return (await this.inspect(projectId, buildId, text)).status === 'valid';
+  }
+  inspect(projectId: string, buildId: string, text: string): Promise<BuildValidation> {
+    if (this.busy) return Promise.resolve({ status: 'deferred' });
+    const key = `${projectId}:${buildId}:${digest(text)}`;
+    const existing = this.validations.get(key);
+    if (existing && !existing.controller.signal.aborted) return existing.task;
+    if (this.validations.size >= 4) return Promise.resolve({ status: 'deferred' });
+    const controller = new AbortController();
+    const task = this.inspectInputs(projectId, buildId, text, controller.signal)
+      .finally(() => { if (this.validations.get(key)?.task === task) this.validations.delete(key); });
+    this.validations.set(key, { controller, task });
+    return task;
+  }
+  private async inspectInputs(projectId: string, buildId: string, text: string, signal: AbortSignal): Promise<BuildValidation> {
     const record = this.records.get(buildId);
-    if (!record || record.restored || record.projectId !== projectId || !record.build.success || !record.build.dependenciesVerified || record.text !== text) return false;
+    if (!record || record.restored || record.projectId !== projectId || !record.build.success || !record.build.dependenciesVerified) return { status: 'unavailable' };
+    if (record.text !== text) return { status: 'changed' };
+    const stopped = () => { if (signal.aborted) throw new Error('Validation deferred.'); };
     try {
       const project = this.projects.get(projectId);
-      await this.projects.assertUnchanged(projectId);
-      const expectedIdentity = await this.projects.assertDirectory(projectId);
-      if (record.tciSupport && digest(await readRegularFile(record.tciSupport.path, 8000000)) !== record.tciSupport.hash) return false;
-      for (const input of record.external) if (digest(await readRegularFile(input.path, 64000000)) !== input.hash) return false;
-      const plan = await this.planInputs(projectId, text, record.selectedPaths, record.limits);
-      if (plan.status !== 'ready' || plan.unresolvedIssues.length) return false;
-      const names = plan.files.map(file => file.relative);
-      if (JSON.stringify(names) !== JSON.stringify(record.inputs.map(input => input.relative))) return false;
+      await this.projects.assertUnchanged(projectId); stopped();
+      const expectedIdentity = await this.projects.assertDirectory(projectId); stopped();
+      if (record.tciSupport && digest(await readRegularFile(record.tciSupport.path, 8000000)) !== record.tciSupport.hash) return { status: 'changed' };
+      for (const input of record.external) { stopped(); if (digest(await readRegularFile(input.path, 64000000)) !== input.hash) return { status: 'changed' }; }
+      const plan = await this.prepareInputs(projectId, text, record.selectedPaths, record.limits, signal); stopped();
+      if (plan.status !== 'ready' || plan.unresolvedIssues.length) return { status: 'changed' };
+      if (JSON.stringify(plan.files.map(file => file.relative)) !== JSON.stringify(record.inputs.map(input => input.relative))) return { status: 'changed' };
       for (const input of record.inputs) {
+        stopped();
         const hash = input.relative === project.name ? digest(text) : digest(await readBuildInput(path.dirname(project.path), input.relative, 200_000_000, expectedIdentity));
-        if (hash !== input.hash) return false;
+        if (hash !== input.hash) return { status: 'changed' };
       }
-      return true;
-    } catch { return false; }
+      stopped();
+      return { status: 'valid' };
+    } catch { return { status: signal.aborted ? 'deferred' : 'unavailable' }; }
   }
   async pdf(buildId: string) {
     const record = this.records.get(buildId);

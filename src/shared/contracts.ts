@@ -51,11 +51,12 @@ export const workspaceSchema = z.object({
   pdf: z.object({ page: z.number().int().min(1).max(100000), zoom: z.union([z.literal(1), z.literal(1.25), z.literal(1.5), z.literal(2)]), scrollX: fractionSchema, scrollY: fractionSchema, flow: z.boolean().optional() }),
   pdfBuildId: z.string().uuid().nullable(), pdfOpen: z.boolean(), commentsHidden: z.boolean().default(false),
   paneSizes: z.tuple([fractionSchema, fractionSchema, fractionSchema]).refine(v => v.every(n => n >= .05) && Math.abs(v.reduce((a, b) => a + b, 0) - 1) < .001, 'Invalid pane proportions'),
-  toolbarCollapsed: z.boolean(), followComments: z.boolean(), reviewView: z.enum(['pending', 'later', 'history'])
+  layout: z.enum(['auto', 'three', 'source-comments', 'pdf-comments', 'writing', 'stacked']).default('auto'), compactTab: z.enum(['source', 'pdf']).default('source'), displayName: z.string().trim().max(80).default(''),
+  changesOpen: z.boolean().default(true), toolbarCollapsed: z.boolean(), followComments: z.boolean(), reviewView: z.enum(['pending', 'later', 'history'])
 });
 export type WorkspaceState = z.infer<typeof workspaceSchema>;
 export function defaultWorkspace(): WorkspaceState {
-  return { schemaVersion: 1, source: { anchor: 0, head: 0, topLine: 1, offset: 0 }, pdf: { page: 1, zoom: 1, scrollX: 0, scrollY: 0 }, pdfBuildId: null, pdfOpen: false, commentsHidden: false, paneSizes: [.28, .33, .39], toolbarCollapsed: false, followComments: true, reviewView: 'pending' };
+  return { schemaVersion: 1, source: { anchor: 0, head: 0, topLine: 1, offset: 0 }, pdf: { page: 1, zoom: 1, scrollX: 0, scrollY: 0 }, pdfBuildId: null, pdfOpen: false, commentsHidden: false, paneSizes: [.28, .33, .39], layout: 'auto', compactTab: 'source', displayName: '', changesOpen: true, toolbarCollapsed: false, followComments: true, reviewView: 'pending' };
 }
 export const effortSchema = z.enum(['low', 'medium', 'high', 'max']);
 export type Effort = z.infer<typeof effortSchema>;
@@ -78,6 +79,7 @@ export type BuildInputSelection = { mode: 'folder' | 'dependencies' | 'explicit'
 export type Build = { id: string; engine: Engine; success: boolean; clean: boolean; dependenciesVerified?: boolean; sourceHash: string; diagnostics: Diagnostic[]; log: string; elapsedMs: number; inputPreparation?: BuildInputPreparation; inputSelection?: BuildInputSelection };
 export const pdfRequestSchema = z.object({ projectId: z.string(), buildId: z.string(), text: z.string().max(2000000), from: z.number().int().nonnegative(), to: z.number().int().nonnegative() });
 export type PdfRequest = z.infer<typeof pdfRequestSchema>;
+export type BuildValidation = { status: 'valid' | 'changed' | 'deferred' | 'unavailable' };
 export type PdfLocation = { kind: 'mapped'; buildId: string; page: number; x: number; y: number; width: number; height: number } | { kind: 'compile' | 'unavailable'; reason: string };
 export type ReviewRequest = { projectId: string; text: string; from: number; to: number; instructions: string; attachmentPreviewId?: string; requestId?: string };
 export type ReplyRequest = { projectId: string; text: string; comment: Comment; message: string; requestId?: string; attachmentPreviewId?: string; deeper?: boolean };
@@ -90,6 +92,9 @@ export const resultSchema = z.discriminatedUnion('kind', [
 export type WaitingResult = z.infer<typeof resultSchema>;
 export type SourceRecovery = { name: string; choices: { label: string; text: string }[]; notices: string[] };
 export type EditorAPI = {
+  pendingChats(): Promise<import('./help-chat.ts').PendingChat[]>;
+  pendingChat(id: string): Promise<import('./help-chat.ts').PendingChatReply>;
+  recoverChat(input: { id: string; action: 'retry' | 'copy' | 'discard' }): Promise<void>;
   chatState(scope: import('./help-chat.ts').ChatScope): Promise<import('./help-chat.ts').ChatState>;
   clearChat(scope: import('./help-chat.ts').ChatScope): Promise<void>;
   retryChat(scope: import('./help-chat.ts').ChatScope): Promise<import('./help-chat.ts').ChatState>;
@@ -104,6 +109,7 @@ export type EditorAPI = {
   chooseTool(tool: 'codex' | 'latexmk'): Promise<string | null>;
   saveSetup(settings: ToolSettings): Promise<ToolSettingsState>;
   checkSetup(settings: ToolSettings): Promise<SetupCheck>;
+  listCodexModels(settings: ToolSettings): Promise<import('./codex-models.ts').CodexModel[]>;
   copySetupDetails(settings: ToolSettings): Promise<CopiedSetupDetails>;
   attachmentInventory(projectId: string): Promise<AttachmentInventory>;
   chooseAttachments(projectId: string, folder: boolean): Promise<AttachmentInventory | null>;
@@ -136,6 +142,7 @@ export type EditorAPI = {
   compile(input: { projectId: string; text: string; engine: Engine; selectedPaths?: string[]; limits?: BuildInputLimits }): Promise<Build>;
   previewBuildHelp(input: { projectId: string; text: string }): Promise<import('./build-input-help.ts').BuildInputHelpPreview>;
   askBuildHelp(input: { projectId: string; text: string; previewId: string }): Promise<import('./build-input-help.ts').BuildInputHelpResult>;
+  inspectBuild(input: { projectId: string; buildId: string; text: string }): Promise<BuildValidation>;
   validateBuild(input: { projectId: string; buildId: string; text: string }): Promise<boolean>;
   getPdf(buildId: string): Promise<Uint8Array>;
   locatePdf(input: PdfRequest): Promise<PdfLocation>;

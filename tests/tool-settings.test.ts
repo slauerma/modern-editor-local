@@ -40,6 +40,20 @@ test('corrupt settings are preserved and surfaced, and linked TeX binaries keep 
   assert.equal((await f.service.load()).settings.latexmkPath, link);
 });
 
+test('legacy settings remain readable and an explicit model persists without changing executable paths', async () => {
+  const f = await fixture();
+  await fs.writeFile(f.service.file, JSON.stringify(f.settings));
+  assert.equal((await f.service.load()).settings.codexModel, undefined);
+  for (const codexModel of ['gpt-6-sol', 'gpt-6-luna', null]) {
+    const next = { ...f.settings, codexModel };
+    await f.service.save(next);
+    assert.deepEqual((await f.service.load()).settings, next);
+  }
+  const before = await fs.readFile(f.service.file);
+  for (const codexModel of ['', 'model\nwith-newline', 'model; command', 12]) await assert.rejects(f.service.save({ ...f.settings, codexModel }));
+  assert.deepEqual(await fs.readFile(f.service.file), before);
+});
+
 test('TeX settings can be corrected when the unchanged Codex executable is unavailable', async () => {
   const f = await fixture(); await f.service.save(f.settings);
   await fs.unlink(f.settings.codexPath);

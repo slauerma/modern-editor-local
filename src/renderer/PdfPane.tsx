@@ -9,7 +9,7 @@ import { findPdfMatches, layoutPdfPages, pdfCanvasRatio, pdfPositionAtScroll, pd
 import { usePdfSearchIndex } from './pdf-search.ts';
 GlobalWorkerOptions.workerSrc = workerURL;
 
-type Props = { build: Build | null; freshness: string; position: PdfPosition; jump?: PdfJump | null; onPositionChange: (position: Partial<PdfPosition>) => void; onUserNavigate: () => void; onClose: () => void };
+type Props = { build: Build | null; freshness: string; position: PdfPosition; visible?: boolean; followComments: boolean; onFollowChange: (value: boolean) => void; jump?: PdfJump | null; onPositionChange: (position: Partial<PdfPosition>) => void; onUserNavigate: () => void; onClose: () => void };
 type Loaded = { id: string; document: PDFDocumentProxy; sizes: PdfPageSize[] };
 const positionKey = (position: PdfPosition) => [position.page, position.zoom, position.scrollX ?? 0, position.scrollY ?? 0, !!position.flow].join(':');
 const noMatches: PdfSearchMatch[] = [];
@@ -81,12 +81,13 @@ function RenderedPage({ pdf, layout, matches, active, onReady }: { pdf: PDFDocum
   </>;
 }
 
-export function PdfPane({ build, freshness, position, jump, onPositionChange, onUserNavigate, onClose }: Props) {
+export function PdfPane({ build, freshness, position, visible = true, followComments, onFollowChange, jump, onPositionChange, onUserNavigate, onClose }: Props) {
   const [loaded, setLoaded] = useState<Loaded | null>(null), [error, setError] = useState(''), [progress, setProgress] = useState('');
   const [view, setView] = useState({ width: 440, height: 600, top: 0 }), [pageDraft, setPageDraft] = useState(String(position.page));
   const scroll = useRef<HTMLDivElement>(null), paperList = useRef<HTMLDivElement>(null), findInput = useRef<HTMLInputElement>(null);
   const callbacks = useRef({ onPositionChange, onUserNavigate }); callbacks.current = { onPositionChange, onUserNavigate };
   const positionRef = useRef(position); positionRef.current = position;
+  const visibleRef = useRef(visible); visibleRef.current = visible;
   const layoutRef = useRef<PdfPageLayout[]>([]), lastPublished = useRef(''), appliedLayout = useRef<PdfPageLayout[] | null>(null);
   const publishedBuild = useRef<string | null>(null), scrollFrame = useRef(0);
   const current = loaded?.id === build?.id ? loaded : null, pdf = current?.document ?? null;
@@ -106,11 +107,21 @@ export function PdfPane({ build, freshness, position, jump, onPositionChange, on
   const pendingSearch = findOpen && searchTarget?.key === resultKey ? result.matches[searchTarget.index] : undefined;
   const validJump = jump && jump.buildId === build?.id && jump.page >= 1 && jump.page <= layouts.length ? jump : null;
   const jumpKey = validJump ? `${validJump.buildId}:${validJump.requestId}` : '';
+  const lastEmphasis = useRef(''), [emphasis, setEmphasis] = useState('');
+  useEffect(() => {
+    // A deliberate new target gets one pulse. Hiding/revealing a live pane or
+    // repainting virtual pages must not start the pulse again.
+    if (!visible || !jumpKey) { setEmphasis(''); return; }
+    if (lastEmphasis.current === jumpKey) return;
+    lastEmphasis.current = jumpKey; setEmphasis(jumpKey);
+    const timer = setTimeout(() => setEmphasis(''), 1200);
+    return () => clearTimeout(timer);
+  }, [jumpKey, visible]);
   const renderedPages = visiblePdfPages(layouts, view.top, view.height, pendingSearch?.page ?? validJump?.page);
 
   const readScroll = useCallback((publish = true) => {
     const node = scroll.current, pages = layoutRef.current;
-    if (!node || !pages.length) return;
+    if (!node || !pages.length || !visibleRef.current || !node.clientHeight) return;
     setView(previous => previous.top === node.scrollTop && previous.height === node.clientHeight ? previous : { ...previous, top: node.scrollTop, height: node.clientHeight });
     if (publish) {
       const next = pdfPositionAtScroll(pages, node.scrollTop, node.scrollLeft, node.scrollWidth - node.clientWidth, positionRef.current.zoom);
@@ -122,6 +133,7 @@ export function PdfPane({ build, freshness, position, jump, onPositionChange, on
     const node = scroll.current;
     if (!node) return;
     const resize = new ResizeObserver(() => {
+      if (!node.clientWidth || !node.clientHeight) return;
       const style = getComputedStyle(node), width = Math.max(100, node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
       setView(previous => ({ ...previous, width, height: node.clientHeight }));
     });
@@ -154,7 +166,8 @@ export function PdfPane({ build, freshness, position, jump, onPositionChange, on
   useEffect(() => setPageDraft(String(page)), [page]);
   useLayoutEffect(() => {
     const node = scroll.current;
-    if (!node || !layouts.length) return;
+    if (!visible) { appliedLayout.current = null; return; }
+    if (!node || !layouts.length || !node.clientHeight) return;
     const changedBuild = publishedBuild.current !== build?.id;
     if (!changedBuild && appliedLayout.current === layouts && positionKey(position) === lastPublished.current) return;
     publishedBuild.current = build?.id ?? null; appliedLayout.current = layouts;
@@ -162,7 +175,7 @@ export function PdfPane({ build, freshness, position, jump, onPositionChange, on
     node.scrollTop = pdfScrollPosition(layouts, position, node.clientHeight, parseFloat(style.paddingTop) + parseFloat(style.paddingBottom));
     node.scrollLeft = (position.scrollX ?? 0) * Math.max(0, node.scrollWidth - node.clientWidth);
     readScroll();
-  }, [layouts, position, build?.id, readScroll]);
+  }, [layouts, position, build?.id, readScroll, visible]);
 
   function revealElement(element: HTMLElement) {
     const node = scroll.current;
@@ -173,22 +186,22 @@ export function PdfPane({ build, freshness, position, jump, onPositionChange, on
     readScroll();
   }
   useLayoutEffect(() => {
-    if (!validJump || !jumpKey || !paperList.current) return;
+    if (!visible || !validJump || !jumpKey || !paperList.current) return;
     if (lastJump.current !== jumpKey) {
       const marker = paperList.current.querySelector<HTMLElement>(`[data-pdf-jump="${validJump.page}"]`);
       if (!marker) return;
       lastJump.current = jumpKey; revealElement(marker);
     }
-  }, [jumpKey, layouts, readyRevision]);
+  }, [jumpKey, layouts, readyRevision, visible]);
   useEffect(() => {
     if (!validJump || validJump.persistent) return;
     const timer = setTimeout(() => setExpiredJump(jumpKey), 3000); return () => clearTimeout(timer);
   }, [jumpKey]);
   useLayoutEffect(() => {
-    if (!pendingSearch || !searchTarget || completedSearch.current === searchTarget.request || !paperList.current) return;
+    if (!visible || !pendingSearch || !searchTarget || completedSearch.current === searchTarget.request || !paperList.current) return;
     const element = paperList.current.querySelector<HTMLElement>(`[data-pdf-page="${pendingSearch.page}"] [data-pdf-active-hit]`);
     if (element) { completedSearch.current = searchTarget.request; revealElement(element); }
-  }, [pendingSearch, searchTarget, layouts, readyRevision]);
+  }, [pendingSearch, searchTarget, layouts, readyRevision, visible]);
   function selectMatch(number: number) {
     const match = result.matches[number]; if (!match) return;
     callbacks.current.onUserNavigate();
@@ -200,8 +213,8 @@ export function PdfPane({ build, freshness, position, jump, onPositionChange, on
   useEffect(() => {
     // Select the first result once per query/document, without moving again as
     // later pages finish indexing. Deliberate navigation always wins thereafter.
-    if (findOpen && query === debouncedQuery && result.matches.length && selection.key !== resultKey) selectMatch(0);
-  }, [result, resultKey, findOpen]);
+    if (visible && findOpen && query === debouncedQuery && result.matches.length && selection.key !== resultKey) selectMatch(0);
+  }, [result, resultKey, findOpen, visible]);
   function stepMatch(direction: number) {
     if (!result.matches.length) return;
     const current = selection.key === resultKey ? selection.index : -1;
@@ -217,13 +230,15 @@ export function PdfPane({ build, freshness, position, jump, onPositionChange, on
   const searching = query !== debouncedQuery;
   const matchStatus = searching ? 'Searching…' : query.trim() ? result.matches.length ? `${active ? selection.index + 1 : 0} / ${result.matches.length}${result.limited ? '+' : ''}` : index.status === 'indexing' ? 'No matches yet' : 'No matches' : 'Find text in this PDF';
   const totalHeight = layouts.length ? layouts.at(-1)!.top + layouts.at(-1)!.height : 0;
-  return <section className="pdf-pane continuous-pdf" aria-label="Compiled PDF" onKeyDown={event => {
+  const stateLabel = !build ? 'No PDF yet' : freshness.includes('Candidate') ? 'Candidate · not applied' : build.dependenciesVerified === false || freshness.includes('verification') ? 'Unverified inputs' : freshness.includes('matches') ? 'Current draft' : 'Earlier PDF';
+  return <section id="pdf-surface" hidden={!visible} className="pdf-pane continuous-pdf" aria-label="Compiled PDF" onKeyDown={event => {
     if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'f') { event.preventDefault(); event.stopPropagation(); openFind(); }
   }}>
     <form className="pdf-controls" onSubmit={event => { event.preventDefault(); goToPage(); }}>
-      <span className={`pdf-state ${freshness.includes('matches') ? 'current' : 'older'}`} title={freshness} aria-label={freshness}>{!build || freshness.includes('matches') ? 'PDF' : freshness.includes('Candidate') ? 'Candidate' : 'Older PDF'}</span>
+      <span className={`pdf-state ${stateLabel === 'Current draft' ? 'current' : 'older'}`} title={freshness} aria-label={freshness}>{stateLabel}</span>
       <button type="button" disabled={!pdf || page <= 1} onClick={() => changePage(page - 1)} aria-label="Previous PDF page">‹</button><input aria-label="PDF page number" type="number" min={1} max={pdf?.numPages ?? 1} disabled={!pdf} value={pageDraft} onChange={event => { userNavigate(); setPageDraft(event.target.value); }} onBlur={goToPage} /><span>/ {pdf?.numPages ?? '–'}</span><button type="button" disabled={!pdf || page >= pdf.numPages} onClick={() => changePage(page + 1)} aria-label="Next PDF page">›</button>
-      <select aria-label="PDF zoom" value={position.zoom} onChange={event => { userNavigate(); callbacks.current.onPositionChange({ zoom: Number(event.target.value) }); }}><option value={1}>Fit width</option><option value={1.25}>125%</option><option value={1.5}>150%</option><option value={2}>200%</option></select>
+      <select aria-label="PDF zoom" value={position.zoom} onChange={event => { userNavigate(); callbacks.current.onPositionChange({ zoom: Number(event.target.value) }); }}><option value={1}>Fit width</option><option value={1.25}>1.25× fit</option><option value={1.5}>1.5× fit</option><option value={2}>2× fit</option></select>
+      <button type="button" className="pdf-follow" aria-label="PDF follows comments" title="Follow comments: bring each selected comment’s passage into view" aria-pressed={followComments} onClick={() => onFollowChange(!followComments)}>Follow</button>
       <button type="button" className="pdf-find-toggle" aria-expanded={findOpen} onClick={() => findOpen ? setFindOpen(false) : openFind()}>Find</button><button type="button" className="icon" onClick={onClose} aria-label="Close PDF">×</button>
     </form>
     {findOpen && <div className="pdf-search" role="search" aria-label="Search PDF">
@@ -243,7 +258,7 @@ export function PdfPane({ build, freshness, position, jump, onPositionChange, on
           const left = marker ? Math.max(0, Math.min(marker.x * layout.scale, layout.width - 8)) : 0, top = marker ? Math.max(0, Math.min(marker.y * layout.scale, layout.height - 8)) : 0;
           return <div key={`${build?.id}:${layout.page}`} className="pdf-paper" data-pdf-page={layout.page} style={{ position: 'absolute', top: layout.top, width: layout.width, height: layout.height, '--scale-factor': layout.scale, '--total-scale-factor': layout.scale } as React.CSSProperties} aria-label={`PDF page ${layout.page}`}>
             {renderedPages.has(layout.page) ? <RenderedPage pdf={pdf} layout={layout} matches={matchesByPage.get(layout.page) ?? noMatches} active={active?.page === layout.page ? active : undefined} onReady={pageReady} /> : <span className="pdf-page-placeholder">Page {layout.page}</span>}
-            {marker && <div key={jumpKey} data-pdf-jump={layout.page} className={`pdf-passage-marker ${marker.persistent ? 'persistent' : ''}`} style={{ left, top, width: Math.min(Math.max(8, marker.width * layout.scale), layout.width - left), height: Math.min(Math.max(8, marker.height * layout.scale), layout.height - top) }} role="img" aria-label="Approximate source passage in PDF" />}
+            {marker && <div key={jumpKey} data-pdf-jump={layout.page} className={`pdf-passage-marker ${marker.persistent ? 'persistent' : ''} ${emphasis === jumpKey ? 'emphasize' : ''}`} style={{ left, top, width: Math.min(Math.max(8, marker.width * layout.scale), layout.width - left), height: Math.min(Math.max(8, marker.height * layout.scale), layout.height - top), '--passage-left': `${left}px`, '--cue-height': `${Math.min(28, Math.max(8, marker.height * layout.scale), layout.height - top)}px`, '--cue-pad': `${Math.min(2, Math.max(8, marker.height * layout.scale) * .12)}px` } as React.CSSProperties} role="img" aria-label="Approximate source passage in PDF" title="Nearby typeset line. Source-to-PDF mapping may identify a region rather than the exact quotation." />}
           </div>;
         })}
       </div>}

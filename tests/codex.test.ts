@@ -14,6 +14,87 @@ async function fixture() {
   return { directory, client: new CodexClient(directory, binary) };
 }
 
+test('the model catalog exposes Sol and Luna without creating a thread or sending a prompt', async () => {
+  const { client, directory } = await fixture();
+  await fs.mkdir(directory, { recursive: true });
+  for (const flag of ['gpt6-models', 'model-pagination', 'new-version']) await fs.writeFile(path.join(directory, flag), '');
+  const models = await client.listModels();
+  assert.deepEqual(models.map(m => m.id), ['gpt-6-sol', 'gpt-6-luna', 'fixture-model']);
+  assert(models.every(m => m.images && m.fast && m.efforts.includes('max')));
+  const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  assert.equal(requests.filter((r: any) => r.method === 'model/list').length, 2);
+  assert(!requests.some((r: any) => r.method === 'thread/start' || r.method === 'turn/start'));
+  await assertExited(directory);
+});
+
+for (const selected of ['gpt-6-sol', 'gpt-6-luna']) test(`explicit ${selected} is used for review and Side Chat and remains independent of the Codex default`, async () => {
+  const { client, directory } = await fixture();
+  await fs.mkdir(directory, { recursive: true });
+  for (const flag of ['gpt6-models', 'new-version']) await fs.writeFile(path.join(directory, flag), '');
+  client.setModel(selected);
+  for (const purpose of [undefined, 'help'] as const) {
+    await client.run('normal', replyOutputSchema, () => {}, 'max', true, undefined, { purpose });
+    const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+    assert.equal(requests.find((r: any) => r.method === 'thread/start').params.model, selected);
+    assert.equal(requests.find((r: any) => r.method === 'thread/start').params.config.features.goals, false);
+    assert.equal(requests.find((r: any) => r.method === 'turn/start').params.effort, 'max');
+    await assertExited(directory);
+  }
+  client.setModel(null);
+  await client.run('normal', replyOutputSchema, () => {});
+  const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  assert.equal(requests.find((r: any) => r.method === 'thread/start').params.model, undefined);
+  await assertExited(directory);
+});
+
+test('unavailable, substituted, and unsupported model options fail before a model turn', async () => {
+  const { client, directory } = await fixture();
+  await fs.mkdir(directory, { recursive: true });
+  client.setModel('gpt-6-sol');
+  for (const flag of ['missing-model', 'wrong-model', 'only-medium', 'no-fast', 'text-only']) {
+    if (flag !== 'missing-model') await fs.writeFile(path.join(directory, 'gpt6-models'), '');
+    await fs.writeFile(path.join(directory, flag), '');
+    await assert.rejects(client.run('normal', replyOutputSchema, () => {}, 'high', true, undefined, { images: ['data:image/png;base64,iVBORw0KGgo='] }));
+    const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+    assert(!requests.some((r: any) => r.method === 'turn/start'));
+    await assertExited(directory); await fs.unlink(path.join(directory, flag));
+  }
+});
+
+test('malformed or unbounded model catalogs are rejected and their processes stop', async () => {
+  const { client, directory } = await fixture();
+  await fs.mkdir(directory, { recursive: true });
+  for (const flag of ['malformed-models', 'duplicate-models', 'model-repeated-cursor']) {
+    await fs.writeFile(path.join(directory, flag), '');
+    await assert.rejects(client.listModels());
+    await assertExited(directory); await fs.unlink(path.join(directory, flag));
+  }
+});
+
+test('cancelling model discovery prevents settings changes during the request and stops the server', async () => {
+  const { client, directory } = await fixture();
+  await fs.mkdir(directory, { recursive: true });
+  await fs.writeFile(path.join(directory, 'pause-model-list'), '');
+  const paused = notification(client, 'fixture/paused');
+  const rejected = assert.rejects(client.listModels(), /cancelled/);
+  await within(paused);
+  assert.throws(() => client.setModel('gpt-6-sol'), /Finish or stop/);
+  await within(client.cancel()); await rejected; await assertExited(directory);
+  assert.equal(client.isBusy, false);
+});
+
+test('the new CLI cannot start a review with goal tools enabled or unverifiable', async () => {
+  const { client, directory } = await fixture();
+  await fs.mkdir(directory, { recursive: true }); await fs.writeFile(path.join(directory, 'new-version'), '');
+  for (const flag of ['enabled-goals', 'missing-goals']) {
+    await fs.writeFile(path.join(directory, flag), '');
+    await assert.rejects(client.run('normal', replyOutputSchema, () => {}), /Goal tools.*No paper text/);
+    const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+    assert(!requests.some((r: any) => r.method === 'turn/start'));
+    await assertExited(directory); await fs.unlink(path.join(directory, flag));
+  }
+});
+
 test('the tested prerelease completes a reply with all normal preflight checks', async () => {
   const { client, directory } = await fixture();
   await fs.mkdir(directory, { recursive: true });

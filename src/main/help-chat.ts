@@ -36,16 +36,36 @@ export class HelpChat {
     void task.then(() => { if (this.operation === task) this.operation = null; }, () => { if (this.operation === task) this.operation = null; });
     return task;
   }
-  retry(scope: ChatScope) { return this.exclusive(async () => {
-    const owner = this.owner(scope), pending = this.unsaved.get(owner);
-    if (pending) {
-      const current = digest(serializeJSON(await this.load(owner)));
-      if (current !== digest(serializeJSON(pending.record))) {
-        if (current !== pending.previous) throw new Error('The saved chat changed outside this window. Copy the visible answer before resolving the conflict.');
-        await this.write(await this.file(owner), chatRecordSchema.parse(pending.record), CHAT_LIMITS.recordBytes);
-      }
-      this.unsaved.delete(owner);
+  private label(owner: string) { return owner === 'editor-help' ? 'Editor help' : `${path.basename(path.dirname(owner))} / ${path.basename(owner)}`; }
+  pending() { return [...this.unsaved.keys()].map(owner => ({ id: digest(owner), label: this.label(owner) })); }
+  private pendingOwner(id: string) {
+    const owner = [...this.unsaved.keys()].find(owner => digest(owner) === id);
+    if (!owner) throw new Error('This reply no longer needs saving. Refresh the pending replies.');
+    return owner;
+  }
+  pendingReply(id: string) {
+    const owner = this.pendingOwner(id);
+    return { id, label: this.label(owner), turns: this.unsaved.get(owner)!.record.turns };
+  }
+  private async retryOwner(owner: string) {
+    const pending = this.unsaved.get(owner);
+    if (!pending) return;
+    const current = digest(serializeJSON(await this.load(owner)));
+    if (current !== digest(serializeJSON(pending.record))) {
+      if (current !== pending.previous) throw new Error('The saved chat changed outside this window. Copy the visible answer before resolving the conflict.');
+      await this.write(await this.file(owner), chatRecordSchema.parse(pending.record), CHAT_LIMITS.recordBytes);
     }
+    this.unsaved.delete(owner);
+  }
+  recover(id: string, action: 'retry' | 'discard') {
+    return this.exclusive(async () => {
+      const owner = this.pendingOwner(id);
+      if (action === 'retry') await this.retryOwner(owner);
+      else this.unsaved.delete(owner); // Explicitly discard only the in-memory update; saved history is untouched.
+    });
+  }
+  retry(scope: ChatScope) { return this.exclusive(async () => {
+    await this.retryOwner(this.owner(scope));
     return this.state(scope);
   }); }
   async clear(scope: ChatScope) {
@@ -119,5 +139,5 @@ export class HelpChat {
     } finally { if (session) await this.references!.finish(session, complete); }
   }
   cancel() { this.generation++; this.previews.clear(); return this.client.cancel(); }
-  async settle() { if (this.operation) await Promise.allSettled([this.operation]); if (this.unsaved.size) throw new Error('A chat reply has not been saved. Open Codex Side Chat and retry saving the chat or copy the answer before clearing it.'); }
+  async settle() { if (this.operation) await Promise.allSettled([this.operation]); if (this.unsaved.size) throw new Error(`A chat reply has not been saved (${this.pending().slice(0, 3).map(p => p.label).join(', ')}). Use Review unsaved replies to retry, copy or deliberately discard it.`); }
 }

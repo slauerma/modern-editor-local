@@ -11,7 +11,11 @@ const requests = [];
 const has = name => fs.existsSync(name);
 const flags = process.argv.slice(2);
 const features = Object.fromEntries(flags.flatMap((flag,i) => flag === '--disable' || flag === '--enable' ? [[flags[i+1],flag === '--enable']] : []));
+if (flags.includes('features.goals=false')) features.goals = false;
+if (has('enabled-goals')) features.goals = true;
+if (has('missing-goals')) delete features.goals;
 let reviewConfig;
+let selectedModel = 'fixture-model';
 let referenceMode = '';
 const toolCall = (id, tool, args = {}, extra = {}) => send({ id, method: 'item/tool/call', params: { threadId: 'thread-1', turnId: 'turn-1', callId: id, namespace: null, tool, arguments: args, ...extra } });
 const referenceFinal = () => notification('turn/completed', { turn: { id: 'turn-1', status: 'completed', items: [{ type: 'agentMessage', text: '{"reply":"Reference checked","replacement":null,"packages":[]}' }] } });
@@ -25,7 +29,7 @@ input.on('line', line => {
   }
   if (!method && referenceMode && id === 'ref-read') setTimeout(referenceFinal, 10);
   if (method && has('pause-' + method.replaceAll('/', '-'))) { notification('fixture/paused', { method }); return; }
-  if (method === 'initialize') send({ id, result: { userAgent: `${process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? params.clientInfo.name}/${has('unknown-version') ? '0.999.0' : has('prerelease-version') ? '0.154.0-alpha.6.2' : '0.153.4'} (fixture)` } });
+  if (method === 'initialize') send({ id, result: { userAgent: `${process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? params.clientInfo.name}/${has('unknown-version') ? '0.999.0' : has('new-version') ? '0.155.0-alpha.9.2' : has('prerelease-version') ? '0.154.0-alpha.6.2' : '0.153.4'} (fixture)` } });
   if (method === 'config/read') {
     if (has('config-unavailable')) send({id,error:{code:-32601,message:'Unsupported config/read'}});
     else send({id,result:{config:{features:{...features,...(has('unsafe-feature')?{plugins:true}:{}),...(has('unsafe-code-host')?{code_mode_host:!features.code_mode_host}:{}),...(has('unsafe-skill-discovery')?{skip_host_skill_discovery:false}:{})},...(has('agents-unavailable')?{}:{agents:{enabled:has('agents-enabled')||!flags.includes('agents.enabled=false')}}),web_search:'disabled',project_doc_max_bytes:0,mcp_servers:{'probe.with.dots':{command:'unused',enabled:true},'probe-two':{command:'unused',enabled:true}}}}});
@@ -40,7 +44,8 @@ input.on('line', line => {
   }
   if (method === 'thread/start') {
     reviewConfig=params.config;
-    send({ id, result: { thread: { id: 'thread-1' }, approvalPolicy:has('wrong-policy')?'on-request':'never',sandbox:{type:'readOnly'},model: 'fixture-model', serviceTier: params.serviceTier === 'fast' ? (fs.existsSync('reject-fast') ? 'default' : 'priority') : null } });
+    selectedModel = has('wrong-model') ? 'fixture-model' : params.model ?? 'fixture-model';
+    send({ id, result: { thread: { id: 'thread-1' }, approvalPolicy:has('wrong-policy')?'on-request':'never',sandbox:{type:'readOnly'},model: selectedModel, serviceTier: params.serviceTier === 'fast' ? (fs.existsSync('reject-fast') ? 'default' : 'priority') : null } });
   }
   if (method === 'mcpServerStatus/list') {
     let data=Object.keys(reviewConfig.mcp_servers).map(name=>({name,runtimeStatus:has('enabled-mcp')?'connected':'disabled',tools:has('available-tool')?{harmless_echo:{}}:{},resources:[],resourceTemplates:[]}));
@@ -52,7 +57,14 @@ input.on('line', line => {
     if(has('paginate')){send({id,result:{data:params.cursor?data.slice(1):data.slice(0,1),nextCursor:params.cursor?null:'second'}});return;}
     send({id,result:{data,nextCursor:null}});
   }
-  if (method === 'model/list') send({ id, result: { data: [{ id: 'fixture-model', model: 'fixture-model', inputModalities: has('text-only') ? ['text'] : ['text', 'image'], supportedReasoningEfforts: (fs.existsSync('only-medium') ? ['medium'] : ['low', 'medium', 'high', 'max']).map(reasoningEffort => ({ reasoningEffort })), serviceTiers: fs.existsSync('no-fast') ? [] : [{ id: 'priority' }] }], nextCursor: null } });
+  if (method === 'model/list') {
+    const names = has('gpt6-models') ? ['gpt-6-sol','gpt-6-luna','fixture-model'] : ['fixture-model'];
+    let data = names.map(model => ({ id: model, model, displayName: model, hidden: false, inputModalities: has('text-only') ? ['text'] : ['text', 'image'], supportedReasoningEfforts: (has('only-medium') ? ['medium'] : ['low', 'medium', 'high', 'max']).map(reasoningEffort => ({ reasoningEffort })), serviceTiers: has('no-fast') ? [] : [{ id: 'priority' }] }));
+    if(has('malformed-models')) data[0].supportedReasoningEfforts = null;
+    if(has('duplicate-models')) data.push(data[0]);
+    if(has('model-pagination')) data=params.cursor ? data.slice(1) : data.slice(0,1);
+    send({ id, result: { data:has('model-repeated-cursor')?[]:data, nextCursor:has('model-repeated-cursor')?'same':has('model-pagination')&&!params.cursor?'second':null } });
+  }
   if (method === 'turn/start') {
     const mode = params.input[0].text;
     const started = { id, result: { turn: { id: 'turn-1', status: 'inProgress' } } };

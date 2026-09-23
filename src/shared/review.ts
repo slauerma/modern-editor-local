@@ -1,3 +1,4 @@
+import { controls, literalPackages } from './tex-structure.ts';
 import { commentSchema, commentsSchema, type Comment, type Review, type CodexReply } from './contracts.ts';
 
 export function discussionMessage(c: Comment): string {
@@ -67,13 +68,12 @@ export function proposalChanges(text: string, c: Comment): { from: number; to: n
   const replacement = c.draft === undefined ? c.replacement : c.draft;
   if (replacement === null) throw new Error('This comment is a question without a replacement.');
   const changes = [{ from: c.from, to: c.to, insert: replacement }];
-  const marker = '\\begin{document}';
-  const preambleEnd = text.indexOf(marker);
-  const prefix = preambleEnd >= 0 ? text.slice(0, preambleEnd).replace(/(?<!\\)%[^\n]*/g, '') : '';
-  const loaded = new Set([...prefix.matchAll(/\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\{([^}]+)\}/g)].flatMap(m => m[1].split(',').map(s => s.trim())));
+  const openings = controls(text).filter(t => t.name === 'begin' && t.argument === 'document');
+  const preambleEnd = openings[0]?.from ?? -1;
+  const loaded = literalPackages(text.slice(0, Math.max(0, preambleEnd)));
   const missing = [...new Set(c.packages)].filter(p => !loaded.has(p));
   if (missing.length) {
-    if (preambleEnd < 0 || text.indexOf(marker, preambleEnd + marker.length) >= 0) throw new Error('Choose a complete root document before adding a package.');
+    if (preambleEnd < 0 || openings.length !== 1) throw new Error('Choose a complete root document before adding a package.');
     if (c.from < preambleEnd) throw new Error('Review this preamble change manually; automatic package insertion would overlap it.');
     changes.push({ from: preambleEnd, to: preambleEnd, insert: missing.map(p => `\\usepackage{${p}}\n`).join('') });
   }

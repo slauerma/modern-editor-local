@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0 — Reading and review stability
+
+- Support tested Codex CLI 0.155.0-alpha.9.2, with its goal tools explicitly disabled and the existing review restrictions retained.
+- Choose GPT‑6 Sol, GPT‑6 Luna or another available model in Settings. The selector reads the installed CLI’s catalog; model, effort, Fast mode and screenshot support are checked before sending a request.
+- Compact Source/PDF tabs beside Comments, plus six workspace views that retain edits, Undo, and reading positions.
+- Fixed comment navigation and decisions, compact editable replacements, remembered Changes visibility, and exact before/after blocks for longer rewrites.
+- A quieter amber PDF marker with a constant-width margin bar, one-time emphasis, and preserved selection, search, zoom and manual scrolling. Clear current, earlier, candidate and unverified PDF labels.
+- Background PDF validation yields to explicit compilation. Switching papers clears the displayed Codex context.
+- Failed Side Chat saves remain visible across papers, with retry, copy and deliberate discard that preserve saved history.
+- Package insertion and PDF navigation recognize commented examples and spaced document openings. Codex connection metadata uses the actual editor version.
+
 ## 0.3.2 — Faster acceptance and Close project
 
 - Support the tested Codex CLI 0.155.0-alpha.2.6 for reviews and Codex Side Chat, retaining the existing configuration, skill and tool restrictions. Other untested versions still require verification.

@@ -1,4 +1,13 @@
 export type DiffPart = { kind: 'same' | 'removed' | 'added'; text: string };
+
+// When edits dominate, interleaved red/green tokens obscure the resulting text.
+// This affects presentation only: both exact strings remain available.
+export function preferDiffBlocks(parts: DiffPart[]): boolean {
+  const changed = parts.filter(p => p.kind !== 'same');
+  const changedSize = changed.reduce((n, p) => n + p.text.length, 0);
+  const total = parts.reduce((n, p) => n + p.text.length, 0);
+  return changedSize > 100 && (changed.length > 8 || changedSize > total * .65);
+}
 export function tokenDiff(original: string, proposed: string): DiffPart[] {
   const tokens = (text: string) => text.match(/\\[a-zA-Z]+|\\.|[\p{L}\p{N}]+|\s+|[^\s]/gu) ?? [];
   const a = tokens(original), b = tokens(proposed), result: DiffPart[] = [];

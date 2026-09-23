@@ -1,5 +1,7 @@
 import type { EditorView } from '@codemirror/view';
+import { Annotation } from '@codemirror/state';
 import type { WorkspaceState } from '../shared/contracts.ts';
+export const restoringWorkspace = Annotation.define<boolean>();
 
 export function sourcePosition(editor: EditorView): WorkspaceState['source'] {
   const selection = editor.state.selection.main, top = editor.scrollDOM.scrollTop;
@@ -9,10 +11,11 @@ export function sourcePosition(editor: EditorView): WorkspaceState['source'] {
 
 export function restoreSourcePosition(editor: EditorView, saved: WorkspaceState['source']) {
   const limit = editor.state.doc.length;
-  editor.dispatch({ selection: { anchor: Math.min(saved.anchor, limit), head: Math.min(saved.head, limit) } });
+  editor.dispatch({ selection: { anchor: Math.min(saved.anchor, limit), head: Math.min(saved.head, limit) }, annotations: restoringWorkspace.of(true) });
+  const restored = editor.state;
   editor.requestMeasure({
     read: view => view.lineBlockAt(view.state.doc.line(Math.min(saved.topLine, view.state.doc.lines)).from).top,
-    write: top => { editor.scrollDOM.scrollTop = top + saved.offset; }
+    write: top => { if (editor.state.doc === restored.doc && editor.state.selection.eq(restored.selection)) editor.scrollDOM.scrollTop = top + saved.offset; }
   });
 }
 

@@ -32,6 +32,7 @@
 !/scripts/check-codex-isolation.mjs
 !/scripts/check-help-chat.mjs
 !/scripts/check-chat-images-protocol.mjs
+!/scripts/check-reference-protocol.mjs
 !/scripts/collect-third-party-notices.mjs
 !/fixtures/
 !/resources/

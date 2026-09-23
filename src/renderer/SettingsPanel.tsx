@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { setupOperatingSystem, type SetupCheck, type ToolSettings, type ToolSettingsState } from '../shared/tool-settings.ts';
 import { useDialogFocus } from './use-dialog-focus.ts';
+import type { CodexModel } from '../shared/codex-models.ts';
 import './settings-panel.css';
 
 type Props = { onClose(): void; disabled?: boolean };
@@ -11,6 +12,7 @@ export function SettingsPanel({ onClose, disabled = false }: Props) {
   const [result, setResult] = useState<SetupCheck | null>(null), [busy, setBusy] = useState('Loading settings…');
   const [error, setError] = useState(''), [status, setStatus] = useState('');
   const [copiedDetails, setCopiedDetails] = useState('');
+  const [models, setModels] = useState<CodexModel[] | null>(null);
   const live = useRef(true), working = useRef(true), panel = useRef<HTMLElement>(null);
   useDialogFocus(panel, onClose, { canClose: !busy });
   useEffect(() => {
@@ -21,8 +23,9 @@ export function SettingsPanel({ onClose, disabled = false }: Props) {
     return () => { cancelled = true; live.current = false; };
   }, []);
   const locked = disabled || !!busy || !state;
-  const changed = !!state && (draft.codexPath !== state.settings.codexPath || draft.latexmkPath !== state.settings.latexmkPath);
-  const update = (key: keyof ToolSettings, value: string) => { setDraft(current => ({ ...current, [key]: value })); setResult(null); setError(''); setStatus(''); setCopiedDetails(''); };
+  const changed = !!state && (draft.codexPath !== state.settings.codexPath || draft.latexmkPath !== state.settings.latexmkPath || (draft.codexModel ?? null) !== (state.settings.codexModel ?? null));
+  const update = (key: keyof ToolSettings, value: string | null) => { setDraft(current => ({ ...current, [key]: value })); if (key === 'codexPath') setModels(null); setResult(null); setError(''); setStatus(''); setCopiedDetails(''); };
+  const selectedModel = models?.find(model => model.id === draft.codexModel);
   async function action(label: string, run: () => Promise<void>) {
     if (locked || working.current) return;
     working.current = true; setBusy(label); setError(''); setStatus('');
@@ -46,6 +49,23 @@ export function SettingsPanel({ onClose, disabled = false }: Props) {
       </label>)}
     </div>
     <p className="settings-hint">Use an absolute path. You can configure either tool independently; leave the other path unchanged if it is not installed. The TeX installation should keep its engines, kpsewhich and SyncTeX beside latexmk.</p>
+    <div className="settings-model">
+      <label htmlFor="codex-model">Codex model</label>
+      <div className="settings-actions">
+        <select id="codex-model" value={draft.codexModel ?? ''} disabled={locked} onChange={event => update('codexModel', event.target.value || null)}>
+          <option value="">Use Codex default</option>
+          {draft.codexModel && !selectedModel && <option value={draft.codexModel}>{draft.codexModel} · {models ? 'not in current catalog' : 'saved choice'}</option>}
+          {models?.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+        </select>
+        <button disabled={locked || !draft.codexPath.trim()} onClick={() => void action('Reading available Codex models…', async () => {
+          const available = await window.editor.listCodexModels({ ...draft });
+          if (live.current) { setModels(available); setStatus(available.length ? 'Model catalog loaded. Choose a model and save settings.' : 'No models were returned. Check your Codex sign-in and access.'); }
+        })}>{models ? 'Refresh models' : 'Load models'}</button>
+      </div>
+      <p className="settings-hint">Applies to all new reviews, discussions and Side Chat requests in this editor. Your general Codex settings stay unchanged. Load models checks the selected CLI's catalog without sending paper text or starting an AI response.</p>
+      {selectedModel && <p className="settings-hint">Supported effort: {selectedModel.efforts.join(', ')}. {selectedModel.fast ? 'Fast mode available.' : 'Standard speed only.'} {selectedModel.images ? 'Screenshots supported.' : 'Text only.'} Access is checked again when you send a request.</p>}
+      {models && draft.codexModel && !selectedModel && <p className="settings-hint">The saved model is not in this catalog. Choose an available model or use the Codex default before reviewing.</p>}
+    </div>
     <div className="settings-actions">
       <button disabled={locked || !draft.codexPath.trim() || !draft.latexmkPath.trim()} onClick={() => void action('Checking local versions…', async () => {
         const checked = await window.editor.checkSetup({ ...draft });

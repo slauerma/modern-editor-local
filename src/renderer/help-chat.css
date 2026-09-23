@@ -41,3 +41,8 @@
 .chat-image-backdrop header { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 10px; }
 .chat-image-backdrop img { max-width: 90vw; max-height: 78vh; object-fit: contain; }
 @media (max-height: 720px) { .help-chat-drawer { top: 48px; bottom: 6px; } .chat-composer { max-height: 62%; } .chat-heading { padding: 9px 16px; } }
+
+.pending-chat-warning { padding:8px 14px; background:#fff2db; color:#68400d; font-size:13px; flex-shrink:0; }
+.pending-chat-dialog { background:white; color:#273a30; border-radius:10px; padding:18px; width:min(760px,90vw); max-height:85vh; display:flex; flex-direction:column; gap:12px; }
+.pending-chat-dialog header,.pending-chat-dialog footer { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex-shrink:0; }
+.pending-chat-dialog h2 { margin:0; flex:1; font-size:18px; }.pending-chat-content { overflow:auto; min-height:0; }.pending-chat-content pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; }.pending-chat-content article { border-bottom:1px solid #dbe2d7; padding:8px 0; }

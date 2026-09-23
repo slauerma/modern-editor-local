@@ -17,11 +17,12 @@ import { ReferenceService } from './reference-service.ts';
 import { attachmentSelectionsSchema, attachmentPreviewIdSchema } from '../shared/attachments.ts';
 import { feedbackRequestSchema } from '../shared/feedback.ts';
 import { CodexService } from './codex-service.ts';
+import { CodexClient } from './codex-client.ts';
 import { BuildInputHelp } from './build-input-help.ts';
 import { buildInputLimitsSchema, buildInputPathsSchema } from '../shared/build-input-help.ts';
 import { inspectSourceRecovery, writeSourceCopy } from './source-export.ts';
 import { prepareRuntimeStorage, runtimeLocation, createDraftSource } from './runtime-storage.ts';
-import { ToolSettingsService } from './tool-settings.ts';
+import { ToolSettingsService, validateExecutable } from './tool-settings.ts';
 import { formatSetupDetails, toolSettingsSchema, type ToolSettingsState } from '../shared/tool-settings.ts';
 import { verifiedCodexVersions } from './codex-policy.ts';
 import { HelpChat } from './help-chat.ts';
@@ -48,6 +49,8 @@ const helpChat = new HelpChat(projects, codex.client, path.join(runtime, 'help-c
   documentation: (await Promise.all(['USER_GUIDE.md','SETUP.md','FAQ.md','CHANGELOG.md'].map(async name => `## ${name}\n${(await readRegularFile(path.join(__dirname, 'help', name), 100000)).toString('utf8')}`))).join('\n\n')
 }), references);
 let storageNotices: string[] = [], setupBusy = false, activeToolOperations = 0;
+let setupCatalog: CodexClient | null = null;
+let setupCatalogGeneration = 0;
 let window: BrowserWindow | null = null, closing = false, rendererGone = false;
 app.on('second-instance', () => { if (window?.isMinimized()) window.restore(); window?.show(); window?.focus(); });
 const documentFile = path.join(__dirname, 'renderer/index.html');
@@ -107,12 +110,23 @@ handle('setup:save', async input => {
     // All tool requests are excluded across the await above. Apply both paths
     // together, retaining the compiler's already verified PDF snapshots.
     compiler.setLatexmk(saved.latexmkPath); codex.client.setBinary(saved.codexPath);
+    codex.client.setModel(saved.codexModel ?? null);
     return toolSettingsState();
   } finally { setupBusy = false; }
 });
 handle('setup:check', async input => {
   const parsed = toolSettingsSchema.parse(input); reserveSetup();
   try { return await tools.check(parsed); } finally { setupBusy = false; }
+});
+handle('setup:models', async input => {
+  const parsed = toolSettingsSchema.parse(input); reserveSetup();
+  const generation = setupCatalogGeneration;
+  try {
+    await validateExecutable(parsed.codexPath);
+    if (generation !== setupCatalogGeneration) throw new Error('Codex model check cancelled.');
+    setupCatalog = new CodexClient(path.join(runtime, 'setup-models'), parsed.codexPath);
+    return await setupCatalog.listModels();
+  } finally { setupCatalog = null; setupBusy = false; }
 });
 handle('setup:copy-details', async input => {
   const parsed = toolSettingsSchema.parse(input); reserveSetup();
@@ -170,6 +184,7 @@ handle('review:import', async input => {
 handle('build:compile', input => { const p = textInput.extend({ engine: engineSchema, selectedPaths: buildInputPathsSchema.optional(), limits: buildInputLimitsSchema.optional() }).strict().parse(input); return compiler.compile(p.projectId, p.text, p.engine, p.selectedPaths, p.limits); });
 handle('build:help-preview', input => { const p = textInput.strict().parse(input); return buildHelp.prepare(p.projectId, p.text); });
 handle('codex:build-help', input => { const p = textInput.extend({ previewId: z.string().uuid() }).strict().parse(input); return buildHelp.ask(p.projectId, p.text, p.previewId, message => window?.webContents.send('codex:progress', message)); });
+handle('build:inspect', input => { const p = textInput.extend({ buildId: z.string() }).parse(input); return compiler.inspect(p.projectId, p.buildId, p.text); });
 handle('build:validate', input => { const p = textInput.extend({ buildId: z.string() }).parse(input); return compiler.validate(p.projectId, p.buildId, p.text); });
 handle('build:pdf', id => compiler.pdf(z.string().parse(id)));
 handle('build:locate', input => compiler.locatePdf(pdfRequestSchema.parse(input)));
@@ -197,6 +212,13 @@ handle('feedback:list', id => codex.feedback.list(z.string().parse(id)));
 handle('codex:review', input => { const p = textInput.extend({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), instructions: z.string().max(10000), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional() }).parse(input); return codex.review(p, message => window?.webContents.send('codex:progress', message)); });
 handle('codex:reply', input => { const p = textInput.extend({ comment: commentSchema, message: z.string().min(1).max(10000), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional(), deeper: z.boolean().optional() }).parse(input); return codex.reply(p, message => window?.webContents.send('codex:progress', message)); });
 handle('codex:waiting', id => codex.results.list(z.string().parse(id)));
+handle('chat:pending', () => helpChat.pending());
+handle('chat:pending-reply', id => helpChat.pendingReply(z.string().regex(/^[a-f0-9]{64}$/).parse(id)));
+handle('chat:recover', async input => {
+  const p = z.object({ id: z.string().regex(/^[a-f0-9]{64}$/), action: z.enum(['retry', 'copy', 'discard']) }).strict().parse(input);
+  if (p.action === 'copy') { clipboard.writeText(JSON.stringify(helpChat.pendingReply(p.id), null, 2)); return; }
+  await helpChat.recover(p.id, p.action);
+});
 handle('chat:state', input => helpChat.state(chatScopeSchema.parse(input)));
 handle('chat:clear', input => helpChat.clear(chatScopeSchema.parse(input)));
 handle('chat:retry', input => helpChat.retry(chatScopeSchema.parse(input)));
@@ -212,8 +234,9 @@ handle('codex:chat', input => {
 handle('codex:acknowledge', input => { const p = z.object({ projectId: z.string(), resultId: z.string().uuid(), outcome: z.enum(['adopted', 'dismissed']) }).parse(input); return codex.results.acknowledge(p.projectId, p.resultId, p.outcome); });
 handle('codex:cancel', () => { buildHelp.cancel(); return Promise.all([helpChat.cancel(), codex.cancel()]); });
 handle('codex:preamble', input => codex.preamble(preambleRequestSchema.parse(input), message => window?.webContents.send('codex:progress', message)));
+function cancelSetupCatalog() { setupCatalogGeneration++; return setupCatalog?.cancel(); }
 async function settleWindowWork() {
-  await Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), attachments.stop()]);
+  await Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), attachments.stop(), cancelSetupCatalog()]);
   // A finished model process can still have an answer being validated/written.
   await Promise.all([codex.settle(), helpChat.settle()]); await projects.settle();
 }
@@ -234,7 +257,7 @@ async function createWindow() {
   window.webContents.on('will-navigate', (event, url) => { if (url !== documentURL) event.preventDefault(); });
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   window.webContents.on('console-message', details => { if (['warning', 'error'].includes(details.level)) console.error('Renderer:', details.message); });
-  window.webContents.on('render-process-gone', () => { rendererGone = true; void Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), attachments.stop()]).catch(console.error); });
+  window.webContents.on('render-process-gone', () => { rendererGone = true; void Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), attachments.stop(), cancelSetupCatalog()]).catch(console.error); });
   window.on('close', event => { if (!closing) { event.preventDefault(); if (rendererGone) void finishClose().catch(console.error); else window?.webContents.send('window:close-requested'); } });
   window.on('closed', () => { window = null; });
   await window.loadFile(documentFile);
@@ -245,6 +268,7 @@ if (primaryInstance) app.whenReady().then(async () => {
   storageNotices = storage.notices;
   const settings = await tools.load();
   compiler.setLatexmk(settings.settings.latexmkPath); codex.client.setBinary(settings.settings.codexPath);
+  codex.client.setModel(settings.settings.codexModel ?? null);
   storageNotices.push(...settings.notices);
   app.setAboutPanelOptions({ applicationName: 'Modern Codex Editor', applicationVersion: app.getVersion() });
   const menu: Electron.MenuItemConstructorOptions[] = [

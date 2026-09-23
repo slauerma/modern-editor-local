@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "388f1226938fde155a8b96f3dbf043a71ae4b0a42b66bd11b396c60fb5c0ee7e",
+  "lockfileSha256": "3c50492bea6ef9223e70af67989dea64b15a56386ce1dfd2285fcbaa8bf7953d",
   "packages": [
     {
       "name": "@codemirror/commands",

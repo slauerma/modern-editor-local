@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { EditorAPI } from '../shared/contracts.ts';
 const api: EditorAPI = {
+  pendingChats: () => ipcRenderer.invoke('chat:pending'),
+  pendingChat: id => ipcRenderer.invoke('chat:pending-reply', id),
+  recoverChat: input => ipcRenderer.invoke('chat:recover', input),
   chatState: scope => ipcRenderer.invoke('chat:state', scope),
   clearChat: scope => ipcRenderer.invoke('chat:clear', scope),
   retryChat: scope => ipcRenderer.invoke('chat:retry', scope),
@@ -10,6 +13,7 @@ const api: EditorAPI = {
   chooseTool: tool => ipcRenderer.invoke('setup:choose', tool),
   saveSetup: settings => ipcRenderer.invoke('setup:save', settings),
   checkSetup: settings => ipcRenderer.invoke('setup:check', settings),
+  listCodexModels: settings => ipcRenderer.invoke('setup:models', settings),
   copySetupDetails: settings => ipcRenderer.invoke('setup:copy-details', settings),
   attachmentInventory: projectId => ipcRenderer.invoke('attachments:list', projectId),
   chooseAttachments: (projectId, folder) => ipcRenderer.invoke('attachments:choose', { projectId, folder }),
@@ -47,6 +51,7 @@ const api: EditorAPI = {
   compile: input => ipcRenderer.invoke('build:compile', input),
   previewBuildHelp: input => ipcRenderer.invoke('build:help-preview', input),
   askBuildHelp: input => ipcRenderer.invoke('codex:build-help', input),
+  inspectBuild: input => ipcRenderer.invoke('build:inspect', input),
   validateBuild: input => ipcRenderer.invoke('build:validate', input),
   getPdf: id => ipcRenderer.invoke('build:pdf', id),
   locatePdf: input => ipcRenderer.invoke('build:locate', input),

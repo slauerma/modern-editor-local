@@ -34,3 +34,22 @@ test('SyncTeX parses its first finite box in top-left PDF points and rejects mal
   assert.deepEqual(parseSyncTex(result),{page:2,x:90,y:286,width:350,height:14});
   for(const bad of [result.replace('Page:2','Page:0'),result.replace('W:350','W:NaN'),result.replace('v:300','v:1e30'),'No tag for input']) assert.equal(parseSyncTex(bad),null);
 });
+test('PDF navigation recognizes active document controls with whitespace and comments', () => {
+  const text = String.raw`\documentclass{article}
+% \begin{document}
+\newcommand{\example}{\begin{document}}
+\begin % opening
+ { document }
+A visible sentence.
+\verb|\end{document}|
+Another visible sentence.
+\end {document}
+Outside the document.`;
+  for (const word of ['A visible', 'Another visible']) {
+    const at = text.indexOf(word);
+    assert.deepEqual(compiledPosition(text, text, at, at + word.length), { line: text.slice(0, at).split('\n').length, column: 1 });
+  }
+  assert.equal((compiledPosition(text, text, text.indexOf('Outside'), text.length) as any).kind, 'unavailable');
+  const duplicate = text.replace('A visible', '\\begin{document}\nA visible'), at = duplicate.indexOf('A visible');
+  assert.equal((compiledPosition(duplicate, duplicate, at, at + 9) as any).kind, 'unavailable');
+});

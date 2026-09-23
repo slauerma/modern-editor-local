@@ -10,6 +10,10 @@
 .settings-executables label>div { display:flex; gap:8px; }
 .settings-executables input { flex:1; min-width:0; width:100%; padding:8px; border:1px solid #cfdacd; border-radius:5px; background:white; font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
 .settings-hint { color:#65725f; font-size:11px; }
+.settings-model { margin-top:18px; padding-top:14px; border-top:1px solid #dce4d7; }
+.settings-model>label { font-weight:600; }
+.settings-model .settings-actions { margin-top:7px; }
+.settings-model select { max-width:100%; padding:8px; font:inherit; border:1px solid #cfdacd; border-radius:5px; background:white; }
 .settings-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:16px; }
 .settings-status { color:#345f48; }
 .settings-copy-preview { margin:12px 0; }

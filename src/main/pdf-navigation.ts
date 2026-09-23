@@ -2,6 +2,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { PdfLocation } from '../shared/contracts.ts';
+import { controls } from '../shared/tex-structure.ts';
 const execute = promisify(execFile);
 
 function uncomment(text: string) {
@@ -16,12 +17,15 @@ function uncomment(text: string) {
 
 export function compiledPosition(current: string, compiled: string, from: number, to: number): { line: number; column: number } | Exclude<PdfLocation, { kind: 'mapped' }> {
   if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > current.length) throw new Error('Choose a passage within the current source.');
-  const masked = uncomment(current), start = masked.indexOf('\\begin{document}'), end = masked.lastIndexOf('\\end{document}');
+  const masked = uncomment(current), tokens = controls(current);
+  const starts = tokens.filter(t => t.name === 'begin' && t.argument === 'document');
+  const start = starts[0], end = tokens.find(t => t.name === 'end' && t.argument === 'document');
   const at = from + (current.slice(from, to).match(/^\s*/)?.[0].length ?? 0);
   const lineStart = current.lastIndexOf('\n', Math.max(0, at - 1)) + 1;
   const lineEnd = current.indexOf('\n', at), limit = lineEnd < 0 ? current.length : lineEnd;
-  if (start < 0) return { kind: 'compile', reason: 'This draft needs a document preamble before it can be shown in a PDF.' };
-  if (at < start + '\\begin{document}'.length || (end >= 0 && at >= end) || !masked.slice(at, limit).trim() || !masked.slice(lineStart, limit).trim())
+  if (!start) return { kind: 'compile', reason: 'This draft needs a document preamble before it can be shown in a PDF.' };
+  if (starts.length !== 1) return { kind: 'unavailable', reason: 'This draft has multiple document openings. Resolve them before locating a PDF passage.' };
+  if (at < start.to || (end && at >= end.from) || !masked.slice(at, limit).trim() || !masked.slice(lineStart, limit).trim())
     return { kind: 'unavailable', reason: 'Choose typeset text in the document body. Preamble definitions, blank lines and LaTeX comments may have no visible PDF counterpart.' };
   let offset = at;
   if (current !== compiled) {

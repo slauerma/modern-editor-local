@@ -44,3 +44,31 @@ test('Cancel and stop finish a running compiler without leaving the next compila
     assert.equal((await f.compiler.compile(f.project.id, 'OK', 'pdflatex')).success, true);
   } finally { await f.compiler.stop(); }
 });
+
+test('passive validation coalesces, yields to Compile and never reports busy as changed', { timeout: 10000 }, async () => {
+  const f = await fixture();
+  try {
+    const build = await f.compiler.compile(f.project.id, f.project.text, 'pdflatex');
+    // The process-control compiler produces only a PDF header. Supply verified
+    // record metadata here to exercise coordination, not TeX input verification.
+    (f.compiler as any).records.get(build.id).build.dependenciesVerified = true;
+    const original = (f.compiler as any).prepareInputs.bind(f.compiler);
+    let entered!: () => void, release!: () => void;
+    const started = new Promise<void>(done => { entered = done; });
+    let calls = 0;
+    (f.compiler as any).prepareInputs = async (...args: any[]) => {
+      calls++;
+      if (calls === 1) { entered(); await new Promise<void>(done => { release = done; }); }
+      return original(...args);
+    };
+    const one = f.compiler.inspect(f.project.id, build.id, f.project.text);
+    const two = f.compiler.inspect(f.project.id, build.id, f.project.text);
+    assert.equal(one, two); await started;
+    const compiled = f.compiler.compile(f.project.id, f.project.text, 'pdflatex');
+    assert.equal((await f.compiler.inspect(f.project.id, build.id, f.project.text)).status, 'deferred');
+    release(); assert.equal((await one).status, 'deferred');
+    assert((await compiled).success); assert.equal(calls, 2);
+    assert.equal((await f.compiler.inspect(f.project.id, build.id, f.project.text)).status, 'valid');
+    assert.equal(await f.compiler.validate(f.project.id, build.id, 'Changed'), false);
+  } finally { await f.compiler.stop(); await fs.rm(f.root, { recursive: true, force: true }); }
+});

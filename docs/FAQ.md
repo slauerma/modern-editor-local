@@ -18,7 +18,7 @@ Run `node node_modules/electron/install.js` from the repository folder, then reb
 
 The editor may be launching a different executable. Open **Settings** with **Command+,**, choose that same absolute path, run **Check setup**, and **Save settings**. Authenticate the executable separately as described in [Codex setup](SETUP.md#3-configure-codex-if-you-want-ai-review). Path changes need no rebuild; a successful version check does not establish sign-in or account access.
 
-If the error says **Codex review restrictions could not be verified**, no paper text was sent by that attempt. This build supports CLI **0.153.4**, **0.154.0-alpha.6.2** and **0.155.0-alpha.2.6** and verifies that inherited MCP servers are disabled before sending the request. Check the executable version and report a synthetic reproduction if that supported version still fails. A maintainer must rerun the configuration probe and review compatibility before enabling another version; removing the guard is not a setup fix. The check does not change your saved Codex settings.
+If the error says **Codex review restrictions could not be verified**, no paper text was sent by that attempt. This build supports CLI **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6** and **0.155.0-alpha.9.2** and verifies that inherited MCP servers are disabled before sending the request. Check the executable version and report a synthetic reproduction if that supported version still fails. A maintainer must rerun the configuration probe and review compatibility before enabling another version; removing the guard is not a setup fix. The check does not change your saved Codex settings.
 
 If the error names an unsupported effort, choose an effort listed as supported in that error. If Fast mode was refused, turn **Fast mode** off in Actions or check the model's access before retrying. The app reports an unsupported setting instead of silently substituting one. Authentication details belong in your own CLI configuration, never in a paper or shared bug report.
 
@@ -27,6 +27,8 @@ If the error names an unsupported effort, choose an effort listed as supported i
 For questions about the editor, errors, or a paper, open **Codex Side Chat** (**Command+Shift+H**). It supports screenshots and optional error context. See the [chat guide](USER_GUIDE.md#ask-codex-side-chat-about-the-editor-or-paper). The ordinary searchable **Help** works offline; **Codex Side Chat** calls Codex when you send a question. In paper conversations it uses that paper's effort/Fast settings; editor-only help uses Standard effort with Fast mode off.
 
 ## What do effort, Fast mode, and answer length mean?
+
+Choose the model separately in **Settings → Load models → Save settings**. GPT‑6 Sol and GPT‑6 Luna appear when offered by the selected CLI. Its catalog also shows supported effort, Fast mode and screenshot input; access is checked again when you send. A saved model that is no longer available is reported rather than silently replaced. Select **Use Codex default** to return to the CLI’s configured model.
 
 **Actions → Codex effort** offers Quick (`low`), Standard (`medium`), Deep (`high`), and Max (`max`). These request different reasoning efforts from the configured model; they do not promise a fixed thinking time or answer length. The choice is saved per paper. **Think more** requests Deep/high effort, retaining Max if already selected.
 
@@ -164,6 +166,6 @@ If Save reports that version history needs attention, the source was saved but h
 
 ## How should I report a problem?
 
-Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **0.3.2**.
+Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **1.1.0**.
 
 Add the exact action and error, whether the synthetic sample reproduces it, your Node version (`node --version`), and the editor commit if known. A small synthetic `.tex` example is most useful. Inspect logs, screenshots, and `.modern-editor` records before sharing: they may contain source, discussion, or local paths. Do not include authentication tokens or account configuration. The [testing guide](../TESTING.md) separates offline checks from optional live Codex requests.

@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { codexVersion } from './codex-version.ts';
+import { codexModelIdSchema } from './codex-models.ts';
 
 export const toolSettingsSchema = z.object({
   codexPath: z.string().trim().min(1).max(4096),
-  latexmkPath: z.string().trim().min(1).max(4096)
+  latexmkPath: z.string().trim().min(1).max(4096),
+  codexModel: codexModelIdSchema.nullable().optional()
 }).strict();
 export type ToolSettings = z.infer<typeof toolSettingsSchema>;
 export type SetupIdentity = { editorVersion: string; platform: string; osVersion: string };

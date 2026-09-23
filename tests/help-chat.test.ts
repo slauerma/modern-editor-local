@@ -207,3 +207,24 @@ test('history has explicit bounds and excludes old context/images; long source t
   assert.throws(() => chatInputSchema.parse({ ...f.input, images: [{ ...image(), dataUrl: 'https://example.invalid/screen.png' }] }));
   assert.throws(() => chatInputSchema.parse({ ...f.input, images: Array.from({ length: 4 }, image) }));
 });
+
+test('pending replies remain discoverable and recoverable after switching papers; discard preserves saved history', async () => {
+  let fail = true;
+  const f = await fixture(async (file, value, limit) => { if (fail && (value as any).turns.at(-1).status === 'complete') throw new Error('Synthetic disk failure'); await writeJSON(file, value, limit); });
+  try {
+    const reply = await ask(f), stored = await fs.readFile(f.stored, 'utf8');
+    const otherFile = path.join(f.root, 'other.tex'); await fs.writeFile(otherFile, source);
+    const other = await f.projects.open(otherFile);
+    assert(!(await f.service.state({ projectId: other.id })).needsSave);
+    const pending = f.service.pending(); assert.equal(pending.length, 1); assert.match(pending[0].label, /main.tex/);
+    assert.equal(f.service.pendingReply(pending[0].id).turns.at(-1)?.reply, reply.reply);
+    await assert.rejects(f.service.settle(), /main.tex.*Review unsaved replies/);
+    await f.service.recover(pending[0].id, 'discard');
+    assert.equal(await fs.readFile(f.stored, 'utf8'), stored); assert.equal(f.service.pending().length, 0); await f.service.settle();
+    const second = await ask(f, { ...f.input, projectId: other.id });
+    const id = f.service.pending()[0].id; fail = false;
+    await f.service.recover(id, 'retry'); await f.service.settle();
+    assert.equal((await f.service.state({ projectId: other.id })).turns.at(-1)?.reply, second.reply);
+    assert.equal(await fs.readFile(f.file, 'utf8'), source);
+  } finally { await fs.rm(f.root, { recursive: true, force: true }); }
+});
