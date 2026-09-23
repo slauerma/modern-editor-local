@@ -105,9 +105,9 @@ Ordinary **Accept** skips the build check for an individual suggestion while ret
 
 ## Why is the PDF old or not jumping to my comment?
 
-Typing and ordinary **Accept** do not automatically compile. An **Older PDF** reflects an earlier source snapshot. Unchanged passages can still be located when matching is unambiguous; changed passages may require **Compile and show**. A failed build preserves the previous successful PDF.
+Typing and ordinary **Accept** do not automatically compile. An **Earlier PDF** reflects an earlier source snapshot. Unchanged passages can still be located when matching is unambiguous; changed passages may require **Compile and show**. A failed build preserves the previous successful PDF.
 
-Open the PDF and check **PDF follows comments** in Actions. Automatic following leaves a hidden preview closed and pauses for candidate previews. Uncertain comment placement needs confirmation first. Preamble text, comments, and some macro-generated material have no useful typeset location; try nearby prose. Clicking from PDF back to source is not implemented.
+Open the PDF and enable **Follow** beside the zoom control. Automatic following leaves a hidden preview closed and pauses for candidate previews. Uncertain comment placement needs confirmation first. Preamble text, comments, and some macro-generated material have no useful typeset location; try nearby prose. Clicking from PDF back to source is not implemented.
 
 ## How do I read or search several PDF pages?
 
