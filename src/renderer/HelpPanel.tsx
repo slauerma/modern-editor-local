@@ -7,6 +7,7 @@ import packageInfo from '../../package.json?raw';
 import { findHelpSections, helpPlainText, helpSections, type HelpDocument } from './help-content.ts';
 import { useDialogFocus } from './use-dialog-focus.ts';
 import './help-panel.css';
+import { editorAuthor, predecessorCredit } from '../shared/editor-credits.ts';
 
 const editorVersion = (JSON.parse(packageInfo) as { version: string }).version;
 const sections = [...helpSections(guide, 'guide'), ...helpSections(setup, 'setup'), ...helpSections(faq, 'faq'), ...helpSections(changelog, 'changelog')];
@@ -60,7 +61,7 @@ export function HelpPanel({ onClose }: Props) {
   const current = choices.find(section => section.id === selected) ?? choices[0];
   useEffect(() => { article.current?.scrollTo({ top: 0 }); }, [current?.id]);
   return <div className="help-overlay"><section ref={panel} tabIndex={-1} className="help-panel" role="dialog" aria-modal="true" aria-labelledby="editor-help-title">
-    <header><div><h2 id="editor-help-title">Help</h2><p className="help-version">Modern Codex Editor · Version {editorVersion}</p></div><button onClick={onClose}>Close</button></header>
+    <header><div><h2 id="editor-help-title">Help</h2><p className="help-version">Modern Codex Editor · Version {editorVersion}</p><p className="help-version">By {editorAuthor}. {predecessorCredit}</p></div><button onClick={onClose}>Close</button></header>
     <div className="help-search"><input ref={search} type="search" aria-label="Search editor help" placeholder="Search help, shortcuts, or recovery…" value={query} onChange={event => setQuery(event.target.value)} maxLength={200} />{query && <button onClick={() => { setQuery(''); search.current?.focus(); }}>Clear</button>}</div>
     <nav className="help-tabs" aria-label="Help topics">{(['guide', 'setup', 'faq', 'shortcuts', 'changelog'] as const).map(value => <button key={value} aria-pressed={!query && tab === value} onClick={() => { setQuery(''); setTab(value); }}>{value === 'shortcuts' ? 'Shortcuts' : titles[value]}</button>)}</nav>
     <div className="help-content"><nav className="help-sections" aria-label={query ? 'Help search results' : 'Guide sections'}>

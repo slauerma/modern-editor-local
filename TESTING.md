@@ -63,7 +63,7 @@ After `npm run build` and `npm start`, choose **Try the working sample**. It has
 5. Click ordinary **Accept** and confirm that the PDF is marked older and no build starts. Undo, then choose **Accept & compile** on a clean suggestion: it should compile once, apply and advance. Use Source/PDF navigation afterward.
 6. Put one pending comment in Later. Use **More → Dismiss pending comments**, inspect History, and Undo once. Confirm the pending batch returns, Later remains set, and source text and discussions are unchanged.
 7. Add an author question to a source selection and rewrite that passage. Use **Link question to current selection** and verify that the card retains Earlier wording beside the Linked current passage. Undo the link and confirm the source stays unchanged by linking. Replacement suggestions must still require exact original text for reattachment.
-8. Open Help and Settings, verify version **1.1.0**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
+8. Open Help and Settings, verify version **1.2.0**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
 9. Save, compare with the retained original, and reopen the sample to check saved comments and source. Test Undo before quitting; its history is session-only.
 10. At 1000 × 740, switch Source/PDF tabs; at a larger size, test all View arrangements. Verify source Undo, replacement edits, PDF reading position and zoom survive. Check long proofs, collapsed Changes with package additions, search/copy, and manual scrolling during a pending PDF jump.
 11. Make an unsaved edit, then **Close project**. Confirm Home has no paper panes or old chat/error context, and restarting stays at Home. Reopen the same paper and check recovered source, comments and reading position. Try closing during a review/build; late results must not reappear on Home. A failed recovery write must keep the project open.
@@ -92,7 +92,7 @@ Live requests use your separately configured CLI and account and may consume ser
 node --experimental-strip-types scripts/check-codex-isolation.mjs
 ```
 
-Use `--codex /absolute/path/to/codex` for another executable location. The currently supported runtimes are **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6** and **0.155.0-alpha.9.2**; an unknown version must fail closed. The script uses a disposable Codex home and synthetic trusted project under `.test-runs/`, without copying credentials or changing your normal configuration. It never starts a model turn.
+The probe defaults to the editor-managed CLI installed by `npm ci --ignore-scripts`. Use `--codex /absolute/path/to/codex` for another executable location. The currently supported runtimes are **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6** and **0.155.0-alpha.9.2**; an unknown version must fail closed. The script uses a disposable Codex home and synthetic trusted project under `.test-runs/`, without copying credentials or changing your normal configuration. It never starts a model turn.
 
 The positive control demonstrates that the old empty-table override starts a harmless MCP server and exposes its tool. The corrected cases use the actual editor client, with inherited home configuration, home plus trusted-project configuration, and an inherited desktop-launcher identity. All must report every server disabled, expose no MCP tools/resources, and leave the startup markers absent. The probe uses automatic tool approval settings to ensure that rejecting approval callbacks is not mistaken for disabling a server. It records CLI version and tested source hashes in ignored `test-evidence/`.
 
@@ -127,3 +127,14 @@ node --experimental-strip-types scripts/check-codex-isolation.mjs
 ```
 
 Also run the references-on/off protocol check above, then the desktop regression above. Audit all dependencies, including development dependencies: Electron is a development dependency but runs the app. Review the exact Git tree and reachable history with a redacting secret scanner, and inspect binary assets separately. Do not upload private logs, scanner matches, or manuscript-derived test evidence to public CI or issues. See [SECURITY.md](SECURITY.md) for reporting guidance.
+
+
+## Viewer regression
+
+After building, run `node scripts/check-viewer.mjs` with an installed Playwright package (or pass `--playwright-package /absolute/path/to/package.json`). It launches an isolated Electron profile with synthetic `.txt` and `.tex` files. It checks text preview/acceptance/Save/Undo, one controlled preamble answer, actual local TeX proposal compilation, candidate highlights, unsupported previews, delayed replies, layouts and reopening. No live model request or account credentials are used. Screenshots and the receipt remain local under `test-evidence/`; successful disposable runs are removed after Electron exits.
+
+The Changes PDF checks cover exact source reconstruction, block alignment, omissions, validated arrangements, bounded reason recording, cancellation and preservation of ordinary PDFs. `tests/changes-pdf.integration.ts` uses real TeX for marked prose, mathematics, deletions, unsupported labels and proposal previews. After building, `node scripts/check-changes-pdf.mjs --playwright-package /path/to/playwright/package.json` runs an isolated native Electron check with synthetic papers and a controlled arrangement response; it makes no live Codex request. It also checks margin-note clicks, revision-markup/clean-paper switching without additional model calls, clean deletion details, stale-result rejection, cancellation and close/reopen.
+
+## Managed CLI setup smoke check
+
+After the normal build, `node scripts/check-managed-codex.mjs --playwright-package /absolute/path/to/playwright/package.json` opens an isolated Electron copy. It checks the home/Help credits, managed/custom CLI settings, a local version check and bundled installation instructions from a relocated app directory. It uses no paper, account sign-in or model request. Evidence goes to an ignored `.test-runs/managed-cli-desktop-*` folder; Electron launch may need permission.

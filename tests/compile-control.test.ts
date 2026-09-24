@@ -15,8 +15,10 @@ async function fixture(timeoutMs = 2000) {
   const projects = new ProjectService(path.join(root, 'cache')), project = await projects.open(file);
   return { root, file, project, compiler: new CompileService(projects, path.join(root, 'builds'), command, timeoutMs) };
 }
-test('split Unicode output is preserved, a timed-out compile stops, and the service remains usable', { timeout: 10000 }, async () => {
-  const f = await fixture(1500);
+test('split Unicode output is preserved, a timed-out compile stops, and the service remains usable', { timeout: 20000 }, async () => {
+  // Allow process startup during the parallel suite; the HANG case must still
+  // hit the real watchdog, preserve the previous PDF and permit a later build.
+  const f = await fixture(5000);
   try {
     const good = await f.compiler.compile(f.project.id, 'OK', 'pdflatex');
     assert.match(good.log, /Ελληνικά and Hebrew עברית/);

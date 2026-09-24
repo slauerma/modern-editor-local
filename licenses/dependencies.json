@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "3c50492bea6ef9223e70af67989dea64b15a56386ce1dfd2285fcbaa8bf7953d",
+  "lockfileSha256": "828e99fc1b66f98878f2658adea42fe878feeec121ac61c66e48adcf7d4bbd5a",
   "packages": [
     {
       "name": "@codemirror/commands",
@@ -480,6 +480,70 @@
       "version": "1.5.1",
       "license": "MIT",
       "development": true,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@openai/codex",
+      "version": "0.155.0-alpha.9.2",
+      "license": "Apache-2.0",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": []
+    },
+    {
+      "name": "@openai/codex-darwin-arm64",
+      "declaredName": "@openai/codex",
+      "version": "0.155.0-alpha.9.2-darwin-arm64",
+      "license": "Apache-2.0",
+      "development": false,
+      "optional": true,
+      "installed": true,
+      "noticeFiles": []
+    },
+    {
+      "name": "@openai/codex-darwin-x64",
+      "version": "0.155.0-alpha.9.2-darwin-x64",
+      "license": "Apache-2.0",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@openai/codex-linux-arm64",
+      "version": "0.155.0-alpha.9.2-linux-arm64",
+      "license": "Apache-2.0",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@openai/codex-linux-x64",
+      "version": "0.155.0-alpha.9.2-linux-x64",
+      "license": "Apache-2.0",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@openai/codex-win32-arm64",
+      "version": "0.155.0-alpha.9.2-win32-arm64",
+      "license": "Apache-2.0",
+      "development": false,
+      "optional": true,
+      "installed": false,
+      "noticeFiles": []
+    },
+    {
+      "name": "@openai/codex-win32-x64",
+      "version": "0.155.0-alpha.9.2-win32-x64",
+      "license": "Apache-2.0",
+      "development": false,
       "optional": true,
       "installed": false,
       "noticeFiles": []

@@ -71,12 +71,12 @@ export const preambleProposalSchema = z.object({ explanation: z.string().max(400
 export type PreambleProposal = z.infer<typeof preambleProposalSchema>;
 export const preambleRequestSchema = z.object({ projectId: z.string(), text: z.string().min(1).max(120000), engine: engineSchema, previousAttempt: z.object({ proposal: preambleProposalSchema, log: z.string().max(16000) }).optional() });
 export type PreambleRequest = z.infer<typeof preambleRequestSchema>;
-export type Project = { id: string; path: string; name: string; text: string; diskHash: string; review: Review; recovered: boolean; notices: string[]; engine: Engine; effort: Effort; fastMode: boolean; paperInstructions: string; baseline: Baseline | null; workspace?: WorkspaceState; restoredPdf?: { build: Build; text: string } };
+export type Project = { id: string; path: string; name: string; text: string; diskHash: string; review: Review; recovered: boolean; notices: string[]; engine: Engine; effort: Effort; fastMode: boolean; paperInstructions: string; baseline: Baseline | null; sessionBaseline?: Baseline; workspace?: WorkspaceState; restoredPdf?: { build: Build; text: string } };
 export type Diagnostic = { severity: 'error' | 'warning'; message: string; line?: number; file?: string };
 export type BuildInputLimits = { maxBytes: number; maxFiles: number };
 export type BuildInputPreparation = { status: 'needs-selection'; reason: string; issues: string[]; requiredPaths: string[]; requiredBytes?: number; requiredFiles?: number; selectedBytes?: number; selectedFiles?: number; inventory: { paths: { relative: string; size: number }[]; truncated: boolean; visitedEntries: number }; limits: BuildInputLimits };
 export type BuildInputSelection = { mode: 'folder' | 'dependencies' | 'explicit'; fileCount: number; totalBytes: number; unresolvedIssues?: string[] };
-export type Build = { id: string; engine: Engine; success: boolean; clean: boolean; dependenciesVerified?: boolean; sourceHash: string; diagnostics: Diagnostic[]; log: string; elapsedMs: number; inputPreparation?: BuildInputPreparation; inputSelection?: BuildInputSelection };
+export type Build = { purpose?: 'paper' | 'proposal' | 'comparison'; id: string; engine: Engine; success: boolean; clean: boolean; dependenciesVerified?: boolean; sourceHash: string; diagnostics: Diagnostic[]; log: string; elapsedMs: number; inputPreparation?: BuildInputPreparation; inputSelection?: BuildInputSelection };
 export const pdfRequestSchema = z.object({ projectId: z.string(), buildId: z.string(), text: z.string().max(2000000), from: z.number().int().nonnegative(), to: z.number().int().nonnegative() });
 export type PdfRequest = z.infer<typeof pdfRequestSchema>;
 export type BuildValidation = { status: 'valid' | 'changed' | 'deferred' | 'unavailable' };
@@ -92,6 +92,13 @@ export const resultSchema = z.discriminatedUnion('kind', [
 export type WaitingResult = z.infer<typeof resultSchema>;
 export type SourceRecovery = { name: string; choices: { label: string; text: string }[]; notices: string[] };
 export type EditorAPI = {
+  debugState(): Promise<import('./debugging.ts').DebugState>;
+  configureDebug(settings: import('./debugging.ts').DebugSettings): Promise<import('./debugging.ts').DebugState>;
+  deleteDebug(ids: string[] | 'all'): Promise<import('./debugging.ts').DebugState>;
+  openDebugFolder(): Promise<void>;
+  changesSettings(every?: number): Promise<{ every: number }>;
+  planChanges(input: import('./changes-pdf.ts').ChangesInput): Promise<{ id?: string }>;
+  checkChangesVisual(projectId: string, artifactId: string, screenshots: import('./changes-agent.ts').ChangesScreenshot[]): Promise<import('./changes-agent.ts').ChangesVisual>;
   pendingChats(): Promise<import('./help-chat.ts').PendingChat[]>;
   pendingChat(id: string): Promise<import('./help-chat.ts').PendingChatReply>;
   recoverChat(input: { id: string; action: 'retry' | 'copy' | 'discard' }): Promise<void>;
@@ -122,7 +129,7 @@ export type EditorAPI = {
   sourcesUsed(projectId: string): Promise<SourcesHistory>;
   convertFeedback(input: FeedbackRequest): Promise<FeedbackRecord>;
   savedFeedback(projectId: string): Promise<FeedbackList>;
-  exportSource(input: { name: string; text: string }): Promise<string | null>;
+  exportSource(input: { name: string; text: string; format?: 'tex' | 'txt' }): Promise<string | null>;
   inspectRecovery(): Promise<SourceRecovery | null>;
   persist(input: BufferInput): Promise<void>;
   save(input: BufferInput): Promise<{ diskHash: string; baseline?: Baseline | null; historyNotice?: string }>;
@@ -139,7 +146,13 @@ export type EditorAPI = {
   setHistoryBudget(projectId: string, bytes: number): Promise<VersionHistory>;
   reload(projectId: string): Promise<Project>;
   importReview(projectId: string, text: string): Promise<Review | null>;
-  compile(input: { projectId: string; text: string; engine: Engine; selectedPaths?: string[]; limits?: BuildInputLimits }): Promise<Build>;
+  buildChanges(input: import('./changes-pdf.ts').ChangesInput): Promise<import('./changes-pdf.ts').ChangesArtifact>;
+  presentChanges(projectId: string, artifactId: string, presentation: import('./changes-pdf.ts').ChangesPresentation): Promise<import('./changes-pdf.ts').ChangesArtifact>;
+  inspectChanges(projectId: string, artifactId: string): Promise<BuildValidation>;
+  locateChange(projectId: string, artifactId: string, changeId: string): Promise<PdfLocation>;
+  prepareArrangement(input: import('./changes-pdf.ts').ChangesInput): Promise<import('./changes-pdf.ts').ArrangementPreview>;
+  arrangeChanges(input: import('./changes-pdf.ts').ChangesInput, previewId: string): Promise<{ id: string; changes: import('./changes-pdf.ts').ComparisonChange[] }>;
+  compile(input: { projectId: string; text: string; engine: Engine; purpose?: 'paper' | 'proposal'; selectedPaths?: string[]; limits?: BuildInputLimits }): Promise<Build>;
   previewBuildHelp(input: { projectId: string; text: string }): Promise<import('./build-input-help.ts').BuildInputHelpPreview>;
   askBuildHelp(input: { projectId: string; text: string; previewId: string }): Promise<import('./build-input-help.ts').BuildInputHelpResult>;
   inspectBuild(input: { projectId: string; buildId: string; text: string }): Promise<BuildValidation>;

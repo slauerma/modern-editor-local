@@ -37,21 +37,21 @@ Check the main compiler command:
 
 ## 3. Configure Codex if you want AI review
 
-**Supported Codex CLI versions: 0.153.4, 0.154.0-alpha.6.2, 0.155.0-alpha.2.6 and 0.155.0-alpha.9.2.** A newer CLI is not automatically compatible. The editor checks the version and its tool restrictions before sending paper text. Editing and compilation still work if the AI connection is unavailable.
+The source download pins **Codex CLI 0.155.0-alpha.9.2** in `package.json` and `package-lock.json`. Step 4 installs this editor-owned copy under `node_modules`, including the native binary for your Mac. No global Codex installation or desktop app is required. Desktop app updates do not change this copy; CLI upgrades come through a tested editor dependency update.
 
-If you already have one of these supported versions, reuse it and verify its absolute executable path. Otherwise, install a separate copy for this editor, leaving any other Codex installation in place:
+After installing dependencies in step 4, check the pinned CLI and, if needed, sign in:
 
 ~~~sh
-npm install --prefix .tools/codex --no-audit --no-fund @openai/codex@0.153.4
-./.tools/codex/node_modules/.bin/codex --version
-./.tools/codex/node_modules/.bin/codex login
-./.tools/codex/node_modules/.bin/codex login status
-printf '%s/.tools/codex/node_modules/.bin/codex\n' "$PWD"
+npm run codex:version
+npm run codex:login
+npm run codex:login -- status
 ~~~
 
-Complete the browser sign-in using your own account. See the [official Codex CLI guide](https://learn.chatgpt.com/docs/codex/cli) and [authentication options](https://learn.chatgpt.com/docs/auth) for sign-in help, including API-key access. The separate executable uses your normal Codex account configuration.
+Complete the browser sign-in using your own account. The CLI uses your normal Codex account configuration and cached sign-in; the editor does not copy credentials into the repository. See the [official CLI guide](https://learn.chatgpt.com/docs/codex/cli) and [authentication options](https://learn.chatgpt.com/docs/auth). For device sign-in, use `npm run codex:login -- --device-auth` if your account permits it.
 
-Keep the absolute path printed by the last command. After launching the editor, open **Settings** with **Command+,**, paste it into **Codex executable**, and choose **Check setup → Save settings**. For an existing CLI available as `codex`, `command -v codex` shows its path; check and authenticate that same executable. The default `/Applications/ChatGPT.app/Contents/Resources/codex` works only when it exists and reports a supported version. No source-code edit or rebuild is needed for a path change.
+**Settings → Codex installation → Editor-managed CLI** is the default. There is no executable path to paste. Its location follows the current checkout, so a new ZIP folder uses its own locked installation. The former automatic desktop-app path switches to this default when upgrading; explicitly selected custom paths are preserved.
+
+To use another installation, select **Custom executable**, choose its absolute path, then **Check setup → Save settings**. Custom versions must be one of the tested versions: **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6** or **0.155.0-alpha.9.2**. An unsupported version stops before paper text is sent. Editing and compilation remain available. Do not remove the version guard to bypass an error.
 
 You can configure Codex and TeX independently. Leave the other path unchanged if that tool is not installed; saving validates the paths you changed. **Check setup** still reports unavailable tools: Codex is needed for AI requests, and TeX for compilation.
 
@@ -69,11 +69,11 @@ npm run build
 npm start
 ~~~
 
-These commands install the locked dependencies, prepare esbuild and the Electron runtime, build into `dist/`, and open the desktop editor. Keep the explicit Electron installer step; `npm rebuild electron` alone does not install this version's runtime. Installation needs internet access. The editor itself needs no web server.
+These commands install the locked dependencies (including the pinned Codex CLI), prepare esbuild and the Electron runtime, build into `dist/`, and open the desktop editor. Keep the explicit Electron installer step; `npm rebuild electron` alone does not install this version's runtime. Installation needs internet access. The editor itself needs no web server.
 
-Open **Settings**, choose the paths described above, and run **Check setup**. Then choose **Try the working sample**. Compile it with **Command+T** or **Command+B**, inspect a comment, accept a suggestion, and Undo. Prepared comments and compilation need no Codex account. To check the AI connection, choose **Review with Codex** and request a short language review of the sample; this uses your account.
+For AI features, complete the sign-in commands in step 3. Open **Settings**, keep **Editor-managed CLI**, choose a nonstandard TeX path if needed, and run **Check setup**. Then choose **Try the working sample**. Compile it with **Command+T** or **Command+B**, inspect a comment, accept a suggestion, and Undo. Prepared comments and compilation need no Codex account. To check the AI connection, choose **Review with Codex** and request a short language review of the sample; this uses your account.
 
-Help, Settings and **Modern Codex Editor → About** show the editor version, **1.1.0** for this release. For setup troubleshooting, **Settings → Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It makes no AI request and excludes paper text, file paths and account details. The **Changelog** tab in Help summarizes the release.
+Help, Settings and **Modern Codex Editor → About** show the editor version, **1.2.0** for this release. For setup troubleshooting, **Settings → Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It makes no AI request and excludes paper text, file paths and account details. The **Changelog** tab in Help summarizes the release.
 
 Keep real papers in their own folders with their bibliography, figures, and local styles. Start with a copy while learning the editor. **Use this wording** changes a proposal; **Accept** changes the draft; **Save** writes the `.tex` file. The [user guide](USER_GUIDE.md) covers the next steps, and the [FAQ](FAQ.md) covers setup errors and recovery.
 
@@ -85,7 +85,7 @@ Quit before updating. New papers are saved in the folder you choose. Application
 
 When upgrading an older checkout, first launch the updated code from that same checkout while its `.runtime/` is still present. The editor copies and verifies old managed papers, their comments/recovery, and runtime state into the new location, preserving the originals. Keep the old folder until you have reopened and checked your work. If copying fails or conflicts, the startup error names the problem; preserve both locations and resolve it before removing files.
 
-- **ZIP updates:** extract into a new folder and keep the previous folder until drafts and comments are accounted for. An old checkout's `.runtime/` is not discovered in a different folder automatically; preserve it with the old papers or copy the complete folder into the new checkout before its first launch. Repeat step 4. If you installed Codex under the previous checkout's `.tools/codex`, retain that installation or choose its replacement in Settings.
+- **ZIP updates:** extract into a new folder and keep the previous folder until drafts and comments are accounted for. An old checkout's `.runtime/` is not discovered in a different folder automatically; preserve it with the old papers or copy the complete folder into the new checkout before its first launch. Repeat step 4. The editor-managed CLI is installed again with step 4 and follows the new folder. If you deliberately use a custom CLI, keep that installation or change its path in Settings.
 - **Git updates:** inspect `git status`, preserve local changes, and use `git pull --ff-only`. Then repeat step 4. Existing manual source-path edits may need reconciliation; choose the paths in Settings once the new version runs.
 
 Back up paper folders with their hidden `.modern-editor` state. Preserve legacy `.runtime/` until migration is checked, and keep the managed-sample/data folder if it holds work you want. See [storage and recovery](FAQ.md#where-are-comments-and-previous-versions-stored). **Help and shortcuts…** in Actions opens the bundled guides inside the editor.

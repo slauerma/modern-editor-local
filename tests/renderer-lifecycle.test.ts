@@ -1,3 +1,5 @@
+import * as previewTools from '../src/shared/proposal-preview.ts';
+import { documentMode, documentModeNotice } from '../src/shared/document-mode.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -21,7 +23,7 @@ import * as preambleTools from '../src/shared/fragment-preamble.ts';
 // real CodeMirror/Zod, replacing only DOM painting and the narrow IPC boundary.
 const source = await fs.readFile('src/renderer/App.tsx', 'utf8');
 const syntax = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf'];
+const names = ['previewSuggestion', 'leavePreview', 'input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf'];
 const extracted: string[] = []; let filter = '', bindings = '';
 function visit(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? '')) extracted.push(node.getText(syntax));
@@ -56,11 +58,11 @@ function fixture(text = quote) {
     finishClose: async () => { states.events.push('closed'); },
   };
   const scope: any = {
-    EditorState, Transaction, isolateHistory, undo, redo, attachmentPromptContext, defaultKeymap, historyKeymap, commentSchema, crypto, defaultWorkspace, workspaceSchema, ...reviewTools, ...stateTools, ...preambleTools, ...contextTools, ...acceptanceTools,
+    EditorState, Transaction, isolateHistory, undo, redo, documentMode, documentModeNotice, attachmentPromptContext, defaultKeymap, historyKeymap, commentSchema, crypto, defaultWorkspace, workspaceSchema, ...reviewTools, ...stateTools, ...preambleTools, ...contextTools, ...acceptanceTools, ...previewTools,
     document: { body: {}, activeElement: {} }, requestAnimationFrame: (callback: () => void) => { states.frame = callback; }, setCompareOpen: () => {},
     lastSource: { current: null }, lastReviewTop: { current: 0 }, revealPdf: () => {}, revealSource: () => {}, workspaceValues: { current: defaultWorkspace() }, restoredSource: { current: null }, laterRef: { current: false }, discussionLock: { current: false }, followPending: { current: null }, followTasks: { current: new LatestTask() },
     sourcePosition: () => defaultWorkspace().source,
-    preambleRun: { current: null }, buildRun: { current: null }, sectionRun: { current: null }, comparisonPosition: { current: {} },
+    previewJob: { current: null }, previewCache: { current: null }, representation: 'pdf', pdfPosition: {page:1,zoom:1.25}, docMode: 'latex', build: null, candidateBuild: null, preambleRun: { current: null }, buildRun: { current: null }, sectionRun: { current: null }, comparisonPosition: { current: {} },
     warningAcceptance: null,
     approvedBuildInputs: { current: undefined }, buildHelpEpoch: { current: 0 }, buildRetry: null,
     displayedBuild: { current: null }, pdfRequest: { current: 0 }, keyboardReviewFocus: { current: null },
@@ -69,8 +71,10 @@ function fixture(text = quote) {
     setError: (e: string) => states.errors.push(e), setNotice: (v: string) => { states.notice = v; }, setStatus: (v: string) => { states.status = v; },
     choose: (v: string) => { scope.activeRef.current = v; }, move: () => {},
   };
-  for (const setter of ['Layout', 'CompactTab', 'DisplayName', 'ChangesOpen', 'CommentsHidden', 'ReviewBusy', 'ReviewOpen', 'CandidatePosition', 'DiscussionBusy', 'LaterOnly', 'PaneSizes', 'ToolbarCollapsed', 'FollowComments', 'Busy', 'AiBusy', 'PreambleBusy', 'LastAttempt', 'Build', 'PdfText', 'DependencyStale', 'PdfOpen', 'PdfJump', 'PdfNavigation', 'PdfLocating', 'ViewCandidate', 'CandidateBuild', 'ShowHistory', 'NotesOpen', 'Project', 'CompareOpen', 'Baseline', 'Effort', 'FastMode', 'Engine', 'Text', 'SavedText', 'PdfPosition', 'FindOpen', 'FindNotice', 'ActiveId', 'PaperInstructions', 'SavedInstructions', 'SectionProgress', 'ContextOpen', 'OverviewOpen', 'InboxOpen', 'ContextText']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  for (const setter of ['Preview', 'PreviewPosition', 'DocMode', 'Representation', 'SessionText', 'ComparisonBase', 'Layout', 'CompactTab', 'DisplayName', 'ChangesOpen', 'CommentsHidden', 'ReviewBusy', 'ReviewOpen', 'CandidatePosition', 'DiscussionBusy', 'LaterOnly', 'PaneSizes', 'ToolbarCollapsed', 'FollowComments', 'Busy', 'AiBusy', 'PreambleBusy', 'LastAttempt', 'Build', 'PdfText', 'DependencyStale', 'PdfOpen', 'PdfJump', 'PdfNavigation', 'PdfLocating', 'ViewCandidate', 'CandidateBuild', 'ShowHistory', 'NotesOpen', 'Project', 'CompareOpen', 'Baseline', 'Effort', 'FastMode', 'Engine', 'Text', 'SavedText', 'PdfPosition', 'FindOpen', 'FindNotice', 'ActiveId', 'PaperInstructions', 'SavedInstructions', 'SectionProgress', 'ContextOpen', 'OverviewOpen', 'InboxOpen', 'ContextText']) scope['set' + setter] = (value: any) => { states[setter] = value; };
   for (const setter of ['BuildRetry', 'ReferenceState', 'SourcesOpen']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  states.changeEvents = { accepted: 0, saved: 0 };
+  scope.setChangeEvents = (value: any) => { states.changeEvents = typeof value === 'function' ? value(states.changeEvents) : value; };
   scope.setWarningAcceptance = (value: any) => { states.WarningAcceptance = value; scope.warningAcceptance = value; };
   scope.workspaceWriter = { current: new RecoveryWriter<any>(async value => { states.workspace = value; }, () => {}) };
   scope.writer = { current: new RecoveryWriter<any>((value: any) => api.persist(value), (e: unknown) => { throw e; }) };
@@ -428,26 +432,21 @@ test('a Codex preamble is tested before application; source comments and one-ste
   assert.equal(f.editor.state.field(stateTools.commentsField)[0].from, 0);
 });
 
-test('a failed preamble is corrected once using the real failure log, with neither candidate installed early', async () => {
+test('a failed preamble stops after one check without a repair request or source mutation', async () => {
   const f = fixture(); let calls = 0, builds = 0;
-  f.api.generatePreamble = async (request: any) => {
-    calls++;
-    if (calls === 2) assert.match(request.previousAttempt.log, /missing package/);
-    return generatedPreamble;
-  };
-  f.api.compile = async () => {
-    assert.equal(f.editor.state.doc.toString(), quote);
-    return ++builds === 1 ? { id: 'bad', success: false, clean: false, log: 'missing package' } : { id: 'good', success: true, clean: true };
-  };
-  await f.scope.addPreambleAndCompile(); assert.equal(calls, 2); assert.equal(f.states.Build.id, 'good');
+  f.api.generatePreamble = async () => { calls++; return generatedPreamble; };
+  f.api.compile = async () => { builds++; return { id: 'bad', success: false, clean: false, log: 'missing package' }; };
+  await f.scope.addPreambleAndCompile();
+  assert.equal(calls, 1); assert.equal(builds, 1); assert.equal(f.states.Build, undefined);
+  assert.equal(f.editor.state.doc.toString(), quote); assert.match(f.states.errors.at(-1), /one compilation check/);
 });
 
-test('two failed preamble checks or an unknown definition leave source and comments intact', async () => {
+test('a failed preamble check or an unknown definition leave source and comments intact', async () => {
   const f = fixture(); let calls = 0;
   f.api.generatePreamble = async () => { calls++; return generatedPreamble; };
   f.api.compile = async () => ({ id: 'bad', success: false, clean: false, log: 'Undefined control sequence' });
-  await f.scope.addPreambleAndCompile(); assert.equal(calls, 2); assert.equal(f.editor.state.doc.toString(), quote);
-  assert.match(f.states.errors.at(-1), /two attempts/);
+  await f.scope.addPreambleAndCompile(); assert.equal(calls, 1); assert.equal(f.editor.state.doc.toString(), quote);
+  assert.match(f.states.errors.at(-1), /one compilation check/);
   f.api.generatePreamble = async () => ({ preamble: '', ending: '', explanation: '', needsInput: 'What is the original definition of \\payoff?' });
   f.api.compile = async () => { throw new Error('Must not compile an unanswered definition'); };
   await f.scope.addPreambleAndCompile(); assert.match(f.states.errors.at(-1), /original definition/); assert.equal(f.editor.state.doc.toString(), quote);
@@ -558,4 +557,59 @@ test('opening another paper clears the latest outgoing Codex context', () => {
   const next = { ...f.scope.projectRef.current, id: 'paper-b', path: '/synthetic/paper-b.tex', name: 'paper-b.tex', notices: [], text: quote };
   f.scope.load(next);
   assert.equal(f.states.ContextText, ''); assert.equal(f.states.ContextOpen, false);
+});
+
+const previewSource = '\\documentclass{article}\n\\begin{document}\n' + quote + '\n\\end{document}';
+function previewFixture() {
+  const f = fixture(previewSource); f.scope.preview = null;
+  f.scope.setPreview = (value: any) => { f.scope.preview = typeof value === 'function' ? value(f.scope.preview) : value; f.states.Preview = f.scope.preview; };
+  f.api.compile = async (request: any) => { f.states.compileRequest = request; return { id: 'preview-pdf', purpose: request.purpose, success: true, clean: true, dependenciesVerified: true, diagnostics: [] }; };
+  f.api.locatePdf = async (request: any) => { f.states.locationRequest = request; return { kind: 'mapped', buildId: request.buildId, page: 2, x: 70, y: 120, width: 300, height: 12 }; };
+  return f;
+}
+test('proposal preview never changes source, review, Undo or ordinary PDF; repeated preview revalidates its cache', async () => {
+  const f = previewFixture(), before = f.editor.state;
+  await f.scope.previewSuggestion();
+  assert.equal(f.editor.state, before); assert.equal(f.states.Build, undefined); assert.equal(f.states.PdfText, undefined);
+  assert.equal(f.states.compileRequest.purpose, 'proposal'); assert.equal(f.states.Preview.state, 'ready'); assert.equal(f.states.Preview.jump.buildId, 'preview-pdf');
+  assert.equal(f.states.locationRequest.text, previewSource.replace(quote, 'The allocation is increasing.'));
+  f.scope.leavePreview(); f.api.compile = async () => { throw new Error('Unchanged verified preview should use its cache'); };
+  await f.scope.previewSuggestion(); assert.equal(f.states.Preview.state, 'ready'); assert.equal(f.editor.state, before);
+  f.scope.writer.current.clearTimers();
+});
+for (const action of ['source', 'proposal', 'return', 'close', 'document']) test('delayed proposal preview cannot install a stale result after ' + action, async () => {
+  const f = previewFixture(), result = deferred<any>(); f.api.compile = () => result.promise;
+  const run = f.scope.previewSuggestion(); await turns();
+  let stop: Promise<unknown> | undefined;
+  if (action === 'source') f.editor.dispatch({ changes: { from: 0, insert: '% Current edit\n' } });
+  if (action === 'proposal') f.editor.dispatch({ effects: stateTools.patchComments.of([{id:'c1',fields:{draft:'New author wording.'}}]), annotations: Transaction.addToHistory.of(false) });
+  if (action === 'return') f.scope.leavePreview();
+  if (action === 'close') stop = f.scope.close();
+  if (action === 'document') f.scope.projectRef.current = { ...f.scope.projectRef.current, id: 'new-paper' };
+  const preserved = f.editor.state.doc.toString();
+  result.resolve({ id:'late-preview', success:true, clean:true, dependenciesVerified:true, diagnostics:[] });
+  await run; await stop;
+  assert.equal(f.editor.state.doc.toString(),preserved); assert.equal(f.states.Build,undefined); assert.equal(f.states.Preview?.build,undefined); assert.equal(f.states.locationRequest,undefined);
+  f.scope.writer.current.clearTimers(); f.scope.workspaceWriter.current.clearTimers();
+});
+test('text-mode Preview and Accept all do not invoke TeX; PDF deletion refusal makes no build', async () => {
+  const f = fixture(); f.scope.docMode='text'; f.scope.representation='text';
+  f.api.compile=async()=>{throw new Error('Text actions must not compile');};
+  await f.scope.previewSuggestion(); assert.equal(f.states.Preview.candidate.text,'The allocation is increasing.'); assert.equal(f.editor.state.doc.toString(),quote);
+  f.scope.acceptAll(); assert.equal(f.editor.state.doc.toString(),'The allocation is increasing.'); assert(f.scope.doHistory()); assert.equal(f.editor.state.doc.toString(),quote);
+  const pdf=previewFixture(); pdf.editor.dispatch({effects:stateTools.patchComments.of([{id:'c1',fields:{draft:''}}]),annotations:Transaction.addToHistory.of(false)});
+  await pdf.scope.previewSuggestion(); assert.equal(pdf.states.Preview.state,'unavailable'); assert.equal(pdf.states.compileRequest,undefined);
+});
+
+test('acceptance and Save counters schedule comparisons without counting typing, Undo or Redo', async () => {
+  const f = fixture();
+  f.editor.dispatch({ changes: { from: quote.length, insert: ' More context.' } });
+  assert.deepEqual(f.states.changeEvents, { accepted: 0, saved: 0 });
+  await f.scope.acceptWithoutCompile('c1');
+  assert.equal(f.states.changeEvents.accepted, 1);
+  f.scope.doHistory(); f.scope.doHistory(true);
+  assert.equal(f.states.changeEvents.accepted, 1);
+  await f.scope.save(); assert.equal(f.states.changeEvents.saved, 1);
+  f.api.save = async () => { throw new Error('Write refused'); };
+  await f.scope.save(); assert.equal(f.states.changeEvents.saved, 1);
 });

@@ -35,6 +35,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Prepare esbuild
         run: npm rebuild esbuild
+      - name: Verify the pinned Codex CLI
+        run: npm run codex:version
       - name: Install the pinned Electron runtime and notices
         run: node node_modules/electron/install.js
       - name: Type check

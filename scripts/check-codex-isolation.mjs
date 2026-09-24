@@ -6,10 +6,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { CodexClient } from '../src/main/codex-client.ts';
+import { verifyManagedCodex } from '../src/main/managed-codex.ts';
 
 const script = fileURLToPath(import.meta.url), repo = path.resolve(path.dirname(script), '..');
 const option = name => { const at = process.argv.indexOf(name); return at < 0 ? undefined : process.argv[at + 1]; };
-const binary = option('--codex') ?? '/Applications/ChatGPT.app/Contents/Resources/codex';
+const binary = option('--codex') ?? await verifyManagedCodex(repo);
 const exists = file => fs.access(file).then(() => true, () => false);
 
 if (option('--worker')) {

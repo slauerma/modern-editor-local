@@ -8,7 +8,7 @@ Windows is currently unsupported. The application and its save/compile tests nee
 
 ## What works without an account or internet?
 
-After installation, editing, prepared sample comments, version comparison, recovery, Help, PDF reading/search, local reference previews, and compilation with installed TeX work locally. AI review, discussion, preamble generation, and conversion of outside feedback require your configured Codex service. The sample has prepared comments, but no prepared discussion replies.
+After installation, editing, prepared sample comments, text/version comparison, proposal PDF compilation, recovery, Help, PDF reading/search, local reference previews, and compilation with installed TeX work locally. AI review, discussion, Codex Side Chat, Changes PDF arrangement, preamble generation, and conversion of outside feedback require your configured Codex service. The sample has prepared comments, but no prepared discussion replies.
 
 ## Build reports a missing Electron runtime or licence file
 
@@ -16,11 +16,17 @@ Run `node node_modules/electron/install.js` from the repository folder, then reb
 
 ## Codex works in Terminal. Why does the editor fail?
 
-The editor may be launching a different executable. Open **Settings** with **Command+,**, choose that same absolute path, run **Check setup**, and **Save settings**. Authenticate the executable separately as described in [Codex setup](SETUP.md#3-configure-codex-if-you-want-ai-review). Path changes need no rebuild; a successful version check does not establish sign-in or account access.
+The editor normally uses its own pinned CLI, independently of Terminal or desktop-app versions. Open **Settings** with **Command+,**, select **Editor-managed CLI**, run **Check setup**, and **Save settings**. In the repository folder, `npm run codex:version` checks that copy and `npm run codex:login` signs in if needed. A successful version check does not establish account access. For a deliberate custom installation, select **Custom executable** and choose its path. See [Codex setup](SETUP.md#3-configure-codex-if-you-want-ai-review).
 
 If the error says **Codex review restrictions could not be verified**, no paper text was sent by that attempt. This build supports CLI **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6** and **0.155.0-alpha.9.2** and verifies that inherited MCP servers are disabled before sending the request. Check the executable version and report a synthetic reproduction if that supported version still fails. A maintainer must rerun the configuration probe and review compatibility before enabling another version; removing the guard is not a setup fix. The check does not change your saved Codex settings.
 
 If the error names an unsupported effort, choose an effort listed as supported in that error. If Fast mode was refused, turn **Fast mode** off in Actions or check the model's access before retrying. The app reports an unsupported setting instead of silently substituting one. Authentication details belong in your own CLI configuration, never in a paper or shared bug report.
+
+## Do I need to update the editor whenever Codex updates?
+
+Desktop and global CLI updates do not affect **Editor-managed CLI**. Its exact version is locked with this editor release. Installing an editor update with changed dependencies may update the managed CLI after compatibility testing. Account access and service availability still depend on Codex.
+
+If the managed binary is missing or its version mismatches, quit the editor and repeat the dependency/build steps in [Setup](SETUP.md#4-install-build-and-launch). Include npm's optional dependencies; do not use `--omit=optional`. The editor does not silently switch to a desktop or global copy.
 
 ## Can I ask about an error or the paper with a screenshot?
 
@@ -120,13 +126,13 @@ Matches arrive while pages are indexed. **Stop** pauses indexing; **Continue ind
 1. Try compiling the synthetic sample. If that also fails, check the MacTeX executable path and installation in [Setup](SETUP.md).
 2. Check **LaTeX engine** in Actions and read **Build details** and its build output. The displayed output is bounded and may omit earlier lines. Select source-line diagnostics to find the problem where available.
 3. Keep bibliography files, figures, and local styles in the paper folder with relative paths. Linked or external project resources need a self-contained copy. The app disables shell escape and `latexmkrc` startup scripts, so workflows that require them need another compilation route or an adjusted paper.
-4. Supply missing packages, fonts, and custom definitions. A pasted paragraph can use **Add preamble and compile**, but source-body errors or conflicting existing definitions can require manual work.
+4. Supply missing packages, fonts, and custom definitions. A pasted paragraph can use **Add preamble…**, but source-body errors or conflicting existing definitions can require manual work.
 
 `tcilatex.tex` is bundled for Scientific Word/WorkPlace source and supplied inside build snapshots when the paper has no root-level copy. In large folders, an exact copy of the bundled support library is recognized automatically. On macOS, a Windows drive entry in `\graphicspath` is ignored during dependency discovery when local figures resolve the references. The source is unchanged. Windows-only figure references, BMP figures, and Scientific Word graphics specials still require attention. A working Mac compile does not establish a Windows/SWP round trip.
 
 ## Does Save happen automatically?
 
-**Save writes the `.tex` file.** Automatic recovery stores the unsaved buffer separately; comments, proposals, and discussion are also saved separately. Compile can use unsaved text. Recovery writes can be delayed or fail on slow or unavailable storage, so they are an additional safeguard rather than a replacement for Save and ordinary backups.
+**Save writes the opened source file.** Automatic recovery stores the unsaved buffer separately; comments, proposals, and discussion are also saved separately. Compile can use unsaved text. Recovery writes can be delayed or fail on slow or unavailable storage, so they are an additional safeguard rather than a replacement for Save and ordinary backups.
 
 **Use this wording** changes only the proposal. **Accept** changes the draft. **Save** writes the source. These are separate steps.
 
@@ -140,7 +146,7 @@ To place the source elsewhere, use **Actions → Export source…**, choose a ne
 
 ## Where are comments and previous versions stored?
 
-Each `.tex` filename has its own state under `.modern-editor/documents/<document-id>/` beside the paper. It includes `review.json`, settings, reading state, recovery, comparison baselines, source backups, and saved outside feedback. Comments are never inserted into the LaTeX. Different root files in one folder can coexist; a renamed copy starts with separate state. Moving the whole folder with its hidden `.modern-editor` folder preserves that state.
+Each `.tex` or `.txt` filename has its own state under `.modern-editor/documents/<document-id>/` beside the paper. It includes `review.json`, settings, reading state, recovery, comparison baselines, source backups, and saved outside feedback. Comments are never inserted into the LaTeX. Different root files in one folder can coexist; a renamed copy starts with separate state. Moving the whole folder with its hidden `.modern-editor` folder preserves that state.
 
 Back up the paper folder with its dependencies and hidden state. Recovery and discussion files can contain manuscript text, so sharing the whole folder also shares that material. See [Privacy](../PRIVACY.md).
 
@@ -166,6 +172,6 @@ If Save reports that version history needs attention, the source was saved but h
 
 ## How should I report a problem?
 
-Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **1.1.0**.
+Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **1.2.0**.
 
 Add the exact action and error, whether the synthetic sample reproduces it, your Node version (`node --version`), and the editor commit if known. A small synthetic `.tex` example is most useful. Inspect logs, screenshots, and `.modern-editor` records before sharing: they may contain source, discussion, or local paths. Do not include authentication tokens or account configuration. The [testing guide](../TESTING.md) separates offline checks from optional live Codex requests.

@@ -8,6 +8,7 @@
 .settings-executables { display:grid; gap:16px; margin:18px 0 10px; }
 .settings-executables label>span { display:block; font-weight:600; margin-bottom:6px; }
 .settings-executables label>div { display:flex; gap:8px; }
+.settings-executables select { max-width:100%; padding:8px; border:1px solid #cfdacd; border-radius:5px; background:white; font:inherit; }
 .settings-executables input { flex:1; min-width:0; width:100%; padding:8px; border:1px solid #cfdacd; border-radius:5px; background:white; font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
 .settings-hint { color:#65725f; font-size:11px; }
 .settings-model { margin-top:18px; padding-top:14px; border-top:1px solid #dce4d7; }

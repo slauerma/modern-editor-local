@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0 — Text viewer, Changes PDF and proposal previews
+
+- Open UTF-8 `.txt` files and LaTeX fragments in Text mode, with the comment queue and a live text diff. Compare with Session start or an older version; Save keeps the baseline fixed.
+- **Preview** displays a tentative text diff or a compiled proposal PDF with its own passage highlight. Source, comment decisions and Undo remain unchanged; Return to draft restores the ordinary view. Changes to source, proposals or compilation inputs make the PDF visibly out of date.
+- **Changes PDF** compares the draft with a fixed source baseline. Choose Revision markup (struck deletions and underlined additions) or Clean paper (revised wording with numbered markers). Both share compact navigation and expandable before/after explanations. Switching styles makes no further model request.
+- Opening Changes PDF starts GPT-6 Sol arrangement, with updates after five accepts by default, Save or Refresh. The agent can request a visual check. Exact source is inserted by ordinary code; every change is shown or explicitly listed as not shown. Accepted-edit reasons are retained in an optional local journal.
+- Unsupported previews stop with **Preview not possible**; Text diff remains available. Proposal and comparison PDFs stay separate from the ordinary paper PDF.
+- **Add preamble…** makes one checked, undoable attempt while preserving the text body. Undo restores Text mode. Wrapped `.txt` drafts can be exported as LaTeX copies.
+- The editor installs an exact pinned Codex CLI with its locked dependencies. Desktop/global Codex updates no longer change that copy; explicit custom executable settings remain available.
+- Optional debugging records prompts, replies and editor screenshots locally, with a bounded register and deletion controls. It is off by default.
+- Author and original ModernEditor credits appear in the app. Viewer hiding, Compare → View navigation and divider visibility in narrow layouts are corrected.
+
 ## 1.1.0 — Reading and review stability
 
 - Support tested Codex CLI 0.155.0-alpha.9.2, with its goal tools explicitly disabled and the existing review restrictions retained.

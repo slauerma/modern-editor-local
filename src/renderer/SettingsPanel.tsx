@@ -3,6 +3,8 @@ import { setupOperatingSystem, type SetupCheck, type ToolSettings, type ToolSett
 import { useDialogFocus } from './use-dialog-focus.ts';
 import type { CodexModel } from '../shared/codex-models.ts';
 import './settings-panel.css';
+import { DebugPanel } from './DebugPanel.tsx';
+import { editorAuthor, predecessorCredit } from '../shared/editor-credits.ts';
 
 type Props = { onClose(): void; disabled?: boolean };
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -23,7 +25,7 @@ export function SettingsPanel({ onClose, disabled = false }: Props) {
     return () => { cancelled = true; live.current = false; };
   }, []);
   const locked = disabled || !!busy || !state;
-  const changed = !!state && (draft.codexPath !== state.settings.codexPath || draft.latexmkPath !== state.settings.latexmkPath || (draft.codexModel ?? null) !== (state.settings.codexModel ?? null));
+  const changed = !!state && (draft.codexSource !== state.settings.codexSource || draft.codexPath !== state.settings.codexPath || draft.latexmkPath !== state.settings.latexmkPath || (draft.codexModel ?? null) !== (state.settings.codexModel ?? null));
   const update = (key: keyof ToolSettings, value: string | null) => { setDraft(current => ({ ...current, [key]: value })); if (key === 'codexPath') setModels(null); setResult(null); setError(''); setStatus(''); setCopiedDetails(''); };
   const selectedModel = models?.find(model => model.id === draft.codexModel);
   async function action(label: string, run: () => Promise<void>) {
@@ -36,10 +38,19 @@ export function SettingsPanel({ onClose, disabled = false }: Props) {
   return <div className="settings-overlay"><section ref={panel} tabIndex={-1} className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="editor-settings-title" aria-busy={!!busy}>
     <header><h2 id="editor-settings-title">Settings</h2><button onClick={onClose} disabled={!!busy}>Close</button></header>
     {state && <p className="settings-identity">Modern Codex Editor <strong>{state.identity.editorVersion}</strong><span>{setupOperatingSystem(state.identity)}</span></p>}
-    <p>Choose your installed Codex and TeX executables. These settings apply to future reviews and compilations.</p>
+    <p>The editor includes a fixed Codex CLI version. Choose your TeX installation below; these settings apply to future reviews and compilations.</p>
     {disabled && <p className="settings-hint">Finish or cancel the current work before changing or checking setup.</p>}
     <div className="settings-executables">
-      {([{ tool: 'codex', key: 'codexPath', title: 'Codex executable' }, { tool: 'latexmk', key: 'latexmkPath', title: 'LaTeX compiler (latexmk)' }] as const).map(field => <label key={field.key}>
+      <label><span>Codex installation</span><select aria-label="Codex installation" value={draft.codexSource === 'managed' ? 'managed' : 'custom'} disabled={locked} onChange={event => {
+        const source = event.target.value === 'managed' ? 'managed' : 'custom';
+        update('codexSource', source);
+        if (source === 'managed' && state) update('codexPath', state.managedCodex.path);
+      }}>
+        <option value="managed">Editor-managed CLI{state ? ` · ${state.managedCodex.version}` : ''} (recommended)</option>
+        <option value="custom">Custom executable</option>
+      </select></label>
+      {draft.codexSource === 'managed' && <div className="settings-hint">Installed with the editor's locked dependencies. Desktop Codex updates do not change this copy. Sign in from the editor folder with <code>npm run codex:login</code> if needed.</div>}
+      {([{ tool: 'codex', key: 'codexPath', title: 'Codex executable' }, { tool: 'latexmk', key: 'latexmkPath', title: 'LaTeX compiler (latexmk)' }] as const).filter(field => field.tool !== 'codex' || draft.codexSource !== 'managed').map(field => <label key={field.key}>
         <span>{field.title}</span>
         <div><input type="text" spellCheck={false} autoComplete="off" aria-label={field.title} value={draft[field.key]} maxLength={4096} disabled={locked} onChange={event => update(field.key, event.target.value)} />
           <button disabled={locked} aria-label={`Choose ${field.title}`} onClick={() => void action('Choosing executable…', async () => {
@@ -62,7 +73,7 @@ export function SettingsPanel({ onClose, disabled = false }: Props) {
           if (live.current) { setModels(available); setStatus(available.length ? 'Model catalog loaded. Choose a model and save settings.' : 'No models were returned. Check your Codex sign-in and access.'); }
         })}>{models ? 'Refresh models' : 'Load models'}</button>
       </div>
-      <p className="settings-hint">Applies to all new reviews, discussions and Side Chat requests in this editor. Your general Codex settings stay unchanged. Load models checks the selected CLI's catalog without sending paper text or starting an AI response.</p>
+      <p className="settings-hint">Applies to new reviews, discussions and Side Chat requests in this editor. Changes PDF uses GPT-6 Sol separately. Your general Codex settings stay unchanged. Load models checks the selected CLI's catalog without sending paper text or starting an AI response.</p>
       {selectedModel && <p className="settings-hint">Supported effort: {selectedModel.efforts.join(', ')}. {selectedModel.fast ? 'Fast mode available.' : 'Standard speed only.'} {selectedModel.images ? 'Screenshots supported.' : 'Text only.'} Access is checked again when you send a request.</p>}
       {models && draft.codexModel && !selectedModel && <p className="settings-hint">The saved model is not in this catalog. Choose an available model or use the Codex default before reviewing.</p>}
     </div>
@@ -97,6 +108,8 @@ export function SettingsPanel({ onClose, disabled = false }: Props) {
       <p>New papers use the folder you choose. Reviews, recovery, and saved source versions stay beside their paper in its hidden .modern-editor folder.</p>
       <p>Tested Codex CLI: <strong>{state.verifiedCodexVersions.join(', ')}</strong>. The editor checks review restrictions before sending paper text.</p>
     </details>}
+    <DebugPanel />
     {state?.notices.map((notice, index) => <p key={index} className="settings-hint">{notice}</p>)}
+    <p className="settings-hint">By {editorAuthor}. {predecessorCredit}</p>
   </section></div>;
 }

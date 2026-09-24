@@ -21,6 +21,7 @@ This acknowledgement records the project's history. This repository contains the
 | React / React DOM | 18.3.1 | MIT; interface rendering. Scheduler and related dependency notices are included. |
 | CodeMirror and Lezer | Exact component versions in the inventory | MIT; source editing, syntax and comparison. Helper dependency notices are included. |
 | PDF.js (`pdfjs-dist`) | 6.3.289 | Apache-2.0; PDF rendering and worker. |
+| OpenAI Codex CLI (`@openai/codex` and native platform packages) | 0.155.0-alpha.9.2 | Apache-2.0 as declared by the packages; separately installed CLI for AI requests. |
 | Zod | 3.25.76 | MIT; input validation. |
 | Vite / esbuild / Rollup | 7.3.6 / 0.28.2 / 4.63.1 | MIT and their bundled third-party terms; build tools. Vite's module-preload helper can appear in output. |
 | TypeScript | 5.9.3 | Apache-2.0 plus its supplied third-party notices; development tool. |
@@ -41,6 +42,6 @@ To refresh after changing dependencies, install the locked versions, run `npm ru
 
 ## External tools and demonstration
 
-Codex and the TeX toolchain are separate prerequisites. Their software, account credentials and service rights are not distributed by this repository. No affiliation or endorsement by their providers is implied.
+The locked OpenAI Codex CLI packages are downloaded by npm from the official registry. The source repository does not contain those binaries or account credentials. The packages declare Apache-2.0 and supply no top-level licence/notice file; their names, exact versions and declarations are recorded in the dependency inventory. The native package also contains bundled-component notices under its vendor resources; these remain with the installed package. Before distributing an application bundle that includes CLI binaries, collect the corresponding upstream and bundled-component notices for that exact platform. The TeX toolchain remains a separate prerequisite. Software licences do not grant account or service rights. No affiliation or endorsement by their providers is implied.
 
 Demo narration generated with ElevenLabs. Background music created for this demonstration. The project’s source-code MIT license does not grant rights to third-party voices, trademarks, or services.

@@ -34,7 +34,9 @@ for (const [path, entry] of Object.entries(lock.packages).sort(([a], [b]) => a.l
     }
   }
   packages.push({
-    name: metadata?.name ?? path.replace(/^.*node_modules\//, ''),
+    // npm aliases (including Codex's platform binaries) have a different declared name.
+    name: path.replace(/^.*node_modules\//, ''),
+    ...(metadata && metadata.name !== path.replace(/^.*node_modules\//, '') ? { declaredName: metadata.name } : {}),
     version: entry.version, license: entry.license ?? metadata?.license ?? 'Unspecified',
     development: !!entry.dev, optional: !!entry.optional, installed: !!metadata,
     noticeFiles: files,
@@ -57,5 +59,5 @@ await writeFile(resolve(root, 'licenses/dependencies.json'), JSON.stringify(inve
 await writeFile(resolve(root, 'THIRD_PARTY_LICENSES.txt'), text);
 console.log(`Recorded ${packages.length} locked packages and ${notices.size} installed license/notice files.`);
 for (const pkg of packages.filter(pkg => pkg.installed && !pkg.noticeFiles.length)) {
-  console.log(`No separate notice shipped in npm package: ${pkg.name}@${pkg.version} (${pkg.license}); see THIRD_PARTY_NOTICES.md.`);
+  console.log(`No top-level notice collected for npm package: ${pkg.name}@${pkg.version} (${pkg.license}); see THIRD_PARTY_NOTICES.md.`);
 }

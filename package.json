@@ -1,20 +1,22 @@
 {
   "name": "modern-codex-editor",
   "productName": "Modern Codex Editor",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "license": "MIT",
   "type": "module",
   "main": "dist/main.cjs",
   "description": "Local LaTeX editing with source comments and compiled PDF review",
   "scripts": {
+    "codex:version": "node --experimental-strip-types scripts/codex.mjs --version",
+    "codex:login": "node --experimental-strip-types scripts/codex.mjs login",
     "notices": "node scripts/collect-third-party-notices.mjs",
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build.mjs",
     "start": "electron .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "pretest:compile": "node scripts/generate-compile-fixtures.mjs",
-    "test:compile": "node --experimental-strip-types --test --test-concurrency=1 tests/compile.integration.ts tests/compile.audit.ts tests/texpile.integration.ts tests/compile-review.integration.ts tests/fragment-preamble.integration.ts tests/stabilization.integration.ts tests/pdf-navigation.integration.ts tests/build-input-plan.integration.ts"
+    "test:compile": "node --experimental-strip-types --test --test-concurrency=1 tests/compile.integration.ts tests/compile.audit.ts tests/texpile.integration.ts tests/compile-review.integration.ts tests/fragment-preamble.integration.ts tests/stabilization.integration.ts tests/pdf-navigation.integration.ts tests/build-input-plan.integration.ts tests/viewer.integration.ts tests/changes-pdf.integration.ts"
   },
   "dependencies": {
     "@codemirror/commands": "6.11.0",
@@ -23,6 +25,7 @@
     "@codemirror/merge": "6.12.2",
     "@codemirror/state": "6.7.4",
     "@codemirror/view": "6.43.11",
+    "@openai/codex": "0.155.0-alpha.9.2",
     "pdfjs-dist": "6.3.289",
     "react": "18.3.1",
     "react-dom": "18.3.1",

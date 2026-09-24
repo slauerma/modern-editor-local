@@ -25,11 +25,15 @@
 !/scripts/
 /scripts/*
 !/scripts/build.mjs
+!/scripts/codex.mjs
+!/scripts/check-managed-codex.mjs
 !/scripts/copy-build-assets.mjs
 !/scripts/copy-build-assets.d.mts
 !/scripts/generate-compile-fixtures.mjs
 !/scripts/check-discussion-proposals.mjs
 !/scripts/check-codex-isolation.mjs
+!/scripts/check-viewer.mjs
+!/scripts/check-changes-pdf.mjs
 !/scripts/check-help-chat.mjs
 !/scripts/check-chat-images-protocol.mjs
 !/scripts/check-reference-protocol.mjs

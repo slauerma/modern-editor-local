@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { CodexClient, InvalidCodexResponse } from '../src/main/codex-client.ts';
 import { replyOutputSchema } from '../src/main/codex-service.ts';
 import { referenceTools } from '../src/main/reference-service.ts';
+import { managedCodexVersion } from '../src/main/managed-codex.ts';
 
 async function fixture() {
   const directory = path.resolve('.test-runs', 'codex-' + randomUUID());
@@ -13,6 +14,15 @@ async function fixture() {
   await fs.chmod(binary, 0o755);
   return { directory, client: new CodexClient(directory, binary) };
 }
+
+test('managed CLI version mismatch stops before reading configuration or sending a paper', async () => {
+  const { client, directory } = await fixture();
+  client.setBinary(client.binary, managedCodexVersion);
+  await assert.rejects(client.run('Synthetic private paper', replyOutputSchema, () => {}), /editor-managed CLI must be version/);
+  const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  assert.deepEqual(requests.map((request: any) => request.method), ['initialize']);
+  await assertExited(directory);
+});
 
 test('the model catalog exposes Sol and Luna without creating a thread or sending a prompt', async () => {
   const { client, directory } = await fixture();
@@ -300,7 +310,10 @@ test('Codex accepts the final completed item when the terminal turn omits its it
 });
 test('invalid model JSON and failed turns leave no background server', async () => {
   const { directory, client } = await fixture();
+  const records: any[] = []; client.debugRecord = r => records.push(r);
   await assert.rejects(client.run('invalid', replyOutputSchema, () => {}), (error: unknown) => error instanceof InvalidCodexResponse && error.responseText === 'not-json');
+  assert.equal(records.find(r => r.kind === 'reply').data.raw, 'not-json');
+  assert.equal(records.find(r => r.kind === 'reply').data.id, records.find(r => r.kind === 'prompt').data.id);
   await assertExited(directory);
   await assert.rejects(client.run('failure', replyOutputSchema, () => {}), /Fixture model failure/);
   await assertExited(directory);
@@ -406,4 +419,24 @@ test('Fast tier and Max effort remain independent, and Fast refusal stops before
     assert(!requests.some((r: any) => r.method === 'turn/start')); await assertExited(directory);
     await fs.unlink(path.join(directory, refusal));
   }
+});
+
+test('Changes PDF overrides the model with Sol per request and transmits visual input as images', async () => {
+  const { client, directory } = await fixture(); await fs.mkdir(directory, { recursive: true });
+  for (const flag of ['gpt6-models', 'new-version']) await fs.writeFile(path.join(directory, flag), '');
+  client.setModel('gpt-6-luna');
+  const records: any[] = []; client.debugRecord = record => records.push(record);
+  const image = 'data:image/png;base64,iVBORw0KGgo=';
+  await client.run('normal', replyOutputSchema, () => {}, 'medium', false, undefined, { purpose: 'changes', model: 'gpt-6-sol', images: [image] });
+  let requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  const thread = requests.find((r: any) => r.method === 'thread/start').params;
+  assert.equal(thread.model, 'gpt-6-sol'); assert.match(thread.baseInstructions, /arrange exact LaTeX/); assert(!thread.developerInstructions.includes('Most comments'));
+  assert.deepEqual(requests.find((r: any) => r.method === 'turn/start').params.input[1], { type: 'image', url: image });
+  assert.deepEqual(records.map(r => r.kind), ['prompt', 'screenshot', 'reply']);
+  // Debug hooks cannot make a successful request fail or supply any context.
+  client.debugRecord = () => { throw new Error('disk full'); };
+  await client.run('normal', replyOutputSchema, () => {});
+  requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  assert.equal(requests.find((r: any) => r.method === 'thread/start').params.model, 'gpt-6-luna');
+  await assertExited(directory);
 });

@@ -3,6 +3,7 @@ import { codexVersion } from './codex-version.ts';
 import { codexModelIdSchema } from './codex-models.ts';
 
 export const toolSettingsSchema = z.object({
+  codexSource: z.enum(['managed', 'custom']).optional(),
   codexPath: z.string().trim().min(1).max(4096),
   latexmkPath: z.string().trim().min(1).max(4096),
   codexModel: codexModelIdSchema.nullable().optional()
@@ -15,6 +16,7 @@ export type ToolSettingsState = {
   runtimePath: string;
   notices: string[];
   verifiedCodexVersions: string[];
+  managedCodex: { version: string; path: string };
 };
 export type SetupTool = 'codex' | 'latexmk' | 'pdflatex' | 'lualatex' | 'xelatex' | 'kpsewhich' | 'synctex';
 export type ToolCheck = { tool: SetupTool; path: string; ok: boolean; required: boolean; version: string | null; message: string };

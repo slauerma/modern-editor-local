@@ -15,6 +15,9 @@ async function fixture() {
   await fs.writeFile(a, 'First source\n'); await fs.writeFile(b, 'Second source\n');
   const service = new ProjectService(path.join(root, 'cache'));
   const p = await service.open(a);
+  // Most migration cases stage a pre-document-state installation after obtaining
+  // a valid review envelope. Remove only this synthetic opening checkpoint.
+  await fs.rm(path.join(root, '.modern-editor'), { recursive: true });
   return { root, a, b, service, p };
 }
 async function legacyVersion(f: Awaited<ReturnType<typeof fixture>>, bytes: string, owner = f.p.name) {

@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { arrangementOutputSchema } from '../shared/changes-pdf.ts';
+import { changesAgentModel, changesAgentOutputSchema, visualCheckOutputSchema } from '../shared/changes-agent.ts';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { commentSchema, preambleProposalSchema, type PreambleRequest, type PreambleProposal, type Comment, type ReviewRequest, type ReplyRequest, type CodexReply } from '../shared/contracts.ts';
@@ -49,6 +51,15 @@ export class CodexService {
   reply(request: ReplyRequest, progress: (message: string) => void) { return this.track(() => this.replyOperation(request, progress)); }
   preamble(request: PreambleRequest, progress: (message: string) => void) { return this.track(() => this.preambleOperation(request, progress)); }
   convertFeedback(request: FeedbackRequest, progress: (message: string) => void) { return this.track(() => this.feedbackOperation(feedbackRequestSchema.parse(request), progress)); }
+  arrangeChanges(projectId: string, prompt: string, progress: (message: string) => void) { return this.track(() => this.run(projectId, prompt, arrangementOutputSchema, progress)); }
+  planChanges(projectId: string, prompt: string, progress: (message: string) => void) {
+    this.projects.get(projectId);
+    return this.track(() => this.client.run(prompt, changesAgentOutputSchema, progress, 'medium', false, undefined, { purpose: 'changes', model: changesAgentModel }));
+  }
+  checkChanges(projectId: string, prompt: string, images: string[], progress: (message: string) => void) {
+    this.projects.get(projectId);
+    return this.track(() => this.client.run(prompt, visualCheckOutputSchema, progress, 'medium', false, undefined, { purpose: 'changes', model: changesAgentModel, images }));
+  }
   helpBuildInputs(projectId: string, prompt: string, progress: (message: string) => void) { return this.track(() => this.run(projectId, prompt, buildInputOutputSchema, progress)); }
   private async feedbackOperation(request: FeedbackRequest, progress: (message: string) => void) {
     const generation = this.generation;

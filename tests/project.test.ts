@@ -133,6 +133,7 @@ test('a request for a previously open paper cannot write to the current paper', 
 });
 test('a symlinked review directory cannot redirect writes', async () => {
   const f = await fixture(), target = path.join(f.root, 'elsewhere'); await fs.mkdir(target);
+  await fs.rename(path.join(f.paper, '.modern-editor'), path.join(f.paper, 'kept-state'));
   await fs.symlink(target, path.join(f.paper, '.modern-editor'));
   await assert.rejects(f.service.persist({ projectId: f.project.id, text: f.project.text, review: f.project.review }), /regular directory/);
   assert.deepEqual(await fs.readdir(target), []);
@@ -151,9 +152,9 @@ test('the chosen engine survives reopening without saving the source or losing i
   await assert.rejects(f.service.setEngine('old-paper-id', 'xelatex'), /no longer open/);
 });
 test('malformed optional engine settings do not prevent opening the manuscript', async () => {
-  const f = await fixture(); await fs.mkdir(path.join(f.paper, '.modern-editor'));
-  const settings = path.join(f.paper, '.modern-editor/settings.json'); await fs.writeFile(settings, 'invalid');
+  const f = await fixture();
+  const settings = path.join(await f.service.stateDirectory(f.project.id), 'settings.json'); await fs.writeFile(settings, 'invalid');
   const p = await f.service.open(f.file);
   assert.equal(p.text, 'Original source\n'); assert.equal(p.engine, 'pdflatex');
-  assert(p.notices.some(n => n.includes('settings.json'))); assert.equal(await fs.readFile(settings, 'utf8'), 'invalid');
+  assert(p.notices.some(n => n.includes('settings'))); assert.equal(await fs.readFile(settings, 'utf8'), 'invalid');
 });

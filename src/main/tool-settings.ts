@@ -7,10 +7,12 @@ import { toolSettingsSchema, type ToolSettings, type SetupCheck, type ToolCheck,
 import { readJSON, writeJSON } from './files.ts';
 import { verifiedCodexVersions, verifyCodexVersion } from './codex-policy.ts';
 import { codexVersion } from '../shared/codex-version.ts';
+import { managedCodexLocation, managedCodexVersion, verifyManagedCodex } from './managed-codex.ts';
 
 const execute = promisify(execFile);
 export const defaultToolSettings: ToolSettings = {
-  codexPath: '/Applications/ChatGPT.app/Contents/Resources/codex',
+  codexSource: 'managed',
+  codexPath: managedCodexLocation().path,
   latexmkPath: '/Library/TeX/texbin/latexmk'
 };
 
@@ -31,29 +33,45 @@ export class ToolSettingsService {
   readonly directory: string;
   readonly file: string;
   private readonly timeoutMs: number;
-  constructor(directory: string, timeoutMs = 4000) {
+  readonly applicationDirectory: string;
+  constructor(directory: string, timeoutMs = 4000, applicationDirectory = process.cwd()) {
     this.directory = directory; this.file = path.join(directory, 'tool-settings.json'); this.timeoutMs = timeoutMs;
+    this.applicationDirectory = applicationDirectory;
+  }
+  resolve(input: unknown): ToolSettings {
+    const settings = toolSettingsSchema.parse(input);
+    // Migrate the old automatic desktop path; deliberately selected custom paths stay custom.
+    if (settings.codexSource === 'managed' || (!settings.codexSource && settings.codexPath === '/Applications/ChatGPT.app/Contents/Resources/codex')) {
+      return { ...settings, codexSource: 'managed', codexPath: managedCodexLocation(this.applicationDirectory).path };
+    }
+    return settings;
   }
   async load(): Promise<{ settings: ToolSettings; notices: string[] }> {
-    try { return { settings: toolSettingsSchema.parse(await readJSON(this.file, 16000)), notices: [] }; }
+    try {
+      const previous = toolSettingsSchema.parse(await readJSON(this.file, 16000)), settings = this.resolve(previous);
+      return { settings, notices: !previous.codexSource && settings.codexSource === 'managed' ? ['Codex now uses the editor-managed CLI. Choose Custom executable in Settings to use another installation.'] : [] };
+    }
     catch (error) {
-      return { settings: { ...defaultToolSettings }, notices: (error as NodeJS.ErrnoException).code === 'ENOENT' ? [] : ['Saved executable settings could not be read. Defaults are shown; the existing settings file was preserved.'] };
+      return { settings: this.resolve(defaultToolSettings), notices: (error as NodeJS.ErrnoException).code === 'ENOENT' ? [] : ['Saved executable settings could not be read. Defaults are shown; the existing settings file was preserved.'] };
     }
   }
   async save(input: unknown): Promise<ToolSettings> {
-    const settings = toolSettingsSchema.parse(input), current = (await this.load()).settings;
+    const settings = this.resolve(input), current = (await this.load()).settings;
     // An unavailable, unchanged tool must not prevent configuring the other.
     // Changed paths are checked before either setting is written; availability
     // and supported versions are still checked when the tool is used.
     for (const key of ['codexPath', 'latexmkPath'] as const) {
       validateExecutablePath(settings[key]);
-      if (settings[key] !== current[key]) await validateExecutable(settings[key]);
+      if (settings[key] !== current[key] || (key === 'codexPath' && settings.codexSource !== current.codexSource)) {
+        if (key === 'codexPath' && settings.codexSource === 'managed') await verifyManagedCodex(this.applicationDirectory);
+        else await validateExecutable(settings[key]);
+      }
     }
     await writeJSON(this.file, settings, 16000);
     return settings;
   }
   async check(input: unknown): Promise<SetupCheck> {
-    const settings = toolSettingsSchema.parse(input), texDirectory = path.dirname(settings.latexmkPath);
+    const settings = this.resolve(input), texDirectory = path.dirname(settings.latexmkPath);
     const probeDirectory = path.join(this.directory, 'setup-check');
     await fs.mkdir(probeDirectory, { recursive: true, mode: 0o700 });
     // These version commands get no account credentials or inherited TeX startup settings.
@@ -67,6 +85,7 @@ export class ToolSettingsService {
     for (const spec of specs) {
       let version: string | null = null;
       try {
+        if (spec.tool === 'codex' && settings.codexSource === 'managed') await verifyManagedCodex(this.applicationDirectory);
         await validateExecutable(spec.file);
         const result = await execute(spec.file, spec.args, { cwd: probeDirectory, env, timeout: this.timeoutMs, killSignal: 'SIGKILL', maxBuffer: 16000, windowsHide: true });
         const output = (result.stdout + '\n' + result.stderr).trim();
@@ -76,6 +95,7 @@ export class ToolSettingsService {
           const number = codexVersion(output, 'cli');
           if (number) version = `codex-cli ${number}`;
           verifyCodexVersion(number ? `modern_codex_editor/${number}` : undefined);
+          if (settings.codexSource === 'managed' && number !== managedCodexVersion) throw new Error(`The editor-managed CLI must be version ${managedCodexVersion}. Repeat the locked dependency installation from Help → Setup.`);
         }
         checks.push({ tool: spec.tool, path: spec.file, required: spec.required, ok: true, version, message: spec.tool === 'codex' ? `Supported CLI version. Review restrictions are verified again before every review. Tested version: ${verifiedCodexVersions.join(', ')}.` : 'Local executable responded. Compilation is checked separately when you compile a paper.' });
       } catch (error) {

@@ -9,9 +9,9 @@ import { comparisonText, comparisonDiffConfig } from './comparison.ts';
 import { VersionHistoryPanel } from './VersionHistoryPanel.tsx';
 
 export type ComparisonPosition = { baselineHash?: string; anchor?: number; scrollTop?: number; mode?: 'split' | 'inline'; collapse?: boolean };
-type Props = { projectId: string; onSavedVersion(id:string):Promise<void>; baseline: Baseline | null; text: string; dirty: boolean; pending: boolean; position: ComparisonPosition;
+type Props = { plain?: boolean; projectId: string; onSavedVersion(id:string):Promise<void>; baseline: Baseline | null; text: string; dirty: boolean; pending: boolean; position: ComparisonPosition;
   onPin(name: string): void; onChoose(): void; onReturn(position?: number): void };
-export function ComparePane({ projectId, onSavedVersion, baseline, text, dirty, pending, position, onPin, onChoose, onReturn }: Props) {
+export function ComparePane({ plain = false, projectId, onSavedVersion, baseline, text, dirty, pending, position, onPin, onChoose, onReturn }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<'split' | 'inline'>(position.mode ?? 'split'), [collapse, setCollapse] = useState(position.collapse ?? true), [setupOpen, setSetupOpen] = useState(!baseline);
   const [name, setName] = useState('Before revisions'), [count, setCount] = useState(0), [selected, setSelected] = useState(0), [coarse, setCoarse] = useState(false);
@@ -33,7 +33,7 @@ export function ComparePane({ projectId, onSavedVersion, baseline, text, dirty, 
     const extensions = (label: string) => [EditorState.readOnly.of(true), EditorView.editable.of(false),
       // Also block mutation commands invoked programmatically, not just typing.
       EditorState.transactionFilter.of(tr => tr.docChanged ? [] : tr),
-      lineNumbers(), drawSelection(), EditorView.lineWrapping, StreamLanguage.define(stex), syntaxHighlighting(defaultHighlightStyle),
+      lineNumbers(), drawSelection(), EditorView.lineWrapping, ...(plain ? [] : [StreamLanguage.define(stex), syntaxHighlighting(defaultHighlightStyle)]),
       EditorView.contentAttributes.of({ 'aria-label': label, tabindex: '0', 'aria-readonly': 'true' })];
     const config = { highlightChanges: true, gutter: true, diffConfig: comparisonDiffConfig, collapseUnchanged: collapse ? { margin: 3, minSize: 8 } : undefined };
     let destroy: () => void;
@@ -55,11 +55,11 @@ export function ComparePane({ projectId, onSavedVersion, baseline, text, dirty, 
       else reveal(0);
     });
     return () => { cancelAnimationFrame(frame); Object.assign(position, { baselineHash: baseline.sourceHash, mode, collapse, scrollTop: scroller.scrollTop }); destroy(); original.current = null; current.current = null; changes.current = []; };
-  }, [baseline?.sourceHash, text, mode, collapse]);
+  }, [baseline?.sourceHash, text, mode, collapse, plain]);
   return <section className="compare-pane" aria-label="Compare document versions">
     <div className="compare-heading"><div><strong>Compare versions</strong><p>{baseline ? <>Pinned: <b>{baseline.name}</b> · {new Date(baseline.createdAt).toLocaleString()}</> : 'Choose an original version, or keep the current draft before revising it.'}</p></div><button aria-expanded={historyOpen} onClick={()=>setHistoryOpen(v=>!v)}>Save history…</button><button aria-expanded={setupOpen} onClick={() => setSetupOpen(v => !v)}>Baseline…</button><button onClick={() => onReturn()}>Back to editing</button></div>
     {historyOpen&&<VersionHistoryPanel key={projectId} projectId={projectId} onCompare={onSavedVersion} />}
-    {(setupOpen || !baseline) && <div className="compare-setup"><button disabled={pending} onClick={onChoose}>Choose older .tex file…</button><label>Snapshot name <input aria-label="Comparison snapshot name" maxLength={200} value={name} onChange={e => setName(e.target.value)} /></label><button disabled={pending || !name.trim()} onClick={() => onPin(name)}>Keep current draft as baseline</button><span>{pending ? 'Keeping comparison version…' : 'Save keeps this baseline fixed.'}</span></div>}
+    {(setupOpen || !baseline) && <div className="compare-setup"><button disabled={pending} onClick={onChoose}>Choose older file…</button><label>Snapshot name <input aria-label="Comparison snapshot name" maxLength={200} value={name} onChange={e => setName(e.target.value)} /></label><button disabled={pending || !name.trim()} onClick={() => onPin(name)}>Keep current draft as baseline</button><span>{pending ? 'Keeping comparison version…' : 'Save keeps this baseline fixed.'}</span></div>}
     {baseline ? <><div className="compare-controls"><div className="compare-modes" role="group" aria-label="Comparison layout"><button aria-pressed={mode === 'split'} onClick={() => setMode('split')}>Side by side</button><button aria-pressed={mode === 'inline'} onClick={() => setMode('inline')}>Inline</button></div><label><input type="checkbox" checked={collapse} onChange={e => setCollapse(e.target.checked)} /> Collapse unchanged text</label><button disabled={!count} onClick={() => reveal(selected - 1)}>← Previous change</button><span role="status">{count ? `Change ${selected + 1} of ${count}` : 'No text changes'}</span><button disabled={!count} onClick={() => reveal(selected + 1)}>Next change →</button><button disabled={!count} onClick={() => onReturn(Math.min(changes.current[selected]?.fromB ?? 0, text.length))}>Go to source</button></div>
       <div className={`compare-labels ${mode}`}><span title={baseline.sourcePath ?? 'Snapshot of the editor buffer'}>− {baseline.name}</span><span>+ Current draft · {dirty ? 'includes unsaved edits' : 'saved'}</span></div>
       {coarse && <div className="compare-note">Large changes are shown in broader blocks to keep comparison responsive. All source text is still included.</div>}

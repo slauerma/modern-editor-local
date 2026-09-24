@@ -72,7 +72,7 @@ export class CompileService {
       return await this.prepareInputs(projectId, text, selectedPaths, limits, this.preparation.signal);
     } finally { this.preparation = null; this.busy = false; this.stopped.splice(0).forEach(resolve => resolve()); }
   }
-  async compile(projectId: string, text: string, engine: Engine, selectedPaths?: string[], limits?: BuildInputLimits): Promise<Build> {
+  async compile(projectId: string, text: string, engine: Engine, selectedPaths?: string[], limits?: BuildInputLimits, purpose: 'paper' | 'proposal' | 'comparison' = 'paper'): Promise<Build> {
     if (this.busy) throw new Error('A compilation is already running.');
     if (text.length > 2000000) throw new Error('Source exceeds the supported size.');
     this.cancelValidations();
@@ -86,7 +86,7 @@ export class CompileService {
       const preparationStarted = Date.now();
       const plan = await this.prepareInputs(projectId, text, selectedPaths, limits, this.preparation.signal);
       if (plan.status === 'needs-selection') {
-        return { id: randomUUID(), engine, success: false, clean: false, dependenciesVerified: false, sourceHash: digest(text),
+        return { purpose, id: randomUUID(), engine, success: false, clean: false, dependenciesVerified: false, sourceHash: digest(text),
           diagnostics: [{ severity: 'error', message: plan.reason }, ...plan.issues.map(message => ({ severity: 'warning' as const, message }))],
           log: [plan.reason, ...plan.issues].join('\n'), elapsedMs: Date.now() - preparationStarted, inputPreparation: plan };
       }
@@ -146,7 +146,7 @@ export class CompileService {
       try { code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); }); }
       finally { clearTimeout(watchdog); this.running = null; this.terminateDescendants(child); }
       await fs.writeFile(path.join(directory, 'editor-build.log'), output, { mode: 0o600 });
-      const stem = project.name.replace(/\.tex$/i, ''), pdf = path.join(directory, stem + '.pdf');
+      const stem = project.name.replace(/\.(?:tex|txt)$/i, ''), pdf = path.join(directory, stem + '.pdf');
       let validPdf = false;
       try { const data = await readRegularFile(pdf, 100000000); validPdf = data.subarray(0, 5).toString() === '%PDF-'; } catch {}
       let log = output, logReadable = true;
@@ -168,12 +168,12 @@ export class CompileService {
       if (running.cancelled || this.cancelled) diagnostics.unshift({ severity: 'error', message: running.timedOut ? 'Compilation exceeded its time limit and was stopped. Check the engine and build log.' : 'Compilation cancelled.' });
       const success = code === 0 && validPdf && !running.cancelled && !this.cancelled;
       if (!success && !diagnostics.some(d => d.severity === 'error')) diagnostics.push({ severity: 'error', message: 'LaTeX did not produce a successful PDF. See the build log.' });
-      const build: Build = { id, engine, success, clean: success && !blockingWarnings && dependenciesVerified && logReadable, dependenciesVerified, sourceHash: digest(text), diagnostics: diagnostics.slice(0, 50), log: output.slice(-30000), elapsedMs: Date.now() - started,
+      const build: Build = { purpose, id, engine, success, clean: success && !blockingWarnings && dependenciesVerified && logReadable, dependenciesVerified, sourceHash: digest(text), diagnostics: diagnostics.slice(0, 50), log: output.slice(-30000), elapsedMs: Date.now() - started,
         inputSelection: { mode: plan.mode, fileCount: plan.files.length, totalBytes: plan.totalBytes, ...(plan.unresolvedIssues.length ? { unresolvedIssues: plan.unresolvedIssues } : {}) } };
       this.records.set(id, { build, projectId, text, inputs, directory, pdf, tciSupport, external, selectedPaths: selectedPaths ? plan.files.map(file => file.relative) : undefined, limits });
       // This optional snapshot is only for reopening the reader. Failure does
       // not turn a valid compilation into a failed source edit.
-      if (success) try { await rememberPdf(directory, project.path, build); }
+      if (success && purpose === 'paper') try { await rememberPdf(directory, project.path, build); }
       catch { build.diagnostics.push({ severity: 'warning', message: 'This PDF could not be retained for workspace restoration. It remains available in this session.' }); }
       return build;
     } finally { this.preparation = null; this.busy = false; this.stopped.splice(0).forEach(resolve => resolve()); }
@@ -191,7 +191,7 @@ export class CompileService {
   cancel() { this.cancelValidations(); this.cancelled = true; this.preparation?.abort(); if (this.running) { this.running.cancelled = true; this.terminate(this.running.child); } }
   async stop() { this.cancel(); for (const controller of this.navigation.keys()) controller.abort(); await Promise.allSettled([...this.navigation.values(), ...[...this.validations.values()].map(value => value.task)]); if (this.busy) await new Promise<void>(resolve => this.stopped.push(resolve)); }
   async validate(projectId: string, buildId: string, text: string) {
-    return (await this.inspect(projectId, buildId, text)).status === 'valid';
+    return this.records.get(buildId)?.build.purpose !== 'comparison' && (await this.inspect(projectId, buildId, text)).status === 'valid';
   }
   inspect(projectId: string, buildId: string, text: string): Promise<BuildValidation> {
     if (this.busy) return Promise.resolve({ status: 'deferred' });
@@ -252,7 +252,7 @@ export class CompileService {
     const position = compiledPosition(input.text, record.text, input.from, input.to);
     if ('kind' in position) return position;
     try {
-      const source = path.join(record.directory, project.name), stem = project.name.replace(/\.tex$/i, '');
+      const source = path.join(record.directory, project.name), stem = project.name.replace(/\.(?:tex|txt)$/i, '');
       if (digest(await readRegularFile(source, 8000000)) !== record.build.sourceHash) throw new Error('The compiled source snapshot changed.');
       await readRegularFile(path.join(record.directory, stem + '.synctex.gz'), 32000000);
       const location = await syncTexLocation(path.join(path.dirname(this.latexmk), 'synctex'), source, record.pdf, position, record.directory, signal);
@@ -266,7 +266,7 @@ export class CompileService {
     this.busy = true;
     try {
       const recent = [...this.records.values()].slice(-5).map(r => r.build.id);
-      const latestGood = [...this.records.values()].reverse().find(r => r.build.success)?.build.id;
+      const latestGood = [...this.records.values()].reverse().find(r => r.build.success && (r.build.purpose ?? 'paper') === 'paper')?.build.id;
       const keep = new Set([...keepIds, ...recent, ...(latestGood ? [latestGood] : [])]);
       let removed = 0;
       for (const entry of await fs.readdir(this.cache, { withFileTypes: true }).catch(() => [])) {

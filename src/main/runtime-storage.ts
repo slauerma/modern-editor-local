@@ -162,7 +162,7 @@ export async function prepareRuntimeStorage(options: Options): Promise<{ directo
 }
 
 export async function createDraftSource(file: string, applicationDirectory?: string) {
-  if (!path.isAbsolute(file) || path.extname(file).toLowerCase() !== '.tex') throw new Error('Choose an absolute filename ending in .tex.');
+  if (!path.isAbsolute(file) || !['.tex', '.txt'].includes(path.extname(file).toLowerCase())) throw new Error('Choose an absolute filename ending in .tex or .txt.');
   const folder = await fs.realpath(path.dirname(file)), target = path.join(folder, path.basename(file));
   if (applicationDirectory && inside(await fs.realpath(applicationDirectory), target)) throw new Error('Choose a paper folder outside the editor installation so updating the editor cannot remove your draft.');
   try { await writeSourceCopy(target, ''); }

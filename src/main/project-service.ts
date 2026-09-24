@@ -1,3 +1,4 @@
+import { ChangeJournal } from './change-journal.ts';
 import { listVersions, savedVersion, deleteVersion, setVersionBudget, pruneVersions, recordSaveCheckpoints, completeSaveCheckpoints, originalSaveVersion } from './version-history.ts';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
@@ -56,6 +57,7 @@ async function retainRecovery(file: string) {
 }
 export class ProjectService {
   current: Project | null = null;
+  readonly changeJournal = new ChangeJournal();
   private lineEnding = '\n';
   private bom = '';
   private recoveryRevision = 0;
@@ -87,7 +89,7 @@ export class ProjectService {
   async stateDirectory(projectId: string) { return (await this.dirs(this.get(projectId))).home; }
   async open(file: string): Promise<Project> { return this.serial(async () => {
     const actual = await fs.realpath(file);
-    if (path.extname(actual).toLowerCase() !== '.tex') throw new Error('Choose the root .tex document.');
+    if (!['.tex', '.txt'].includes(path.extname(actual).toLowerCase())) throw new Error('Choose a .tex or .txt document.');
     const directoryIdentity = await captureBuildDirectory(path.dirname(actual));
     const bytes = await readProjectSource(actual, directoryIdentity);
     if (bytes.length > 2000000) throw new Error('This first version supports source files up to 2 MB.');
@@ -175,7 +177,13 @@ export class ProjectService {
     await writeJSON(path.join(this.cache, 'last-project.json'), { path: actual });
     await assertBuildDirectory(path.dirname(actual), directoryIdentity);
     this.openedDirectory = { projectId: p.id, identity: directoryIdentity };
+    // Opening is a comparison checkpoint, independent of Save and the pinned baseline.
+    p.sessionBaseline = baselineSchema.parse({ schemaVersion: 1, rootFile: p.name, name: 'Session start', text: p.text, sourceHash: digest(p.text), createdAt: new Date().toISOString(), sourcePath: null });
     this.current = p; this.lineEnding = lineEnding; this.bom = bom; this.recoveryRevision = recoveryRevision;
+    try { const dirs = await this.dirs(p); await writeJSON(path.join(dirs.home, 'session-start.json'), p.sessionBaseline); }
+    catch { p.notices.push('The session comparison is available in memory, but its checkpoint could not be saved.'); }
+    try { await this.changeJournal.open((await this.dirs(p)).home, p.text, p.review.comments); }
+    catch { this.changeJournal.notice = 'Reason recording is unavailable; exact comparison still works.'; }
     return structuredClone(p);
   }); }
   async resume() {
@@ -272,7 +280,7 @@ export class ProjectService {
   async baselineFromFile(projectId: string, file: string) {
     this.get(projectId);
     const actual = await fs.realpath(file);
-    if (path.extname(actual).toLowerCase() !== '.tex') throw new Error('Choose a .tex comparison version.');
+    if (!['.tex', '.txt'].includes(path.extname(actual).toLowerCase())) throw new Error('Choose a .tex or .txt comparison version.');
     const bytes = await readStateFile(actual, 2000000);
     const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
     return this.pinBaseline(projectId, path.basename(actual), text, actual);
@@ -294,6 +302,7 @@ export class ProjectService {
     // The higher session revision supersedes it even if this process stops before writing review.json.
     await atomicWrite(sessionFile, sessionJSON);
     await atomicWrite(path.join(dirs.home, 'review.json'), reviewJSON);
+    await this.changeJournal.record(text, review.comments);
   }); }
   async save(input: BufferInput) { return this.serial(async () => {
     const { p, text, review } = this.checked(input);
@@ -334,6 +343,7 @@ export class ProjectService {
       async () => { if (!p.baseline && !(await exists(path.join(dirs.home, 'baseline.json')))) await this.keepBaseline(p, 'Before first editor Save', await originalSaveVersion(dirs.home, p.name)); },
       async () => { const history = await pruneVersions(p.path, [digest(previous), p.diskHash]); historyNotices.push(...history.notices); }
     ]) try { await maintain(); } catch (e) { historyNotices.push('Source saved; version history needs attention. ' + String(e)); }
+    await this.changeJournal.record(text, review.comments);
     return { diskHash: p.diskHash, baseline: p.baseline, historyNotice: historyNotices.join(' ') };
   }); }
   async import(file: string, projectId: string, text: string): Promise<Review> {

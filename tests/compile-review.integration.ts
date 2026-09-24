@@ -57,13 +57,14 @@ test('bundled TCI support compiles an SWP root without changing its paper folder
   const file = path.join(paper, 'main.tex'); await fs.writeFile(file, source);
   const projects = new ProjectService(path.join(root, 'cache')), p = await projects.open(file);
   const compiler = new CompileService(projects, path.join(root, 'builds'), undefined, undefined, support);
+  const paperEntries = await fs.readdir(paper);
   try {
     const result = await compiler.compile(p.id, p.text, 'pdflatex');
     assert.equal(result.clean, true, result.log);
     assert.match(result.log, /TCILATEX Macros/);
     assert.equal(await compiler.validate(p.id, result.id, p.text), true);
     assert.equal(await fs.readFile(file, 'utf8'), source);
-    assert.deepEqual(await fs.readdir(paper), ['main.tex']);
+    assert.deepEqual(await fs.readdir(paper), paperEntries);
     await fs.appendFile(support, '\n% new bundled revision\n');
     assert.equal(await compiler.validate(p.id, result.id, p.text), false);
     await fs.writeFile(support, bundled);

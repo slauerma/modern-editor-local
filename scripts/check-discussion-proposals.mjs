@@ -120,7 +120,7 @@ const message = text => page.locator('.discussion .message').filter({ hasText: t
 const use = text => message(text).getByRole('button', { name: 'Use this wording', exact: true });
 const wording = text => message(text).getByLabel('Suggested wording', { exact: true });
 async function buffer() {
-  return page.getByLabel('LaTeX source', { exact: true }).evaluate(el => window.editorViewForTest(el).state.doc.toString());
+  return page.getByLabel('Document source', { exact: true }).evaluate(el => window.editorViewForTest(el).state.doc.toString());
 }
 async function sourceUnchanged() {
   assert.equal(await buffer(), source, 'The source buffer must stay unchanged');
@@ -221,7 +221,7 @@ try {
   await button('Open paper…').click();
   await page.getByRole('heading', { name: comment.title, exact: true }).waitFor();
   if (await button('Dismiss notice').count()) await button('Dismiss notice').click();
-  await button('Discuss').click();
+  await page.getByRole('button', { name: /^Discuss\b/ }).click();
   await ask('Please propose precise wording, keeping the literal LaTeX available for inspection.');
   await replacement().fill(manualDraft);
   await note().fill(newerNote);
@@ -299,6 +299,7 @@ try {
   for (const answer of [answerA, answerB, deletion]) assert(await use(answer.reply).isDisabled());
   assert.equal(await page.locator('.reply-current').count(), 0);
   assert.equal(await wording(answerA.reply).textContent(), answerA.replacement);
+  await button('Comment options ▾').click();
   await button('Reopen').click();
   await proposalIs(manualDraft, ['amsmath']);
   for (const answer of [answerA, answerB, deletion]) assert(await use(answer.reply).isEnabled());
@@ -307,7 +308,8 @@ try {
   await ask('Provide a long alternative so I can inspect its complete final line.');
   await complete(longAnswer);
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(960, 720));
-  await button('PDF').click();
+  await button('View ▾').click();
+  await button('Source + comments').click();
   await wording(longAnswer.reply).scrollIntoViewIfNeeded();
   assert.equal(await wording(longAnswer.reply).textContent(), longAnswer.replacement);
   const dimensions = await wording(longAnswer.reply).evaluate(el => ({
@@ -346,6 +348,7 @@ try {
   assert.equal(await fs.readFile(file, 'utf8'), source);
   await launch();
   await page.getByRole('heading', { name: comment.title, exact: true }).waitFor();
+  await page.getByRole('button', { name: /^Discuss\b/ }).click();
   await proposalIs(manualDraft, ['amsmath']);
   for (const answer of [answerA, answerB, longAnswer]) assert.equal(await wording(answer.reply).textContent(), answer.replacement);
   assert.equal(await message(explanationOnly.reply).locator('.reply-proposal').count(), 0);

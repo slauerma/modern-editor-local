@@ -20,7 +20,7 @@ async function readRegular(file: string, limit: number) {
 // a winner, change the open project, or rewrite any source/recovery record here.
 export async function inspectSourceRecovery(file: string): Promise<SourceRecovery> {
   const name = path.basename(file), directory = await fs.realpath(path.dirname(file));
-  if (path.extname(name).toLowerCase() !== '.tex') throw new Error('Choose the root .tex document.');
+  if (!['.tex', '.txt'].includes(path.extname(name).toLowerCase())) throw new Error('Choose a .tex or .txt document.');
   const result: SourceRecovery = { name, choices: [], notices: [] };
   try { result.choices.push({ label: 'Source currently on disk', text: await readRegular(path.join(directory, name), 8000000) }); }
   catch (error) { result.notices.push(String(error)); }

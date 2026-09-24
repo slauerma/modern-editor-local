@@ -129,7 +129,7 @@ async function inventory(root: string, rootName: string, textSize: number, limit
         const rel = portable(path.join(relative, entry.name));
         if (entry.isSymbolicLink()) { problems.push(`Linked candidate: ${rel}`); continue; }
         if (entry.isDirectory()) { await walk(rel, depth + 1); if (result.visitedEntries >= limit) { result.truncated = true; break; } continue; }
-        if (!entry.isFile() || !allowed.has(path.extname(entry.name).toLowerCase()) || rel === rootName.replace(/\.tex$/i, '.pdf')) continue;
+        if (!entry.isFile() || !allowed.has(path.extname(entry.name).toLowerCase()) || rel === rootName.replace(/\.(?:tex|txt)$/i, '.pdf')) continue;
         try {
           const checked = await safeStat(root, rel, expectedIdentity);
           result.paths.push({ relative: checked.relative, size: checked.relative === rootName ? textSize : checked.stat.size });
@@ -216,7 +216,7 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
   const resolved = new Map<string, Awaited<ReturnType<typeof safeStat>> | null>();
   const lookup = async (relative: string) => {
     const normalized = canonicalRelative(relative);
-    if (normalized === rootName.replace(/\.tex$/i, '.pdf')) throw new Error('The root output PDF cannot be a build input.');
+    if (normalized === rootName.replace(/\.(?:tex|txt)$/i, '.pdf')) throw new Error('The root output PDF cannot be a build input.');
     if (!resolved.has(normalized)) {
       try { resolved.set(normalized, await safeStat(root, normalized, expectedIdentity)); }
       catch (error) { if (code(error) === 'ENOENT' || code(error) === 'ENOTDIR') resolved.set(normalized, null); else throw error; }

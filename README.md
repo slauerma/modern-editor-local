@@ -2,7 +2,7 @@
 
 A local desktop editor for LaTeX source, compiled PDF reading, and Codex-assisted review. It uses Electron, React, CodeMirror, and PDF.js.
 
-**Version 1.1.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
+**Version 1.2.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
 
 This is a personal project, kept lean for individual use. **macOS is the currently validated platform. Windows is not yet supported.** The repository contains development source; there is no packaged application or installer.
 
@@ -17,13 +17,13 @@ These Markdown guides can be read locally without an account or internet connect
 
 ## Overview
 
-Open a root `.tex` file, review a selection or document, discuss comments, and inspect proposed replacements before applying them. The editor can compile a candidate before accepting it, preserve the last successful PDF after a failed compile, compare saved versions, and export source recovery to a new file. Discussion replies show their proposed source changes beside the explanation. The **Codex Side Chat** drawer answers editor and paper questions with optional screenshots and inspectable context. Scroll continuously through the PDF or search its text. You can also convert outside feedback into comments and attach reference files or folders that Codex can consult during reviews and discussions.
+Open a `.tex` or `.txt` file, review a selection or document, discuss comments, and inspect proposed replacements before applying them. Text and LaTeX fragments open with a live text diff; complete LaTeX papers can show a compiled PDF. **Preview** displays a tentative change without accepting it. **Changes PDF** uses GPT-6 Sol when requested to arrange revisions as struck-through/underlined markup or a clean paper with change markers and expandable explanations. The editor can also compile before acceptance, preserve the last successful PDF after a failed build, compare saved versions, and export source recovery. Discussion replies show their proposed source changes beside the explanation. The **Codex Side Chat** drawer answers editor and paper questions with optional screenshots and inspectable context. Scroll continuously through the PDF or search its text. You can also convert outside feedback into comments and attach reference files or folders that Codex can consult during reviews and discussions.
 
 [Watch the one-minute demonstration](demo/modern-editor-twitter-short.mp4) · [Full demonstration, download options and credits](demo/README.md).
 
 ## Install and run on Mac
 
-Use Node.js 24 LTS with npm, full MacTeX, and a [supported Codex CLI](docs/SETUP.md#3-configure-codex-if-you-want-ai-review) authenticated with your own account for AI features. The minimum Node version is 22.18. Follow the [setup guide](docs/SETUP.md) before building. **Actions → Settings and Check setup** lets you choose the installed executables and check their versions.
+Use Node.js 24 LTS with npm, full MacTeX, and your own Codex account for AI features. The locked dependencies install a separate **Codex CLI 0.155.0-alpha.9.2** for the editor; no Codex desktop app or global CLI is required. The minimum Node version is 22.18. Follow the [setup guide](docs/SETUP.md) before building. **Actions → Settings and Check setup** lets you choose the installed executables and check their versions.
 
 From the repository folder containing `package.json`:
 
@@ -34,6 +34,8 @@ node node_modules/electron/install.js
 npm run build
 npm start
 ```
+
+For AI review, run `npm run codex:login` once if you are not already signed in. Keep **Editor-managed CLI** in Settings; desktop Codex updates do not change it. See [Codex setup](docs/SETUP.md#3-configure-codex-if-you-want-ai-review).
 
 The rebuild step prepares esbuild. The explicit Electron installer downloads or retrieves the pinned platform runtime and its licences. The build is local and writes `dist/`. `npm start` launches the desktop application without an HTTP server.
 

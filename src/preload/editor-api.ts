@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { EditorAPI } from '../shared/contracts.ts';
 const api: EditorAPI = {
+  debugState: () => ipcRenderer.invoke('debug:state'),
+  configureDebug: settings => ipcRenderer.invoke('debug:configure', settings),
+  deleteDebug: ids => ipcRenderer.invoke('debug:delete', ids),
+  openDebugFolder: () => ipcRenderer.invoke('debug:open'),
+  changesSettings: every => ipcRenderer.invoke('changes:settings', every),
+  planChanges: input => ipcRenderer.invoke('codex:changes-plan', input),
+  checkChangesVisual: (projectId, artifactId, screenshots) => ipcRenderer.invoke('codex:changes-visual', { projectId, artifactId, screenshots }),
   pendingChats: () => ipcRenderer.invoke('chat:pending'),
   pendingChat: id => ipcRenderer.invoke('chat:pending-reply', id),
   recoverChat: input => ipcRenderer.invoke('chat:recover', input),
@@ -48,6 +55,12 @@ const api: EditorAPI = {
   setHistoryBudget: (projectId, bytes) => ipcRenderer.invoke('comparison:budget', { projectId, bytes }),
   reload: id => ipcRenderer.invoke('project:reload', id),
   importReview: (id, text) => ipcRenderer.invoke('review:import', { projectId: id, text }),
+  buildChanges: input => ipcRenderer.invoke('build:changes', input),
+  presentChanges: (projectId, artifactId, presentation) => ipcRenderer.invoke('build:changes-presentation', { projectId, artifactId, presentation }),
+  inspectChanges: (projectId, artifactId) => ipcRenderer.invoke('build:changes-inspect', { projectId, artifactId }),
+  locateChange: (projectId, artifactId, changeId) => ipcRenderer.invoke('build:change-location', { projectId, artifactId, changeId }),
+  prepareArrangement: input => ipcRenderer.invoke('build:arrange-preview', input),
+  arrangeChanges: (input, previewId) => ipcRenderer.invoke('codex:arrange-changes', { input, previewId }),
   compile: input => ipcRenderer.invoke('build:compile', input),
   previewBuildHelp: input => ipcRenderer.invoke('build:help-preview', input),
   askBuildHelp: input => ipcRenderer.invoke('codex:build-help', input),
