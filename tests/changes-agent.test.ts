@@ -1,16 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ChangesPdfService } from '../src/main/changes-pdf.ts';
-import { changesUpdateDue } from '../src/shared/changes-agent.ts';
+import { changesUpdateDue, visualCheckSchema, changesAgentSchema } from '../src/shared/changes-agent.ts';
 import type { ChangesInput } from '../src/shared/changes-pdf.ts';
 const before = '\\documentclass{article}\n\\begin{document}\nA sentence have a mistake.\n\\end{document}';
 const input: ChangesInput = { projectId: 'paper', before, after: before.replace('have', 'has'), name: 'Session start', engine: 'pdflatex' };
 function fixture() {
   const calls = { plan: 0, compile: 0, visual: 0 };
   const projects = { get() { return {}; }, changeJournal: { explain(_: string, __: string, p: unknown) { return p; } } };
-  const compiler = { async compile() { calls.compile++; return { id: 'build', success: true, dependenciesVerified: true }; }, async inspect() { return { status: 'valid' }; }, async locatePdf() { return { kind: 'mapped', page: 2 }; } };
+  const compiler = { async compile() { calls.compile++; return { id: 'build', success: true, dependenciesVerified: true }; }, async inspect() { return { status: 'valid' }; }, async pdf() { return new Uint8Array(); }, async locatePdf() { assert.fail('Comparison navigation must not use approximate SyncTeX.'); } };
   const codex = { async planChanges(_: string, prompt: string) { calls.plan++; const changes = JSON.parse(prompt).changes; return { groups: changes.map((c: any) => ({ ids: [c.id], layout: 'keep', summary: 'Correct grammar.' })), inspect: [changes[0].id] }; }, async checkChanges(_: string, prompt: string, images: string[]) { calls.visual++; assert.deepEqual(JSON.parse(prompt).pages, [2]); assert.equal(images.length, 1); return { readable: true, issues: [] }; } };
-  return { service: new ChangesPdfService(projects as any, compiler as any, codex as any), calls, codex, compiler };
+  return { service: new ChangesPdfService(projects as any, compiler as any, codex as any, async (_, ids) => Object.fromEntries(ids.map(id => [id, { page: 2, x: 10, y: 20, width: 18, height: 12 }]))), calls, codex, compiler };
 }
 test('Changes PDF is driven by accepted and saved events, not source keystrokes', () => {
   assert.equal(changesUpdateDue({ accepted: 2, saved: 1 }, { accepted: 6, saved: 1 }, 5), false);
@@ -52,4 +52,41 @@ test('cancelled planning and changed inputs cannot authorize an arrangement or v
   compiler.inspect = async () => ({ status: 'changed' });
   await assert.rejects(service.checkVisual('paper', artifact.id, [{ page: 2, dataUrl: 'image' }], () => {}), /inputs changed/);
   assert.equal(calls.visual, 0);
+});
+test('Sol receives exact presentation limits and a concrete visual-quality brief', async () => {
+  const { service, codex } = fixture();
+  const originalPlan = codex.planChanges, originalCheck = codex.checkChanges;
+  codex.planChanges = async (...args) => {
+    const prompt = JSON.parse(args[1]);
+    assert.equal(prompt.presentation, 'markup');
+    assert.deepEqual(prompt.changes[0].shownIn, { markup: true, clean: true });
+    assert.match(prompt.task, /every supplied change ID exactly once/);
+    assert.match(prompt.task, /application generates TeX from exact source/);
+    assert.match(prompt.task, /Do not claim visual success/);
+    return originalPlan(...args);
+  };
+  codex.checkChanges = async (...args) => {
+    const prompt = JSON.parse(args[1]);
+    assert.match(prompt.task, /joined old\/new words/);
+    assert.match(prompt.task, /invisible anchors.*intentional/);
+    assert.match(prompt.task, /not certification of unseen pages/);
+    assert.equal(prompt.changes[0].id, 'change-1');
+    return originalCheck(...args);
+  };
+  const arranged = await service.smartPlan(input, () => {}), artifact = await service.build({ ...input, arrangementId: arranged.id });
+  await service.checkVisual('paper', artifact.id, [{ page: 2, dataUrl: 'image' }], () => {});
+});
+test('Sol cannot inspect a change omitted by the chosen presentation or bypass the JSON contract', async () => {
+  const { service, calls, codex } = fixture();
+  const math = { ...input, before: before.replace('A sentence have a mistake.', 'For $x=1$ the result holds.'), after: before.replace('A sentence have a mistake.', 'For $x=2$ the result holds.') };
+  await service.smartPlan(math, () => {}); assert.equal(calls.plan, 0, 'No model request for an all-omitted markup view');
+  const clean = await service.smartPlan({ ...math, presentation: 'clean' }, () => {}); assert(clean.id);
+  const original = codex.planChanges;
+  codex.planChanges = async (...args) => ({ ...await original(...args), inspect: ['change-2'] });
+  await assert.rejects(service.smartPlan(input, () => {}), /unsupported visual check/);
+  assert(!changesAgentSchema.safeParse({ groups: [], inspect: ['change-1', 'change-1'] }).success);
+  assert(!changesAgentSchema.safeParse({ groups: [], inspect: [], tex: 'replacement code' }).success);
+  assert(!visualCheckSchema.safeParse({ readable: true, issues: ['There is visible overlap.'] }).success);
+  assert(!visualCheckSchema.safeParse({ readable: false, issues: [] }).success);
+  assert(visualCheckSchema.safeParse({ readable: false, issues: ['Page 2: inserted wording overlaps the deletion.'] }).success);
 });

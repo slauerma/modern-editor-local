@@ -10,6 +10,129 @@ import { restorePdf } from '../src/main/pdf-workspace-cache.ts';
 import { commentSchema } from '../src/shared/contracts.ts';
 import { proposalPreview } from '../src/shared/proposal-preview.ts';
 
+test('audit regressions: unbraced arguments, long footnotes and preloaded ulem preserve a usable comparison', { timeout: 90000 }, async t => {
+  const root = path.resolve('.test-runs', 'changes-audit-' + randomUUID());
+  await fs.mkdir(path.join(root, 'paper'), { recursive: true }); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const before = String.raw`\documentclass{article}
+\usepackage{ulem}
+\begin{document}
+\textbf Old result.
+
+A note\footnote{First paragraph.
+
+The argument are correct.
+
+Final paragraph.}
+
+\noindent This ordinary sentence have a mistake and [old wording].
+\emph{Keep the author's emphasis.}
+\end{document}`;
+  const after = before.replace('Old result.', 'New result.').replace('argument are', 'argument is').replace('have a mistake', 'has a mistake').replace('[old wording]', '[new wording]');
+  const file = path.join(root, 'paper/paper.tex'); await fs.writeFile(file, before);
+  const projects = new ProjectService(path.join(root, 'cache')), p = await projects.open(file), compiler = new CompileService(projects, path.join(root, 'builds'));
+  const service = new ChangesPdfService(projects, compiler);
+  try {
+    const candidate = await compiler.compile(p.id, after, 'pdflatex'); assert(candidate.success, candidate.log);
+    const markup = await service.build({ projectId: p.id, before, after, name: 'Start', engine: 'pdflatex' });
+    for (const artifact of [markup, await service.present(p.id, markup.id, 'clean')]) {
+      assert(artifact.build?.success && artifact.build.dependenciesVerified, artifact.build?.log);
+      assert.equal(artifact.changes.filter(c => c.layout === 'omitted').length, 2);
+      assert.equal(artifact.changes.filter(c => c.layout !== 'omitted').length, 1);
+      const generated = await fs.readFile(path.join(root, 'builds', artifact.build.id, 'paper.tex'), 'utf8');
+      assert(generated.includes('\\textbf New result.'));
+      assert(generated.includes('First paragraph.\n\nThe argument is correct.\n\nFinal paragraph.}'));
+      assert(generated.includes("\\emph{Keep the author's emphasis.}"));
+      assert(!generated.includes('\\normalem'));
+      for (const c of artifact.changes) assert.equal((await service.locate(p.id, artifact.id, c.id)).kind, 'mapped');
+    }
+    assert.equal(await fs.readFile(file, 'utf8'), before);
+  } finally { service.cancel(); await service.settle(); await compiler.stop(); }
+});
+
+test('article titles stay on page one and exact comparison destinations survive ordinary display math', { timeout: 90000 }, async t => {
+  const root = path.resolve('.test-runs', 'changes-destinations-' + randomUUID()), paper = path.join(root, 'paper');
+  await fs.mkdir(paper, { recursive: true }); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const before = String.raw`\documentclass{article}
+\usepackage{amsmath,amssymb}
+\title{An ordinary title}\author{Synthetic test}\date{}
+\begin{document}
+\maketitle
+The conclusion are immediate.
+\begin{equation}\label{eq:test}x^{\prime}=\varnothing\end{equation}
+The proof are direct.
+
+\newpage
+An unchanged final paragraph.
+\end{document}`;
+  const after = before.replaceAll(' are ', ' is ').replace('\\date{}', '\\date{} % A changed source note.');
+  const file = path.join(paper, 'paper.tex'); await fs.writeFile(file, before);
+  const projects = new ProjectService(path.join(root, 'cache')), p = await projects.open(file), compiler = new CompileService(projects, path.join(root, 'builds'));
+  const comparisons = new ChangesPdfService(projects, compiler);
+  try {
+    const markup = await comparisons.build({ projectId: p.id, before, after, name: 'Session start', engine: 'pdflatex' });
+    for (const artifact of [markup, await comparisons.present(p.id, markup.id, 'clean')]) {
+      assert(artifact.build?.success && artifact.build.dependenciesVerified);
+      assert.equal(artifact.changes.filter(c => c.layout !== 'omitted').length, 1);
+      const shown = artifact.changes.find(c => c.layout !== 'omitted')!, omitted = artifact.changes.find(c => c.layout === 'omitted')!;
+      const first = await comparisons.locate(p.id, artifact.id, shown.id), last = await comparisons.locate(p.id, artifact.id, omitted.id);
+      assert.equal(first.kind, 'mapped'); if (first.kind === 'mapped') assert.equal(first.page, 1, 'No comparison-only page before maketitle');
+      assert.equal(last.kind, 'mapped'); if (last.kind === 'mapped') assert.equal(last.page, 2, 'Omission navigation uses the real summary marker');
+      const generated = await fs.readFile(path.join(root, 'builds', artifact.build.id, 'paper.tex'), 'utf8');
+      assert.equal(generated.split('\\label{eq:test}').length - 1, 1);
+      assert.equal(generated.split('\\begin{equation}').length - 1, 1);
+      assert(!artifact.build.diagnostics.some(d => /multiply.defined|duplicate/i.test(d.message)), artifact.build.log);
+    }
+    assert.equal(await fs.readFile(file, 'utf8'), before);
+  } finally { comparisons.cancel(); await comparisons.settle(); await compiler.stop(); }
+});
+
+test('real comparison preserves percent comments and line joining while marking nearby prose', { timeout: 90000 }, async t => {
+  const root = path.resolve('.test-runs', 'changes-comments-' + randomUUID()), paper = path.join(root, 'paper');
+  await fs.mkdir(paper, { recursive: true }); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const before = String.raw`\documentclass{article}
+\begin{document}
+% A source note before the paragraph.
+This sentence have a mistake. % old source note with \unknown{unused syntax}
+The conclusion remain valid.
+
+This is in% Keep the joined word.
+correct. The rate is 10\% and remains fixed.
+
+The old explanation is vague.% Keep the same paragraph.
+The paragraph continues here.
+\end{document}
+`;
+  const after = before.replace('have', 'has').replace('old source note', 'new source note').replace('remain valid', 'remains valid').replace('in%', 'un%')
+    .replace('The old explanation is vague.', 'The revised explanation applies the induction hypothesis to the preceding step and establishes the conclusion.');
+  const file = path.join(paper, 'paper.tex'); await fs.writeFile(file, before);
+  const projects = new ProjectService(path.join(root, 'cache')), p = await projects.open(file), compiler = new CompileService(projects, path.join(root, 'builds'));
+  try {
+    const ordinary = await compiler.compile(p.id, before, 'pdflatex'); assert(ordinary.success, ordinary.log);
+    const bytes = await compiler.pdf(ordinary.id), service = new ChangesPdfService(projects, compiler);
+    const markup = await service.build({ projectId: p.id, before, after, name: 'Session start', engine: 'pdflatex' });
+    assert(markup.build?.success, markup.build?.log);
+    assert(markup.build.dependenciesVerified);
+    assert.equal(markup.changes.filter(c => c.layout === 'omitted').length, 1);
+    assert.equal(markup.changes.filter(c => c.layout === 'inline').length, 4);
+    const clean = await service.present(p.id, markup.id, 'clean'); assert(clean.build?.success, clean.build?.log);
+    for (const artifact of [markup, clean]) {
+      const generated = await fs.readFile(path.join(root, 'builds', artifact.build!.id, 'paper.tex'), 'utf8');
+      assert(generated.includes('% new source note with \\unknown{unused syntax}\n'));
+      assert(generated.includes('% Keep the same paragraph.\nThe paragraph continues here.'));
+      assert(generated.includes('10\\%'));
+      assert(generated.includes('Change 2 not shown.'));
+      for (const c of artifact.changes) assert.equal((await service.locate(p.id, artifact.id, c.id)).kind, 'mapped');
+      assert.equal(await compiler.validate(p.id, artifact.build!.id, after), false);
+    }
+    const markedTex = await fs.readFile(path.join(root, 'builds', markup.build.id, 'paper.tex'), 'utf8');
+    assert(markedTex.includes('\\MECompareDel{in}\\MECompareSep{}\\MECompareAdd{un}% Keep the joined word.\ncorrect.'));
+    const cleanTex = await fs.readFile(path.join(root, 'builds', clean.build.id, 'paper.tex'), 'utf8');
+    assert(cleanTex.includes('un% Keep the joined word.\ncorrect.'));
+    assert.equal(await fs.readFile(file, 'utf8'), before);
+    assert.deepEqual(await compiler.pdf(ordinary.id), bytes);
+  } finally { await compiler.stop(); }
+});
+
 test('real ordinary prose in labelled theorem/proof and beside unchanged math compiles without duplicated structure', { timeout: 90000 }, async t => {
   const root = path.resolve('.test-runs', 'changes-prose-' + randomUUID()); await fs.mkdir(path.join(root, 'paper'), { recursive: true });
   t.after(() => fs.rm(root, { recursive: true, force: true }));

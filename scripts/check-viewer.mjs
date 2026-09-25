@@ -16,10 +16,13 @@ const root = path.join(appRoot, '.test-runs', 'viewer-' + Date.now()), copy = pa
 const evidence = path.join(appRoot, 'test-evidence', 'viewer-' + Date.now());
 await fs.mkdir(copy, { recursive: true }); await fs.mkdir(evidence, { recursive: true });
 await fs.cp(path.join(appRoot, 'dist'), path.join(copy, 'dist'), { recursive: true });
+await fs.symlink(path.join(appRoot, 'node_modules'), path.join(copy, 'node_modules'), 'dir');
 await fs.writeFile(path.join(copy, 'package.json'), JSON.stringify({ name: 'viewer-check', version: '1.2.0', main: 'dist/main.cjs', private: true }));
 const injection = `
-const viewerProbe = { file:null, hold:false, release:null, builds:0, preambles:0 };
+const viewerProbe = { file:null, hold:false, release:null, builds:0, preambles:0, pdfReads:0 };
 dialog.showOpenDialog = async()=>({ canceled:false, filePaths:[viewerProbe.file] });
+const realPdf = compiler.pdf.bind(compiler);
+compiler.pdf = async(...args)=>{viewerProbe.pdfReads++;return realPdf(...args);};
 const realCompile = compiler.compile.bind(compiler);
 compiler.compile = async(...args)=>{ viewerProbe.builds++; if(viewerProbe.hold) { viewerProbe.hold=false; await new Promise(resolve=>{viewerProbe.release=resolve;}); } return realCompile(...args); };
 codex.preamble = async()=>{throw new Error('Use the controlled preamble method');};
@@ -32,7 +35,15 @@ codex.preamble = async()=>{viewerProbe.preambles++;return {preamble:'\\\\documen
 `;
 await build({ entryPoints: [path.join(appRoot, 'src/main/index.ts')], outfile: path.join(copy, 'dist/main.cjs'), bundle: true, platform: 'node', format: 'cjs', target: 'node22', external: ['electron'],
   plugins: [{ name: 'viewer-probe', setup(b) { b.onLoad({ filter: /src\/main\/index\.ts$/ }, async a => ({ contents: await fs.readFile(a.path, 'utf8') + injection + controlled, loader: 'ts' })); } }] });
-const reader = await build({ stdin: { contents: "import {EditorView} from '@codemirror/view';import {undoDepth} from '@codemirror/commands';window.viewerRead=()=>{let v=EditorView.findFromDOM(document.querySelector('.source-pane .cm-content'));return {text:v.state.doc.toString(),undo:undoDepth(v.state),selection:v.state.selection.main.toJSON()};};", resolveDir: appRoot }, bundle: true, write: false, format: 'iife', platform: 'browser' });
+const reader = await build({ stdin: { contents: `
+import {EditorView} from '@codemirror/view';
+import {undoDepth} from '@codemirror/commands';
+const source=()=>EditorView.findFromDOM(document.querySelector('.source-pane .cm-content'));
+const diff=()=>EditorView.findFromDOM(document.querySelector('.text-diff-host .cm-content'));
+window.viewerRead=()=>{let v=source();return {text:v.state.doc.toString(),undo:undoDepth(v.state),selection:v.state.selection.main.toJSON()};};
+window.viewerDiff=()=>{let v=diff();return {text:v.state.doc.toString(),selection:v.state.selection.main.toJSON()};};
+window.viewerWrite=text=>{let v=source();v.dispatch({changes:{from:0,to:v.state.doc.length,insert:text},userEvent:'test.replace'});};
+`, resolveDir: appRoot }, bundle: true, write: false, format: 'iife', platform: 'browser' });
 const hash = text => createHash('sha256').update(text).digest('hex');
 const quote = 'The allocation are monotone.';
 const plain = 'A short synthetic note.\n\n' + quote + '\n\nThe proof follows by induction.\n';
@@ -59,6 +70,53 @@ async function open(file) {
 }
 async function home() { if (!await button('Close project').isVisible()) await button('Actions ▾').click(); await button('Close project').click(); await button('Open a LaTeX or text file').waitFor(); await page.evaluate(reader.outputFiles[0].text); }
 async function snapshot(name) { await page.screenshot({ path: path.join(evidence, name + '.png') }); }
+async function pdfGeometry() {
+  return page.locator('#pdf-surface > .pdf-reader .pdf-scroll').evaluate(el => {
+    const r=el.getBoundingClientRect();
+    return { x:r.x, y:r.y, width:r.width, height:r.height, top:el.scrollTop, left:el.scrollLeft, zoom:el.parentElement.querySelector('[aria-label="PDF zoom"]').value };
+  });
+}
+async function nativeFind() {
+  await application.evaluate(({Menu})=>{
+    const item=Menu.getApplicationMenu().items.find(i=>i.label==='Find')?.submenu?.items.find(i=>i.label==='Find in focused pane…');
+    if(!item) throw Error('Registered native Find command missing');
+    item.click();
+  });
+}
+async function pdfStaysRendered() {
+  const reads=await application.evaluate(()=>globalThis.__viewerProbe.pdfReads);
+  const style=await page.addStyleTag({content:'.pdf-scroll::-webkit-scrollbar{width:15px;height:15px}.pdf-scroll::-webkit-scrollbar-thumb{background:#999}'});
+  const previousStyle=await page.locator('#pdf-surface').getAttribute('style');
+  await page.locator('#pdf-surface').evaluate(p=>Object.assign(p.style,{position:'fixed',right:'15px',top:'80px',width:'550px',height:'900px',zIndex:'80'}));
+  receipt.renderStability=[];
+  for(const width of [480,550,660]) {
+    await page.locator('#pdf-surface').evaluate((p,width)=>p.style.width=width+'px',width);
+    await page.waitForTimeout(250);
+    const threshold=await page.locator('#pdf-surface').evaluate(p=>{
+      const s=p.querySelector(':scope > .pdf-reader .pdf-scroll'),css=getComputedStyle(s),paper=s.querySelector('.pdf-paper');
+      return (s.offsetWidth-parseFloat(css.paddingLeft)-parseFloat(css.paddingRight)-7.5)*paper.clientHeight/paper.clientWidth+parseFloat(css.paddingTop)+parseFloat(css.paddingBottom)+(p.clientHeight-s.clientHeight);
+    });
+    await page.locator('#pdf-surface').evaluate((p,h)=>p.style.height=h+'px',threshold);
+    await page.waitForTimeout(300);
+    const scroller=page.locator('#pdf-surface > .pdf-reader .pdf-scroll');
+    await scroller.getByLabel('PDF page 1, rendered',{exact:true}).waitFor();
+    const measurement=await scroller.evaluate(s=>new Promise(resolve=>{
+      const widths=new Set([s.clientWidth]);let renderChanges=0;
+      const mutation=new MutationObserver(entries=>{renderChanges+=entries.length;});
+      mutation.observe(s,{subtree:true,attributes:true,attributeFilter:['width','height','aria-label']});
+      const resize=new ResizeObserver(()=>widths.add(s.clientWidth));resize.observe(s);
+      setTimeout(()=>{mutation.disconnect();resize.disconnect();resolve({renderChanges,widths:[...widths],rendered:s.querySelector('canvas')?.getAttribute('aria-label')});},1600);
+    }));
+    receipt.renderStability.push({width,...measurement});
+    assert.equal(measurement.renderChanges,0,'Idle page must not restart rendering at the scrollbar threshold');
+    assert.equal(measurement.widths.length,1);assert.match(measurement.rendered,/, rendered$/);
+  }
+  await snapshot('pdf-stable-at-scrollbar-threshold');
+  await page.locator('#pdf-surface').evaluate((p,old)=>old===null?p.removeAttribute('style'):p.setAttribute('style',old),previousStyle);
+  await style.evaluate(s=>s.remove());await page.waitForTimeout(300);
+  assert.equal(await application.evaluate(()=>globalThis.__viewerProbe.pdfReads),reads,'Resize never reloads PDF bytes');
+  receipt.checks.push('Classic-scrollbar threshold at three widths / idle canvas remains rendered / no PDF reloads');
+}
 try {
   application = await _electron.launch({ executablePath: require('electron'), args: [copy], cwd: appRoot, env: { ...process.env, MODERN_EDITOR_RUNTIME_DIR: path.join(root, 'runtime') }, chromiumSandbox: true, timeout: 25000 });
   const child = application.process(); receipt.processes.push({ pid: child.pid, exited: false }); console.log('Owned Electron PID', child.pid);
@@ -69,6 +127,16 @@ try {
   await open(txtFile);
   assert.equal(await page.getByLabel('Viewer format').inputValue(), 'text');
   assert.equal(await button('Accept & compile').count(), 0); await page.getByText('No text changes', { exact:true }).waitFor();
+  const searchBefore=await read();
+  await page.locator('.text-diff-host .cm-content').focus();await nativeFind();
+  const textSearch=page.locator('.text-diff-host .cm-search input[name="search"]');await textSearch.waitFor();
+  assert(await textSearch.evaluate(e=>e===document.activeElement));
+  await textSearch.fill('');await textSearch.pressSequentially('allocation');await textSearch.press('Enter');
+  await poll(async()=>{const v=await page.evaluate(()=>window.viewerDiff());return v.text.slice(v.selection.anchor,v.selection.head)==='allocation';},'Text diff search selects a match');
+  assert.equal(await page.locator('.text-diff-host input[name="replace"]').count(),0,'Read-only Find has no replacement control');
+  assert.deepEqual(await read(),searchBefore,'Searching Text diff leaves source and Undo alone');
+  await textSearch.press('Escape');await page.locator('.text-diff-host .cm-search').waitFor({state:'hidden'});
+  receipt.checks.push('Registered native Find searches revised Text diff / read-only search / Escape / source and Undo preserved');
   const initial = await read(); await button('Preview').click();
   await page.getByText('Preview · not applied', { exact: true }).waitFor();
   assert.equal((await read()).text, initial.text); assert.equal((await read()).undo, initial.undo); assert.equal((await probe()).builds, 0);
@@ -92,15 +160,34 @@ try {
   receipt.checks.push('One checked preamble attempt / unchanged text body / one-step Undo');
   await home(); await open(texFile);
   await button('Compile').click(); await page.getByLabel('PDF matches the current source', {exact:true}).waitFor({ timeout:60000 });
+  await pdfStaysRendered();
   await page.getByRole('region', {name:'Compiled PDF',exact:true}).getByLabel('PDF zoom', {exact:true}).selectOption('1.25');
   const before = await read();
   await page.getByLabel('Proposed replacement', {exact:true}).fill('The allocation is weakly increasing.');
+  const draftGeometry = await pdfGeometry();
   await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor({timeout:60000});
   await page.locator('.pdf-passage-marker').waitFor({timeout:15000});
   assert.equal((await read()).text, before.text); assert.equal((await read()).undo, before.undo);
   assert.equal(await fs.readFile(texFile,'utf8'),tex);
   const project = await application.evaluate(() => globalThis.__viewerProjects.current);
   assert.equal(project.text, tex);
+  const previewGeometry=await pdfGeometry();
+  for(const key of ['x','y','width','height']) assert.equal(previewGeometry[key],draftGeometry[key], 'Showing preview information keeps PDF geometry: '+key);
+  for(const size of [[1600,980],[1120,760]]) {
+    await application.evaluate(({BrowserWindow},size)=>BrowserWindow.getAllWindows()[0].setContentSize(...size),size);
+    await page.waitForTimeout(400);
+    const stable=await pdfGeometry(), banner=await page.locator('.preview-banner').boundingBox(), viewer=await page.locator('#pdf-surface').boundingBox();
+    assert(banner.height<70,'Preview bar is compact'); assert(Math.abs(banner.y+banner.height-viewer.y-viewer.height)<2,'Preview bar is at the bottom');
+    await page.locator('.preview-details > summary').click(); await page.waitForTimeout(150);
+    assert.deepEqual(await pdfGeometry(),stable,'Opening preview details preserves bounds, scroll and zoom');
+    assert(await button('Refresh preview').isVisible()); assert(await button('Show text diff').isVisible());
+    await snapshot(size[0]===1600?'03-preview-details':'03-preview-details-narrow');
+    await page.locator('.preview-details > summary').click(); await page.waitForTimeout(100);
+    assert.deepEqual(await pdfGeometry(),stable,'Closing preview details preserves the PDF');
+  }
+  await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1600,980));
+  await page.waitForTimeout(400);
+  receipt.checks.push('Bottom preview bar / expanded details preserve PDF bounds, scroll and zoom at wide and narrow widths');
   await snapshot('03-pdf-proposal');
   await button('Return to draft').click(); const cachedAttempts=(await probe()).builds; await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor(); assert.equal((await probe()).builds,cachedAttempts); await button('Return to draft').click(); assert.equal(await page.getByRole('region',{name:'Compiled PDF',exact:true}).getByLabel('PDF zoom',{exact:true}).inputValue(),'1.25');
   await page.getByLabel('PDF matches the current source', {exact:true}).waitFor();
@@ -114,10 +201,10 @@ try {
   assert.equal(await page.locator('.pdf-reader:visible .pdf-state').innerText(), 'Preview out of date');
   assert.equal(await page.locator('.pdf-passage-marker:visible').count(), 0);
   assert.equal((await probe()).builds, previewBuilds);
-  await button('Show text diff').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor();
+  await page.locator('.preview-details > summary').click(); await button('Show text diff').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor();
   await page.getByLabel('Viewer format').selectOption('pdf');
   await page.locator('.preview-banner strong').filter({hasText:'Preview out of date'}).waitFor();
-  await button('Refresh preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor({timeout:60000});
+  await page.locator('.preview-details > summary').click(); await button('Refresh preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor({timeout:60000});
   await page.locator('.pdf-passage-marker').waitFor();
   assert.equal((await probe()).builds, previewBuilds + 1);
   assert.equal((await read()).text, beforeInputs.text); assert.equal((await read()).undo, beforeInputs.undo);
@@ -127,7 +214,7 @@ try {
   const attempts=(await probe()).builds;
   await page.getByLabel('Proposed replacement',{exact:true}).fill(''); await button('Preview').click();
   await page.getByText('Preview not possible',{exact:true}).waitFor(); assert.equal((await probe()).builds,attempts);
-  await button('Show text diff').click(); assert.equal((await read()).text,tex); await snapshot('04-deletion-text-diff'); await button('Return to draft').click();
+  await page.locator('.preview-details > summary').click(); await button('Show text diff').click(); assert.equal((await read()).text,tex); await snapshot('04-deletion-text-diff'); await button('Return to draft').click();
   await page.getByLabel('Viewer format').selectOption('pdf');
   await page.getByLabel('Proposed replacement',{exact:true}).fill('\\undefinedSyntheticMacro'); await button('Preview').click();
   await page.getByText('Preview not possible',{exact:true}).waitFor({timeout:60000}); assert.equal((await read()).text,tex); await button('Return to draft').click();
@@ -152,6 +239,26 @@ try {
   receipt.compactViewer = await page.locator('.viewer-pane').evaluate(el => { const caption=el.querySelector('.viewer-caption'), s=getComputedStyle(caption); return { viewerWidth:el.clientWidth, viewerRight:el.getBoundingClientRect().right, viewport:innerWidth, captionWidth:caption.clientWidth, captionScrollWidth:caption.scrollWidth, captionHeight:caption.clientHeight, captionScrollHeight:caption.scrollHeight, whiteSpace:s.whiteSpace, flexShrink:s.flexShrink }; });
   await snapshot('05-compact-viewer'); assert(await page.getByRole('separator',{name:'Resize comments and viewer'}).isVisible());
   receipt.checks.push('Six layouts / Compare → View / divider visible below old breakpoint');
+  // A hidden, previously used diff keeps its snapshot while a large draft changes.
+  await page.getByLabel('Viewer format').selectOption('pdf');
+  const hiddenBefore=await page.evaluate(()=>window.viewerDiff()), editBefore=await read();
+  const large=editBefore.text+'\n'+('An unchanged synthetic paragraph for a substantial editing session.\n\n'.repeat(4000));
+  for(const value of [large,large+'One new sentence.\n',large+'A corrected new sentence.\n']) {
+    await page.evaluate(text=>window.viewerWrite(text),value);await page.waitForTimeout(100);
+    assert.deepEqual(await page.evaluate(()=>window.viewerDiff()),hiddenBefore,'Hidden diff must not replace its document or selection');
+  }
+  await page.getByLabel('Viewer format').selectOption('text');
+  const latest=await read();
+  await poll(async()=>(await page.evaluate(()=>window.viewerDiff())).text===latest.text,'deferred diff catches up on reveal');
+  assert.equal((await read()).undo,latest.undo,'Revealing diff does not change source Undo');
+  await page.locator('.text-diff-host .cm-content').focus();await nativeFind();
+  await page.locator('.text-diff-host input[name="search"]').fill('');await page.locator('.text-diff-host input[name="search"]').pressSequentially('corrected');await page.locator('.text-diff-host input[name="search"]').press('Enter');
+  const selected=await page.evaluate(()=>window.viewerDiff());
+  await page.getByLabel('Viewer format').selectOption('pdf');await page.getByLabel('Viewer format').selectOption('text');
+  assert.deepEqual(await page.evaluate(()=>window.viewerDiff()),selected,'Unchanged reveal preserves the diff selection');
+  for(let i=0;i<3;i++) await button('Undo').click();
+  assert.equal((await read()).text,editBefore.text);assert.equal((await read()).undo,editBefore.undo);
+  receipt.checks.push('Large synthetic draft / no hidden diff updates / catch up on reveal / unchanged reveal preserves selection / source Undo remains intact');
   await home(); await open(texFile); await page.getByLabel('Viewer format').selectOption('pdf');
   assert.equal(await page.locator('.preview-banner').count(),0); assert.equal((await read()).text,tex); assert.equal(await page.locator('.pdf-passage-marker:visible').count(),0);
   receipt.checks.push('Reopen restores the ordinary PDF, never the proposal');

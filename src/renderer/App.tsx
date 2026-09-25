@@ -1,6 +1,7 @@
 import { HelpChatDrawer } from './HelpChatDrawer.tsx';
 import { editorAuthor, predecessorCredit } from '../shared/editor-credits.ts';
 import { ReviewProgress } from './ReviewProgress.tsx';
+import { reviewPresets } from '../shared/review-presets.ts';
 import { chatCommentForDraft, type ChatInput, type ChatTurn } from '../shared/help-chat.ts';
 import { ReferencePanel, SourcesUsedPanel } from './ReferencePanel.tsx';
 import { BuildPreparationPanel } from './BuildPreparationPanel.tsx';
@@ -36,9 +37,9 @@ import { ProposalPreview } from './ProposalPreview.tsx';
 import { ReadableArea } from './ReadableArea.tsx';
 import { DiscussionMessage } from './DiscussionMessage.tsx';
 import { applyProposal, commentsField, initialState, loadComments, alterComments, patchComments, validateReviewTransaction } from './editor-state.ts';
-import { PdfPane } from './PdfPane.tsx';
+import { PdfPane, type PdfPaneHandle } from './PdfPane.tsx';
 import { ChangesPdfPane } from './ChangesPdfPane.tsx';
-import { TextDiffPane } from './TextDiffPane.tsx';
+import { TextDiffPane, type TextDiffPaneHandle } from './TextDiffPane.tsx';
 import { documentMode, documentModeNotice, type DocumentMode } from '../shared/document-mode.ts';
 import { proposalPreview, proposalSignature, pdfPreviewProblem, type ProposalPreview as PreparedPreview } from '../shared/proposal-preview.ts';
 type PreviewState = { requestedAt?: number; projectId: string; commentId: string; source: string; candidate: PreparedPreview; engine: Engine; state: 'building' | 'ready' | 'unavailable'; reason?: string; build?: Build; jump?: PdfJump };
@@ -84,6 +85,8 @@ export function App() {
   const [previewInspection, setPreviewInspection] = useState<{ buildId: string; status: 'checking' | 'valid' | 'changed' | 'unavailable' } | null>(null);
   const [previewPosition, setPreviewPosition] = useState<PdfPosition>({ page: 1, zoom: 1 });
   const [comments, setComments] = useState<Comment[]>([]), [activeId, setActiveId] = useState<string | null>(null);
+  const comparisonReasonsKey = useMemo(() => JSON.stringify(comments.filter(c => c.decision === 'applied' || c.id === preview?.commentId)
+    .map(c => [c.id, c.explanation, c.replacement, c.draft, c.appliedText, c.messages])), [comments, preview?.commentId]);
   const [status, setStatus] = useState('Ready'), [notice, setNotice] = useState(''), [error, setError] = useState('');
   const [busy, setBusy] = useState(false), [pdfOpen, setPdfOpen] = useState(false), [build, setBuild] = useState<Build | null>(null), [lastAttempt, setLastAttempt] = useState<Build | null>(null), [pdfText, setPdfText] = useState(''), [dependencyStale, setDependencyStale] = useState(false);
   const [inputInspection, setInputInspection] = useState<'valid' | 'changed' | 'unavailable' | null>(null);
@@ -92,7 +95,8 @@ export function App() {
   const approvedBuildInputs = useRef<string[] | undefined>(undefined), buildHelpEpoch = useRef(0);
   const [engine, setEngine] = useState<Engine>('pdflatex'), [showHistory, setShowHistory] = useState(false), [notesOpen, setNotesOpen] = useState(false), [canUndo, setCanUndo] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false), [commentsHidden, setCommentsHidden] = useState(false);
-  const [aiBusy, setAiBusy] = useState(false), [reviewOpen, setReviewOpen] = useState(false), [instructions, setInstructions] = useState('Improve clarity and technical precision. Preserve notation. Flag mathematical concerns with an explanation.');
+  const [aiBusy, setAiBusy] = useState(false), [reviewOpen, setReviewOpen] = useState(false), [instructions, setInstructions] = useState<string>(reviewPresets[0].instructions);
+  const [localEditsOnly, setLocalEditsOnly] = useState(true);
   const [discussionBusy, setDiscussionBusy] = useState(false), discussionLock = useRef(false);
   const [preambleBusy, setPreambleBusy] = useState(false), preambleRun = useRef<{ cancelled: boolean } | null>(null);
   const buildRun = useRef<{ cancelled: boolean } | null>(null);
@@ -126,6 +130,7 @@ export function App() {
   }, [busy, locked, project?.id]);
   const writer = useRef(new RecoveryWriter<BufferInput>(value => window.editor.persist(value), e => setError('Recovery could not be saved: ' + errorText(e))));
   const host = useRef<HTMLDivElement>(null), view = useRef<EditorView | null>(null), projectRef = useRef<Project | null>(null), reviewRef = useRef<Review | null>(null), activeRef = useRef<string | null>(null);
+  const ordinaryPdfFind = useRef<PdfPaneHandle>(null), changesPdfFind = useRef<PdfPaneHandle>(null), textDiffFind = useRef<TextDiffPaneHandle>(null);
   const commandRef = useRef<(command: string) => void>(() => {});
   const historyRef = useRef(false), laterRef = useRef(false);
   const [laterOnly, setLaterOnly] = useState(false);
@@ -936,7 +941,7 @@ export function App() {
   function reviewRequest() {
     const captured = input(), selection = view.current?.state.selection.main;
     if (!captured || !selection) throw new Error('Open a paper first.');
-    return { projectId: captured.projectId, text: captured.text, from: selection.empty ? 0 : selection.from, to: selection.empty ? captured.text.length : selection.to, instructions, attachmentPreviewId: attachmentPreview?.id, requestId: crypto.randomUUID() };
+    return { projectId: captured.projectId, text: captured.text, from: selection.empty ? 0 : selection.from, to: selection.empty ? captured.text.length : selection.to, instructions, localEditsOnly, attachmentPreviewId: attachmentPreview?.id, requestId: crypto.randomUUID() };
   }
   function previewContext(reply = false) {
     try {
@@ -956,7 +961,7 @@ export function App() {
       return window.editor.requestReview({ ...request, attachmentPreviewId: references?.id });
     }, delivered: () => inbox.current!.refresh(), cancel: () => window.editor.cancelCodex(), changed: setSectionProgress });
     sectionRun.current = runner;
-    try { await runner.run({ projectId: captured.projectId, text: captured.text, instructions }); }
+    try { await runner.run({ projectId: captured.projectId, text: captured.text, instructions, localEditsOnly }); }
     catch (e) { setError(errorText(e) + ' Completed sections remain available.'); }
     finally { sectionRun.current = null; setAiBusy(false); setReviewBusy(false); done(); }
   }
@@ -1042,9 +1047,18 @@ export function App() {
     setHelpChatOpen(false); setCompareOpen(false);
     if (pdf) showInPdf(c); else goToSource(c.from, c.to);
   }
-  commandRef.current = command => { if (command === 'help-chat') { setHelpChatOpen(value => !value); return; } if (command === 'settings') { setSettingsOpen(true); return; } if (command === 'help') { setHelpOpen(true); return; } if (settingsOpen || helpOpen || feedbackOpen) return; if (command === 'focus-comments') { revealComments(true); return; } if (command === 'comments') { toggleComments(); return; } if (command === 'focus-source') { revealSource(true); return; } if (gate.current.locked || (compareOpen && ['undo', 'redo', 'find'].includes(command))) return; if (command === 'toolbar') setToolbarCollapsed(value => !value); if (command === 'close-project') void close(true); if (command === 'open') void open(); if (command === 'save') void save(); if (command === 'compile') void compile(); if (command === 'pdf') togglePdf(); if (command === 'find') { const pane = document.activeElement?.closest('.pdf-pane'); if (pane) { const field = pane.querySelector<HTMLInputElement>('.pdf-search-controls input'); if (field) { field.focus(); field.select(); } else pane.querySelector<HTMLButtonElement>('.pdf-find-toggle')?.click(); } else openFind(); } if (command === 'undo' || command === 'redo') menuHistory(command === 'redo'); };
+  function findInFocusedPane() {
+    // Every viewer stays mounted. Route to the active instance, never to the
+    // first search field inside the shared container (which may be hidden).
+    if (showPdf && !compareOpen && document.activeElement?.closest('#pdf-surface')) {
+      const target = representation === 'changes' ? changesPdfFind.current : representation === 'text' ? textDiffFind.current : ordinaryPdfFind.current;
+      target?.find();
+    } else openFind();
+  }
+  commandRef.current = command => { if (command === 'help-chat') { setHelpChatOpen(value => !value); return; } if (command === 'settings') { setSettingsOpen(true); return; } if (command === 'help') { setHelpOpen(true); return; } if (settingsOpen || helpOpen || feedbackOpen) return; if (command === 'focus-comments') { revealComments(true); return; } if (command === 'comments') { toggleComments(); return; } if (command === 'focus-source') { revealSource(true); return; } if (gate.current.locked || (compareOpen && ['undo', 'redo', 'find'].includes(command))) return; if (command === 'toolbar') setToolbarCollapsed(value => !value); if (command === 'close-project') void close(true); if (command === 'open') void open(); if (command === 'save') void save(); if (command === 'compile') void compile(); if (command === 'pdf') togglePdf(); if (command === 'find') findInFocusedPane(); if (command === 'undo' || command === 'redo') menuHistory(command === 'redo'); };
   const freshness = !build ? 'No PDF compiled yet' : text !== pdfText ? 'PDF is older than the current source' : dependencyStale ? inputInspection === 'changed' ? 'PDF inputs have changed since compilation' : 'PDF inputs need verification' : build.engine !== engine ? 'PDF uses a different LaTeX engine' : dirty ? 'PDF matches the current unsaved source' : 'PDF matches the current source';
 
+  const comparisonBaselineControl = !preview && <label className="comparison-baseline">Against<select aria-label="Text diff baseline" disabled={comparisonBusy} value={comparisonBase} onChange={e => { const value = e.target.value; if (value === 'choose') void keepComparison(); else if (value === 'saved') toggleComparison(); else setComparisonBase(value as 'session' | 'pinned'); }}><option value="session">Session start</option>{baseline && <option value="pinned">{baseline.name}</option>}<optgroup label="Other versions"><option value="choose">Choose version…</option><option value="saved">Saved versions…</option></optgroup></select></label>;
   return <><main className="app-shell" aria-busy={locked} {...(locked ? { inert: '' } : {})}>
     <header className={`app-header unified-toolbar ${toolbarCollapsed ? 'collapsed' : ''}`}>
       <div className="brand-mark" title="Modern Editor">M</div><div className="file-name" title={project?.path}><strong>{project ? (displayName ? `${displayName} · ${project.name}` : project.name) : 'Modern Editor'}</strong>{project && <span className={dirty ? 'unsaved' : 'saved'}>{dirty ? 'Unsaved source' : 'Source saved'}</span>}{project && <button className="close-project" title="Return home; unsaved source and comments are kept in recovery" onClick={() => void close(true)}>Close project</button>}</div>
@@ -1062,6 +1076,13 @@ export function App() {
 
       {reviewOpen && <section className="review-request" aria-label="Request Codex review">
         <div className="request-heading"><strong>Review {view.current?.state.selection.main.empty ? 'this source file' : 'the selected passage'}</strong><button className="icon" aria-label="Close review request" onClick={() => setReviewOpen(false)}>×</button></div>
+        <div className="review-presets">
+          <label>Template<select aria-label="Review template" value={reviewPresets.find(p => p.instructions === instructions)?.id ?? 'custom'} title="Choose a template to replace the instructions below" onChange={e => { const preset = reviewPresets.find(p => p.id === e.target.value); if (preset) setInstructions(preset.instructions); }}>
+            {reviewPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<option value="custom" disabled>Custom instructions</option>
+          </select></label>
+          <label className="local-edits"><input type="checkbox" checked={localEditsOnly} onChange={e => setLocalEditsOnly(e.target.checked)} />Smallest local edits only</label>
+        </div>
+        <p className="review-policy-note">{localEditsOnly ? 'One small, independent edit per suggestion. Broader concerns become discussion comments.' : 'Suggestions may include larger rewrites when your instructions call for them.'}</p>
         <label>Instructions for this review<textarea maxLength={10000} value={instructions} onChange={e => setInstructions(e.target.value)} /></label>
         <details><summary>Saved paper instructions{paperInstructions !== savedInstructions ? ' · unsaved' : ''}</summary><p>Notation, assumptions and style preferences included in reviews and discussions for this document.</p><textarea aria-label="Paper instructions" maxLength={10000} value={paperInstructions} onChange={e => setPaperInstructions(e.target.value)} /><button disabled={aiBusy || paperInstructions === savedInstructions} onClick={() => void saveInstructions()}>Save paper instructions</button></details>
         <div className="request-actions"><button className="primary" disabled={aiBusy || attachmentBusy || attachmentPending || paperInstructions !== savedInstructions} onClick={() => void requestReview()}>Start review</button><button disabled={aiBusy || attachmentBusy || attachmentPending || paperInstructions !== savedInstructions} onClick={() => void startSections()}>Review section by section</button><button onClick={() => previewContext()}>Preview context sent to Codex</button><button onClick={() => showAttachments(true)}>Attach context{referenceState.roots.some(r => r.enabled) ? ` (${referenceState.roots.filter(r => r.enabled).length})` : attachmentPreview ? ` (${attachmentPreview.selections.length})` : '…'}</button></div>
@@ -1128,18 +1149,21 @@ export function App() {
         </aside>
         {['three', 'writing'].includes(arrangement) && pdfOpen && <PaneDivider label={commentsHidden ? "Resize source and viewer" : "Resize comments and viewer"} extraClass="pdf-divider" onMove={delta => commentsHidden ? resizePane(0, delta, 2) : resizePane(1, delta)} />}
         <section id="pdf-surface" className="pdf-pane viewer-pane" hidden={!showPdf || compareOpen} aria-label="Document viewer">
-          <div className="viewer-controls"><label>View<select aria-label="Viewer format" value={representation} onChange={e => { cancelPdfNavigation(); setRepresentation(e.target.value as 'pdf' | 'text' | 'changes'); }}><option value="text">Text diff</option>{docMode === 'latex' && <><option value="pdf">PDF</option><option value="changes">Changes PDF</option></>}</select></label>
-            {representation !== 'pdf' && !preview && <label className="comparison-baseline">Against<select aria-label="Text diff baseline" disabled={comparisonBusy} value={comparisonBase} onChange={e => { const value = e.target.value; if (value === 'choose') void keepComparison(); else if (value === 'saved') toggleComparison(); else setComparisonBase(value as 'session' | 'pinned'); }}><option value="session">Session start</option>{baseline && <option value="pinned">{baseline.name}</option>}<optgroup label="Other versions"><option value="choose">Choose version…</option><option value="saved">Saved versions…</option></optgroup></select></label>}
+          {representation !== 'changes' && <div className="viewer-controls"><label>View<select aria-label="Viewer format" value={representation} onChange={e => { cancelPdfNavigation(); setRepresentation(e.target.value as 'pdf' | 'text' | 'changes'); }}><option value="text">Text diff</option>{docMode === 'latex' && <><option value="pdf">PDF</option><option value="changes">Changes PDF</option></>}</select></label>
+            {representation !== 'pdf' && comparisonBaselineControl}
             <button className="icon viewer-close" aria-label="Hide viewer" onClick={closePdf}>×</button>
-          </div>
-          {preview ? <div className={'preview-banner' + (representation === 'changes' ? ' compact-preview' : '')} role="status"><strong>{representation === 'pdf' && preview.build ? previewPdfLabel : !previewCurrent ? 'Preview out of date' : preview.state === 'building' ? 'Preparing preview…' : representation === 'pdf' && (!preview.build || preview.state === 'unavailable') ? 'Preview not possible' : 'Preview · not applied'}</strong>
+          </div>}
+          {preview ? <div className="preview-banner"><strong role="status">{representation === 'pdf' && preview.build ? previewPdfLabel : !previewCurrent ? 'Preview out of date' : preview.state === 'building' ? 'Preparing preview…' : representation === 'pdf' && (!preview.build || preview.state === 'unavailable') ? 'Preview not possible' : 'Preview · not applied'}</strong>
+            <button onClick={leavePreview}>Return to draft</button>
+            <details className="preview-details" key={representation}><summary aria-label="Preview details">Details</summary><div className="preview-info">
             {(representation !== 'changes' || !previewCurrent || preview.reason) && <p>{!previewCurrent ? 'The source, proposal or engine changed. Refresh before relying on this preview.' : representation === 'pdf' && preview.build && previewPdfStatus !== 'valid' ? previewPdfStatus === 'checking' ? 'Checking the files used by this preview.' : 'Compilation inputs changed or could not be checked. Refresh before relying on this PDF.' : preview.reason ?? (representation === 'text' ? 'Current draft → proposed draft. Your text and comment decision are unchanged.' : 'Tentative draft; the marker shows the nearby typeset region. Your source PDF is kept separately.')}</p>}
-            {representation === 'pdf' && !preview.build && <p>The ordinary paper PDF is shown below.</p>}<button onClick={leavePreview}>Return to draft</button>{(representation !== 'changes' || !previewCurrent) && <button disabled={busy || !active || active.decision !== 'open'} onClick={() => void previewSuggestion()}>Refresh preview</button>}{representation === 'pdf' && <button onClick={() => setRepresentation('text')}>Show text diff</button>}
+            {representation === 'pdf' && !preview.build && <p>The ordinary paper PDF is shown.</p>}{(representation !== 'changes' || !previewCurrent) && <button disabled={busy || !active || active.decision !== 'open'} onClick={() => void previewSuggestion()}>Refresh preview</button>}{representation === 'pdf' && <button onClick={() => setRepresentation('text')}>Show text diff</button>}
             {preview.build && preview.build.diagnostics.length > 0 && <details><summary>Preview build warnings ({preview.build.diagnostics.length})</summary>{preview.build.diagnostics.map((d, i) => <p key={i}>{d.message}</p>)}</details>}
+            </div></details>
           </div> : representation === 'text' ? <p className="viewer-caption">{comparisonBase === 'pinned' && baseline ? baseline.name : 'Session start'} → Current draft · {dirty ? 'includes unsaved edits' : 'saved'} · Save keeps the comparison fixed</p> : null}
-          <ChangesPdfPane key={project.id + ':changes'} input={{ projectId: project.id, before: preview?.source ?? (comparisonBase === 'pinned' && baseline ? baseline.text : sessionText), after: preview?.candidate.text ?? text, name: preview ? 'Current draft' : comparisonBase === 'pinned' && baseline ? baseline.name : 'Session start', engine, proposalId: preview?.commentId, selectedPaths: approvedBuildInputs.current }} visible={showPdf && !compareOpen && representation === 'changes'} disabled={busy || aiBusy || locked} proposalCurrent={!preview || previewCurrent} previewRequest={preview?.requestedAt} events={changeEvents} work={comparisonWork} onClose={closePdf} onSource={goToSource} onText={() => setRepresentation('text')} />
-          <TextDiffPane key={project.id} original={preview?.source ?? (comparisonBase === 'pinned' && baseline ? baseline.text : sessionText)} text={preview?.candidate.text ?? text} visible={showPdf && !compareOpen && representation === 'text'} focusKey={preview ? preview.commentId + preview.candidate.signature : active?.id} focusAt={preview?.candidate.from ?? (active?.validity === 'current' ? active.from : undefined)} />
-          <PdfPane visible={showPdf && !compareOpen && representation === 'pdf'} followComments={preview ? false : followComments} onFollowChange={changeFollowing} jump={preview ? (previewPdfCurrent && preview.state === 'ready' ? preview.jump : null) : pdfJump} build={preview?.build ?? (viewCandidate ? candidateBuild : build)} freshness={preview?.build ? previewPdfLabel : viewCandidate ? 'Candidate PDF · not applied' : freshness} position={preview?.build ? previewPosition : viewCandidate ? candidatePosition : pdfPosition} onPositionChange={change => (preview?.build ? setPreviewPosition : viewCandidate ? setCandidatePosition : setPdfPosition)(previous => ({ ...previous, ...change }))} onUserNavigate={stopPendingPdfNavigation} onClose={closePdf} />
+          <ChangesPdfPane reasonsKey={comparisonReasonsKey} findHandle={changesPdfFind} key={project.id + ':changes'} input={{ projectId: project.id, before: preview?.source ?? (comparisonBase === 'pinned' && baseline ? baseline.text : sessionText), after: preview?.candidate.text ?? text, name: preview ? 'Current draft' : comparisonBase === 'pinned' && baseline ? baseline.name : 'Session start', engine, proposalId: preview?.commentId, selectedPaths: approvedBuildInputs.current }} visible={showPdf && !compareOpen && representation === 'changes'} disabled={busy || aiBusy || locked} proposalCurrent={!preview || previewCurrent} previewRequest={preview?.requestedAt} events={changeEvents} work={comparisonWork} baselineControl={comparisonBaselineControl} onFormat={format => { cancelPdfNavigation(); setRepresentation(format); }} onClose={closePdf} onSource={goToSource} onText={() => setRepresentation('text')} />
+          <TextDiffPane findHandle={textDiffFind} key={project.id} original={preview?.source ?? (comparisonBase === 'pinned' && baseline ? baseline.text : sessionText)} text={preview?.candidate.text ?? text} visible={showPdf && !compareOpen && representation === 'text'} focusKey={preview ? preview.commentId + preview.candidate.signature : active?.id} focusAt={preview?.candidate.from ?? (active?.validity === 'current' ? active.from : undefined)} />
+          <PdfPane findHandle={ordinaryPdfFind} bottomControls hideClose visible={showPdf && !compareOpen && representation === 'pdf'} followComments={preview ? false : followComments} onFollowChange={changeFollowing} jump={preview ? (previewPdfCurrent && preview.state === 'ready' ? preview.jump : null) : pdfJump} build={preview?.build ?? (viewCandidate ? candidateBuild : build)} freshness={preview?.build ? previewPdfLabel : viewCandidate ? 'Candidate PDF · not applied' : freshness} position={preview?.build ? previewPosition : viewCandidate ? candidatePosition : pdfPosition} onPositionChange={change => (preview?.build ? setPreviewPosition : viewCandidate ? setCandidatePosition : setPdfPosition)(previous => ({ ...previous, ...change }))} onUserNavigate={stopPendingPdfNavigation} onClose={closePdf} />
         </section>
       </div>
       {compareOpen && <ComparePane plain={docMode === 'text'} projectId={project.id} onSavedVersion={compareSavedVersion} position={comparisonPosition.current} baseline={baseline ?? project.sessionBaseline ?? null} text={text} dirty={dirty} pending={comparisonBusy} onChoose={() => void keepComparison()} onPin={name => void keepComparison(name)} onReturn={returnToSource} />}

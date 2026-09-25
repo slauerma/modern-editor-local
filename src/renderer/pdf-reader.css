@@ -1,4 +1,6 @@
-.continuous-pdf .pdf-scroll { overflow-anchor:none; }
+/* Fit width must not depend on whether a page currently needs a scrollbar.
+   Otherwise classic scrollbars can alternate the width and restart rendering. */
+.continuous-pdf .pdf-scroll { overflow-anchor:none; scrollbar-gutter:stable; }
 .pdf-pages { position:relative; margin-inline:auto; }
 .continuous-pdf .pdf-paper { margin:0; min-height:0; overflow:hidden; }
 .pdf-page-placeholder { position:absolute; inset:0; display:grid; place-items:center; padding:20px; color:#7d8b78; font-size:12px; }

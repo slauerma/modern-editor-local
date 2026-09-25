@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.1 — PDF viewing and comparison reliability
+
+- Keep PDF reading stable at fit width and preserve the selected change, open explanation and reading position during Changes PDF refreshes.
+- Use a compact viewer toolbar and bottom explanations. Reasons appear first; exact LaTeX comparisons expand on request, and margin buttons appear with **Why?**.
+- Route Find to the active PDF or Text diff view, and avoid doing hidden text-diff work.
+- Show ordinary prose edits alongside source comments, theorem/proof structure and unchanged equations. Use exact comparison destinations, preserve existing `ulem` options, and explicitly omit unsafe command arguments or grouped content.
+- Reuse unchanged comparison results after checking their inputs. Refresh still requests Sol; **Build locally without Sol** and a clearly labeled local result keep comparisons usable when Sol analysis fails.
+- Offer editable review presets adapted from Kevin Bryan's ModernEditor and a smallest-local-edits option.
+- Tighten Sol arrangement validation, make paused reason recording visible, and improve bounded debug-record cleanup.
+
 ## 1.2.0 — Text viewer, Changes PDF and proposal previews
 
 - Open UTF-8 `.txt` files and LaTeX fragments in Text mode, with the comment queue and a live text diff. Compare with Session start or an older version; Save keeps the baseline fixed.

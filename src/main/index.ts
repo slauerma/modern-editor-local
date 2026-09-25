@@ -19,6 +19,7 @@ import { feedbackRequestSchema } from '../shared/feedback.ts';
 import { CodexService } from './codex-service.ts';
 import { CodexClient } from './codex-client.ts';
 import { ChangesPdfService } from './changes-pdf.ts';
+import { readComparisonMarkers } from './comparison-markers.ts';
 import { BuildInputHelp } from './build-input-help.ts';
 import { buildInputLimitsSchema, buildInputPathsSchema } from '../shared/build-input-help.ts';
 import { inspectSourceRecovery, writeSourceCopy } from './source-export.ts';
@@ -58,7 +59,8 @@ codex.client.debugRecord = record => {
   } else void debug.record(record.kind, 'Codex ' + record.kind, record.data);
 };
 const buildHelp = new BuildInputHelp(projects, compiler, codex);
-const changesPdf = new ChangesPdfService(projects, compiler, codex);
+const changesPdf = new ChangesPdfService(projects, compiler, codex, (bytes, ids, signal) =>
+  readComparisonMarkers(bytes, ids, signal, path.join(app.getAppPath(), 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')));
 const tools = new ToolSettingsService(runtime, undefined, app.getAppPath());
 const helpChat = new HelpChat(projects, codex.client, path.join(runtime, 'help-chats'), async () => ({
   version: app.getVersion(), platform: process.platform, osVersion: process.getSystemVersion(),
@@ -255,7 +257,7 @@ handle('references:change', input => { const p = z.object({ projectId: z.string(
 handle('references:sources', id => references.history(z.string().parse(id)));
 handle('codex:feedback', input => codex.convertFeedback(feedbackRequestSchema.parse(input), message => window?.webContents.send('codex:progress', message)));
 handle('feedback:list', id => codex.feedback.list(z.string().parse(id)));
-handle('codex:review', input => { const p = textInput.extend({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), instructions: z.string().max(10000), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional() }).parse(input); return codex.review(p, message => window?.webContents.send('codex:progress', message)); });
+handle('codex:review', input => { const p = textInput.extend({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), instructions: z.string().max(10000), localEditsOnly: z.boolean().optional(), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional() }).parse(input); return codex.review(p, message => window?.webContents.send('codex:progress', message)); });
 handle('codex:reply', input => { const p = textInput.extend({ comment: commentSchema, message: z.string().min(1).max(10000), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional(), deeper: z.boolean().optional() }).parse(input); return codex.reply(p, message => window?.webContents.send('codex:progress', message)); });
 handle('codex:waiting', id => codex.results.list(z.string().parse(id)));
 handle('chat:pending', () => helpChat.pending());
@@ -343,12 +345,13 @@ if (primaryInstance) app.whenReady().then(async () => {
     if (debugSuspended || capturing || !window || window.isDestroyed() || !window.isVisible() || window.isMinimized() || closing) return;
     capturing = true;
     try {
+      const generation = debug.captureGeneration;
       const state = await debug.state();
-      if (debugSuspended || !state.settings.enabled || !state.settings.screenshots || Date.now() - lastCapture < state.settings.screenshotSeconds * 1000) return;
+      if (generation !== debug.captureGeneration || debugSuspended || !state.settings.enabled || !state.settings.screenshots || Date.now() - lastCapture < state.settings.screenshotSeconds * 1000) return;
       lastCapture = Date.now();
       const pixels = await window.webContents.capturePage();
       const bytes = pixels.resize({ width: Math.min(pixels.getSize().width, 1600) }).toJPEG(85);
-      await debug.record('screenshot', 'Periodic editor window', null, { bytes, extension: 'jpg' });
+      await debug.recordWindowScreenshot(generation, bytes);
     } catch { /* Debug capture must never interrupt editing or closing. */ }
     finally { capturing = false; }
   })(); }, 10000);

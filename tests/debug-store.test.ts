@@ -64,3 +64,28 @@ test('a failed debug write reports a notice but cannot block the close drain', a
     assert.match((await store.state()).notice, /could not be saved/);
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
+
+
+test('disabling periodic screenshots invalidates an in-flight capture while other logging stays on', async () => {
+  const { root, store } = await fixture();
+  try {
+    await store.configure({ ...defaultDebugSettings, enabled: true, screenshots: true });
+    const generation = store.captureGeneration;
+    let finish!: () => void;
+    const capture = new Promise<void>(resolve => { finish = resolve; }).then(() => store.recordWindowScreenshot(generation, Buffer.from('synthetic capture')));
+    await store.configure({ ...defaultDebugSettings, enabled: true, screenshots: false });
+    finish(); await capture;
+    await store.record('event', 'Still recording events', { synthetic: true });
+    assert.deepEqual((await store.state()).entries.map(e => e.kind), ['event']);
+    await store.configure({ ...defaultDebugSettings, enabled: true, screenshots: true });
+    await store.recordWindowScreenshot(generation, Buffer.from('late capture from before off/on'));
+    assert.equal((await store.state()).entries.length, 1);
+    await store.recordWindowScreenshot(store.captureGeneration, Buffer.from('new capture'));
+    assert.equal((await store.state()).entries.filter(e => e.kind === 'screenshot').length, 1);
+    const beforeClearing = store.captureGeneration;
+    await store.remove('all');
+    await store.configure({ ...defaultDebugSettings, enabled: true, screenshots: true });
+    await store.recordWindowScreenshot(beforeClearing, Buffer.from('late capture after clearing'));
+    assert.equal((await store.state()).entries.length, 0);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});

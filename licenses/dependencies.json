@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "828e99fc1b66f98878f2658adea42fe878feeec121ac61c66e48adcf7d4bbd5a",
+  "lockfileSha256": "0dadb5d76598717d341a618f61f7acb379bd3bc29b2ebc4ca0a74e3c0a9c664a",
   "packages": [
     {
       "name": "@codemirror/commands",
@@ -43,6 +43,17 @@
       "installed": true,
       "noticeFiles": [
         "node_modules/@codemirror/merge/LICENSE"
+      ]
+    },
+    {
+      "name": "@codemirror/search",
+      "version": "6.7.2",
+      "license": "MIT",
+      "development": false,
+      "optional": false,
+      "installed": true,
+      "noticeFiles": [
+        "node_modules/@codemirror/search/LICENSE"
       ]
     },
     {
@@ -1219,6 +1230,10 @@
     {
       "path": "node_modules/@codemirror/merge/LICENSE",
       "sha256": "7c6e3a020c1db4725560be9120b96eb2305ae7d37d155ee20e6023bb27ad144e"
+    },
+    {
+      "path": "node_modules/@codemirror/search/LICENSE",
+      "sha256": "05c6130cda97e7600ca91427a41e8a065efcf82365fc0293e7de80faec494c07"
     },
     {
       "path": "node_modules/@codemirror/state/LICENSE",

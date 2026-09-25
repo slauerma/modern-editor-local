@@ -15,7 +15,7 @@ Prepared comments need no Codex account. Generating reviews, asking questions, a
 
 ## Text mode and the right-hand viewer
 
-A file without a complete ordinary `\begin{document}` / `\end{document}` wrapper opens in **Text mode**. Write ordinary text or a LaTeX fragment on the left, review comments in the middle, and read **Text diff** on the right. Paragraphs and literal commands are preserved; this is not a Markdown renderer. Text editing, comparison, acceptance and Undo do not require TeX or Codex.
+A file without a complete ordinary `\begin{document}` / `\end{document}` wrapper opens in **Text mode**. Write ordinary text or a LaTeX fragment on the left, review comments in the middle, and read **Text diff** on the right. Paragraphs and literal commands are preserved; this is not a Markdown renderer. Text editing, comparison, acceptance and Undo do not require TeX or Codex. **Find** (Command+F with focus in Text diff) searches the revised text; it does not search deleted text or modify the draft.
 
 The default comparison is **Session start**, captured from the opened draft, including recovered unsaved text. Save does not reset it. In the **Against** menu, **Choose version…** selects an older `.tex` or `.txt` file; **Saved versions…** opens the wider comparison and save history. The opening checkpoint is replaced at the next opening; pin a baseline through Compare versions when you want to retain that reference. Comparisons cover this source file, not historical copies of all its dependencies.
 
@@ -25,17 +25,23 @@ Use the right pane's **View** selector to switch a complete LaTeX paper between 
 
 ## Changes PDF
 
-Choose **Changes PDF** in the right-hand viewer to start its GPT-6 Sol agent. Generation can take a few minutes. While the view is open, it updates after **five accepted changes** by default, after **Save**, and when you press **Refresh**. Typing alone does not start another request. **Options** lets you change the acceptance interval or pause updates. **Stop** cancels a running update; leaving the view stops its current work. Each update uses your Codex account and includes unsaved edits. Use the arrows or change menu to navigate; explanations stay collapsed until needed.
+Choose **Changes PDF** in the right-hand viewer to start its GPT-6 Sol agent. Generation can take a few minutes. While the view is open, it updates after **five accepted changes** by default, after **Save**, and when you press **Refresh**. Typing alone does not start another request. **Comparison options (⋯)** holds the **Against** baseline, update interval and pause control. **Stop** cancels a running update; leaving the view stops its current work. Sol-assisted updates use your Codex account and include unsaved edits. Unchanged Save and reopen reuse the current comparison after checking its inputs; Refresh requests new analysis. Use the arrows or change menu to navigate; explanations stay collapsed until needed.
+
+**Build locally without Sol** in Comparison options creates the comparison without a model request. If Sol is unavailable or returns an unusable arrangement, the editor also builds locally and labels that result; recorded acceptance reasons remain available. The next scheduled update can use Sol again. Refresh preserves the open explanation, reading position and any uniquely matching selected change.
 
 The comparison uses the opened root source and current project resources; it does not reconstruct historical figures, bibliography or included files. Ordinary prose corrections can be marked beside unchanged headings, labels, theorem structure and inline math. Those unchanged commands execute only once. Unsupported changes remain explicitly listed; if no change can be marked safely, **Preview not possible** offers the exact text diff without compiling an unmarked paper. Identical versions show **No source changes**.
 
-**Revision markup** strikes through deleted wording and underlines additions. Small edits stay inline; substantial prose rewrites show the old paragraph followed by its replacement. Ordinary single display formulas can be marked as complete old/new formulas. **Clean paper** shows the revised text once, with numbered change markers. Both views use the same captured comparison; switching presentation compiles locally when needed and makes no additional Codex request. It does not include newer typing until the next scheduled update or **Refresh**.
+Ordinary `%` source notes do not hide nearby prose corrections. Their exact text and line endings stay in the generated source; if a note itself changes, that difference is listed separately with its exact wording in **Text diff**. Comments inside command arguments or formulas remain part of that syntax and are not split into prose.
 
-Use **Previous change**, **Next change**, the change selector or numbered margin markers to navigate. **Explain change** expands the exact before/after wording, recorded reason and labelled Sol summary. A deleted passage retains a marker in the clean view and its old wording in the explanation. **N not shown** opens changes available only in the exact Text diff. Explanations stay outside the typeset paper.
+The single viewer menu offers **PDF**, **Text diff**, **Revision markup** and **Clean paper**. Page navigation, zoom and Find sit at the bottom; opening settings, search or explanations leaves the PDF in place.
 
-**Recorded acceptance reason** preserves the explanation associated with an accepted suggestion, including whether its replacement was edited. Later source edits can mark it as edited again. Manual edits and older history may have **No reason recorded**. The comparison shows net changes: Undo removes differences when it restores the baseline. The supplemental local journal is bounded to 500 events / 8 MB; if unavailable or full, recording pauses with a notice and existing records are preserved. Source recovery and Save remain separate.
+**Revision markup** strikes through deleted wording and underlines additions. Small edits stay inline; substantial prose rewrites show the old paragraph followed by its replacement. Ordinary single display formulas can be marked as complete old/new formulas. **Clean paper** shows the revised text once, with optional numbered change markers. Both views use the same captured comparison; switching presentation compiles locally when needed and makes no additional Codex request. It does not include newer typing until the next scheduled update or **Refresh**.
 
-Unsupported changes—such as preamble edits, labels, numbered environments, source comments, whitespace-only edits or unfamiliar commands—appear in a **Changes not shown** summary, with their old/new source lines and a margin marker. Its location is the summary, not a guessed manuscript location. **Text diff** always supplies the exact source comparison. If the marked document fails to compile, the editor stops with **Preview not possible** and retains the ordinary paper PDF. There is no automatic repair attempt. This first version supports up to 100 changed blocks and requires the standard TeX packages `xcolor`, `ulem` and `hyperref`.
+Use **Previous change**, **Next change** or the change selector to navigate. **Why?** reveals the numbered margin buttons and opens a bottom panel with the recorded reason first, followed by the labelled Sol summary. Closing the explanation hides the buttons again, without recompiling, moving or resizing the PDF. **Compare LaTeX source** expands the exact before/after wording. A deleted passage retains its exact navigation location in the clean view and its old wording in this comparison. **N not shown** explains omissions from the selected presentation; some changes can still be marked in **Clean paper**, and **Text diff** retains every exact source change.
+
+**Recorded acceptance reason** preserves the explanation associated with an accepted suggestion, including whether its replacement was edited. Later source edits can mark it as edited again. Manual edits and older history may have **No reason recorded**. The comparison shows net changes: Undo removes differences when it restores the baseline. The supplemental local journal is bounded to 500 events / 8 MB; if unavailable or full, recording pauses with a notice in the comparison, including when Why is closed and existing records are preserved. Source recovery and Save remain separate.
+
+Unsupported changes—such as preamble edits, labels, numbered environments, source comments, whitespace-only edits or unfamiliar commands—appear in a **Changes not shown** summary, with their old/new source lines and a margin marker. Its location is the summary, not a guessed manuscript location. **Text diff** always supplies the exact source comparison. If the marked document fails to compile, the editor stops with **Preview not possible** and retains the ordinary paper PDF. There is no automatic repair attempt. This first version supports up to 100 changed blocks and uses `hyperref`; Revision markup also uses `xcolor` and `ulem`. Existing `ulem` options are respected. Unbraced command arguments and paragraphs inside command arguments or groups remain explicit limitations.
 
 Sol receives the changed source blocks and recorded reasons. It groups adjacent changes, selects supported layouts and supplies labelled summaries; the editor inserts the exact old/new source and checks every change is accounted for. Sol decides whether to inspect up to three comparison pages as images. **Options** reports which pages of the current presentation were checked, or that it has not been checked. Switching presentation does not reuse the other view’s visual verdict. A visual check concerns presentation, not the correctness of the paper. Failed or incomplete checks are labelled; they do not start repair loops. Unsupported comparisons stop with **Preview not possible**, with **Text diff** available. The agent always uses **GPT-6 Sol**, independently of the model chosen for reviews and Side Chat.
 
@@ -47,7 +53,7 @@ Choose **Preview** beside the comment's acceptance controls. It uses the actual 
 
 With **Changes PDF** selected, **Preview** automatically typesets the exact tentative edit in the selected presentation, including deletion markers and explicit unshown-change notices. It is labelled **not applied**.
 
-In Text mode (or with Text diff selected), the right pane compares the current draft with the proposed draft immediately. For a supported LaTeX body change, PDF Preview compiles an isolated candidate and highlights its nearby typeset region. The label **Preview · not applied** distinguishes it from the paper PDF. **Return to draft** restores the ordinary view and reading position. A repeated unchanged PDF preview reuses its cached build only after checking its inputs again.
+In Text mode (or with Text diff selected), the right pane compares the current draft with the proposed draft immediately. For a supported LaTeX body change, PDF Preview compiles an isolated candidate and highlights its nearby typeset region. A compact bottom bar says **Preview · not applied**; **Details** opens its explanation, **Refresh preview** and **Show text diff** without shifting the PDF. **Return to draft** restores the ordinary view and reading position. A repeated unchanged PDF preview reuses its cached build only after checking its inputs again.
 
 Edits to the source or proposal make an existing preview **out of date**; use **Refresh preview**. Switching comments leaves the preview without compiling the next comment. In the ordinary PDF preview, preamble-only edits, full deletions and unavailable PDF locations show **Preview not possible**; **Show text diff** remains available. A failed build leaves the paper PDF intact. No automatic repair or acceptance follows a preview. **Accept** still applies without compiling; **Accept & compile** retains its separate check. In Text mode, **Accept all** applies eligible suggestions together without TeX.
 
@@ -60,6 +66,10 @@ The next launch also starts at Home. Use **Open a LaTeX or text file** to reopen
 ## Ask for the review you need
 
 Click **Review with Codex**. The heading tells you whether you are reviewing **this source file** or **the selected passage**. To review the whole opened file, first click in the source to clear any selection. Included files such as `\input{chapter}` can compile, but their contents are not expanded into this review.
+
+**Template** offers General review and concise adaptations of Kevin Bryan's original **Academic style**, **Literary nonfiction** and **Creative fiction** presets. Choosing a template replaces the instructions below; you can edit them before sending. The style presets preserve technical terms, facts and the author's voice.
+
+**Smallest local edits only** starts checked. It asks Codex for one independent correction per suggestion, using the shortest safe source passage, with broader concerns left as discussion comments. It preserves complete LaTeX commands and enough context to locate repeated wording. Uncheck it to permit larger rewrites. The option applies to both **Start review** and **Review section by section**, and appears in **Preview context sent to Codex**. These review choices last for the current app session; they do not rewrite existing suggestions. Codex's adherence still needs your review.
 
 For a language pass, try:
 
@@ -159,7 +169,7 @@ For papers named `main.tex`, an optional **Actions → Compile & layout → Pape
 
 The PDF scrolls continuously across pages. The page field and arrows still let you jump directly, and reopening restores your reading position and zoom. Zoom choices **1.25× fit**, **1.5× fit**, and **2× fit** are relative to **Fit width**, not an absolute printed scale.
 
-Choose **Find** above the PDF to search its text. **Enter** or the down arrow advances to a highlighted match; **Shift+Enter** or the up arrow goes back. **Escape** closes search. Matches become available as indexing proceeds; the status shows incomplete or limited searches. Search uses the PDF currently displayed, including an older or candidate preview, and does not search images or change the source.
+Choose **Find** at the bottom of the PDF to search its text. **Enter** or the down arrow advances to a highlighted match; **Shift+Enter** or the up arrow goes back. **Escape** closes search. Matches become available as indexing proceeds; the status shows incomplete or limited searches. Search uses the PDF currently displayed, including an older or candidate preview, and does not search images or change the source.
 
 The comment's **Source · PDF** controls refer to that comment's passage. **Show in PDF** above the source uses the source selection or cursor instead. Navigation runs locally without a Codex request.
 
@@ -219,7 +229,7 @@ The buttons visibly show **Shift+A** for acceptance without compiling, **Shift+R
 | **Command+O**, **Command+S** | Open, Save |
 | **Command+T** or **Command+B** | Compile the current draft |
 | **Command+Z**, **Command+Shift+Z** | Undo, Redo |
-| **Command+F** | Find in the focused source or PDF pane |
+| **Command+F** | Find in the focused source, PDF or Text diff pane |
 | **Command+1**, **Command+2** | Focus source / comments |
 | **Command+Shift+P** | Show/hide PDF |
 | **Command+Shift+M** | Show/hide toolbar |
@@ -237,7 +247,7 @@ Open **Actions → Settings and Check setup…** or press **Command+,** to choos
 
 **Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It excludes manuscript text, file paths and account details. Expand **Copied setup details** to inspect the copied summary.
 
-**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **1.2.0**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
+**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **1.2.1**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
 
 ## Optional debugging
 

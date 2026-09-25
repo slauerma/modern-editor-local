@@ -9,7 +9,7 @@ We acknowledge **Kevin Bryan's original ModernEditor (July 2025)** and the subse
 - [Original ModernEditor by Kevin Bryan](https://github.com/kevincure/ModernEditor/tree/ba8839833de51fc1d2d99847fc390e0faebd8936). Its README identifies Kevin Bryan, July 2025, and MIT licensing.
 - [Modern-Editor-w-Import](https://github.com/slauerma/Modern-Editor-w-Import/tree/6502dd6171ade2f593722b4b680b33bc085dbee5). Its README credits "Original: Kevin Bryan (July 2025)" and identifies the subsequent port/maintainer. Its complete MIT notice, including both copyright holders, is preserved in [licenses/modern-editor-predecessor-MIT.txt](licenses/modern-editor-predecessor-MIT.txt).
 
-This acknowledgement records the project's history. This repository contains the new Electron implementation; it does not import the predecessor's Git history or publish the predecessor's browser application. If predecessor material is copied into a later revision, retain its complete existing MIT notice.
+This repository contains the new Electron implementation; it does not import the predecessor's Git history or publish the predecessor's browser application. The Academic style, Literary nonfiction and Creative fiction review presets in `src/shared/review-presets.ts` are abridged adaptations of Kevin Bryan's [original style prompts](https://github.com/kevincure/ModernEditor/blob/ba8839833de51fc1d2d99847fc390e0faebd8936/styles.js). Their existing MIT notice, including Kevin Bryan's copyright, is retained in [licenses/modern-editor-predecessor-MIT.txt](licenses/modern-editor-predecessor-MIT.txt).
 
 ## JavaScript dependencies and Electron
 

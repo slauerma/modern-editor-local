@@ -18,6 +18,12 @@ export class DebugStore {
   readonly limitBytes: number;
   private entryLimit: number;
   constructor(directory: string, limitBytes = 200_000_000, entryLimit = 500) { this.directory = directory; this.limitBytes = limitBytes; this.entryLimit = entryLimit; }
+  // Captures span an await outside the write queue. Changing settings or
+  // clearing records invalidates captures already in flight, including off/on.
+  get captureGeneration() { return this.epoch; }
+  recordWindowScreenshot(generation: number, bytes: Uint8Array) {
+    return this.record('screenshot', 'Periodic editor window', null, { bytes, extension: 'jpg' }, generation);
+  }
   get enabled() { return this.loaded && this.settings.enabled; }
   private serial<T>(action: () => Promise<T>): Promise<T> {
     const next = this.queue.catch(() => {}).then(action); this.queue = next; return next;
@@ -61,10 +67,10 @@ export class DebugStore {
       this.settings = checked; this.notice = ''; return this.snapshot();
     });
   }
-  record(kind: DebugEntry['kind'], label: string, data: unknown, image?: { bytes: Uint8Array; extension: 'png' | 'jpg' }) {
-    const epoch = this.epoch;
+  record(kind: DebugEntry['kind'], label: string, data: unknown, image?: { bytes: Uint8Array; extension: 'png' | 'jpg' }, captureGeneration?: number) {
+    const epoch = captureGeneration ?? this.epoch;
     return this.serial(async () => {
-      await this.load(); if (!this.enabled || epoch !== this.epoch) return;
+      await this.load(); if (!this.enabled || epoch !== this.epoch || captureGeneration !== undefined && !this.settings.screenshots) return;
       let content: string | Uint8Array;
       try { content = image?.bytes ?? JSON.stringify({ createdAt: new Date().toISOString(), kind, label, data }, null, 2); }
       catch { this.notice = 'A debug record could not be serialized.'; return; }

@@ -48,6 +48,7 @@
 **/node_modules/
 **/.modern-editor/
 **/.runtime/
+**/debugging/
 **/.test-runs/
 **/test-evidence/
 **/.env
