@@ -1,0 +1,35 @@
+1
+00:00:00,000 --> 00:00:04,000
+Review precise suggestions beside the source and PDF.
+
+2
+00:00:04,000 --> 00:00:10,000
+Shift+A accepts each edit. No compilation needed.
+
+3
+00:00:10,000 --> 00:00:13,000
+Compile once to update the PDF.
+
+4
+00:00:13,000 --> 00:00:16,000
+Compare the current draft with the start of the session.
+
+5
+00:00:16,000 --> 00:00:26,000
+Deleted text is struck out. New text is underlined.
+
+6
+00:00:26,000 --> 00:00:32,000
+See the reason for the change, right beside the paper.
+
+7
+00:00:32,000 --> 00:00:38,000
+Read the revised text without the deletion markup.
+
+8
+00:00:38,000 --> 00:00:45,000
+Inspect the precise source changes, including LaTeX.
+
+9
+00:00:45,000 --> 00:00:50,000
+Save your draft, then return to a clean home screen.

@@ -2,6 +2,8 @@
 
 A local desktop editor for LaTeX source, compiled PDF reading, and Codex-assisted review. It uses Electron, React, CodeMirror, and PDF.js.
 
+[Watch the 50-second Changes PDF demonstration](demo/README.md).
+
 **Version 1.3.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
 
 This is a personal project, kept lean for individual use. **macOS is the currently validated platform. Windows is not yet supported.** The repository contains development source; there is no packaged application or installer.
