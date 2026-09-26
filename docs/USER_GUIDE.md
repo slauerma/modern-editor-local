@@ -33,7 +33,7 @@ The comparison uses the opened root source and current project resources; it doe
 
 Ordinary `%` source notes do not hide nearby prose corrections. Their exact text and line endings stay in the generated source; if a note itself changes, that difference is listed separately with its exact wording in **Text diff**. Comments inside command arguments or formulas remain part of that syntax and are not split into prose.
 
-The single viewer menu offers **PDF**, **Text diff**, **Revision markup** and **Clean paper**. Page navigation, zoom and Find sit at the bottom; opening settings, search or explanations leaves the PDF in place.
+The single viewer menu offers **PDF**, **Text diff**, **Revision markup** and **Clean paper**. Page navigation, zoom and Find share the top viewer toolbar. In Changes PDF, open the compact **Page** menu for page, zoom, Find and PDF export controls. Opening menus, search or explanations leaves the PDF in place.
 
 **Revision markup** strikes through deleted wording and underlines additions. Small edits stay inline; substantial prose rewrites show the old paragraph followed by its replacement. Ordinary single display formulas can be marked as complete old/new formulas. **Clean paper** shows the revised text once, with optional numbered change markers. Both views use the same captured comparison; switching presentation compiles locally when needed and makes no additional Codex request. It does not include newer typing until the next scheduled update or **Refresh**.
 
@@ -69,7 +69,7 @@ Click **Review with Codex**. The heading tells you whether you are reviewing **t
 
 **Template** offers General review and concise adaptations of Kevin Bryan's original **Academic style**, **Literary nonfiction** and **Creative fiction** presets. Choosing a template replaces the instructions below; you can edit them before sending. The style presets preserve technical terms, facts and the author's voice.
 
-**Smallest local edits only** starts checked. It asks Codex for one independent correction per suggestion, using the shortest safe source passage, with broader concerns left as discussion comments. It preserves complete LaTeX commands and enough context to locate repeated wording. Uncheck it to permit larger rewrites. The option applies to both **Start review** and **Review section by section**, and appears in **Preview context sent to Codex**. These review choices last for the current app session; they do not rewrite existing suggestions. Codex's adherence still needs your review.
+**Smallest local edits only** starts checked. It asks Codex for one independent correction per suggestion, using the shortest safe source passage, with broader concerns left as discussion comments. It preserves complete LaTeX commands and enough context to locate repeated wording. Uncheck it to permit larger rewrites. Save this preference for the paper with **Save paper guidance**. It applies to reviews, section reviews, comment discussions, outside-feedback conversion and paper Side Chat. It appears in request previews and does not rewrite existing suggestions. Codex's adherence still needs your review.
 
 For a language pass, try:
 
@@ -81,7 +81,7 @@ For a separate mathematics pass:
 
 Choose **Start review**. Treat mathematical comments as suggestions to assess; a review is not proof verification. The service asks for a small set of useful comments, so one pass need not catch every issue. A single review accepts at most 120,000 characters; select a shorter passage or use section review for longer files.
 
-**Saved paper instructions** can hold notation and style preferences. Press **Save paper instructions** before starting a request. **Preview context sent to Codex** shows what the editor will supply; **Actions → Latest Codex context…** shows the latest preview or request for the open paper. Switching papers clears it. See [privacy details](../PRIVACY.md).
+**Actions → Paper instructions…** lets you inspect and edit the paper’s standing instructions, **Smallest local edits only**, and **Keep changes minimal and preserve my voice**. These are saved per paper and shared by paper reviews and discussions. Editor-only Side Chat does not receive them. Save guidance before requesting a review; saving alone makes no model request. A prepared but unsent Side Chat preview is refreshed after guidance changes. **Preview context sent to Codex** shows what the editor will supply; **Actions → Latest Codex context…** shows the latest preview or request for the open paper. Switching papers clears it. See [privacy details](../PRIVACY.md).
 
 ## Work through comments
 
@@ -91,13 +91,15 @@ To start a note without Codex, select source text and choose **Actions → Add c
 | --- | --- |
 | **Accept** / **Shift+A** | Applies the proposal and any listed packages without compiling, then advances. The PDF may now be older. Save is still separate. |
 | **Preview** | Shows the exact tentative draft without applying it; text diff or a supported candidate PDF. |
-| **Accept & compile** | Checks a candidate compilation, applies a passing proposal to the editor, then advances. Warnings can pause acceptance for inspection. |
+| **Accept & compile** | Checks a candidate compilation, applies a passing proposal, and stays on that comment so you can inspect its PDF highlight. **Next comment →** advances when you are ready. Warnings can pause acceptance for inspection. |
 | **More → Accept all applicable suggestions (N)** | In LaTeX mode, compiles one combined candidate for the eligible pending replacements, then applies them together as one undoable change. Text mode applies them together without compilation. |
 | **Skip** / **Next** | Advances without making a decision or setting a persistent skipped status. |
 | **Comment options → Later** | Sets an open comment aside, retaining its proposal and discussion across reopening. Use **Later (n)** and **Return to pending** to revisit it. |
 | **Reject** / **Shift+R** | Moves the current comment into History without changing the source. Undo restores it. |
 | **More → Dismiss pending comments** | Closes the current pending batch in one undoable action, retaining Later comments, history and discussions. |
 | **Comment options → Mark addressed manually** / **Resolve** | Closes a comment you handled yourself or an author question. |
+
+**Use original** copies the original passage into the editable proposal, so you can start from the author’s wording. It changes no source; **Undo** restores the previous proposal.
 
 **Overview** lists comments; **History** shows completed decisions. Rejected, dismissed and resolved comments can be reopened. **Reject** closes an unwanted comment; **Skip** leaves it pending. **Resolve** remains a separate action for an author question you have addressed. Undo can reverse recent edits and review decisions during the current session; the Undo stack does not survive quitting.
 
@@ -115,11 +117,15 @@ The comment body scrolls while navigation and decision buttons stay in place. Sh
 
 ## Turn outside feedback into comments
 
-Choose **Actions → Import outside feedback…**, add a source label, and paste referee notes, email feedback, or another AI's comments. **Preview request** shows the source and feedback that will be sent. **Turn into comments with Codex** saves the raw feedback locally before requesting a conversion.
+Choose **Actions → Import outside feedback…** and paste a numbered Markdown review or a JSON array of comments (an object with a `comments` array also works). Alternatively, choose **Turn into comments…** beside a saved pasted context. **Prepare items** saves the original feedback verbatim and captures the current draft and paper guidance locally; it sends nothing to Codex. Check the item count and **Preview next request**, then choose **Next batch** or **Convert remaining with Codex**.
 
-Inspect the returned advice, select the useful items, and choose **Add selected comments**. This adds comments for ordinary review; it does not accept replacements or save changes to the paper. Undo removes the import. General or unmatched advice remains visible as a question. If the draft has changed, quoted passages need confirmation before a replacement can be applied.
+**Add comments when ready** appends each completed batch to the queue while preserving your current comment and edits. It does not accept suggestions or save the manuscript, and it does not interrupt Undo for your own edits. Turn it off to inspect the returned advice and use **Add selected comments** instead; that manual import is undoable. Repeatedly adding the same saved items does not duplicate them. General or unmatched advice remains visible as a question. If the draft changes during conversion, quoted passages need confirmation before a replacement can be applied.
 
-The original feedback and completed conversions remain under **Saved feedback**, including failed attempts you can retry. One conversion accepts up to 60,000 feedback characters and 120,000 source characters and returns at most 30 comments.
+Conversions run in batches of up to ten review items, retaining the original item numbers. There is no 30-comment limit for a whole review. Each completed batch is saved before the next starts. Pause, reopen the paper or retry a failed request to continue the remaining items; the original feedback and previous results remain under **Saved outside feedback**. A prepared conversion always uses its captured draft and guidance. Prepare a new conversion to use a newer draft.
+
+The current limits are 2 MB of UTF-8 feedback, 1,000 review items, 60,000 characters per item, 12,000 introductory characters and 120,000 source characters. Oversized or malformed input is rejected explicitly; it is not silently truncated. Keep nested numbered lists indented so they remain part of the containing issue.
+
+Normal **Review with Codex** requests also offer **Add comments when ready**. You can continue through existing comments while the review runs. Completed suggestions are matched against the current draft; uncertain or changed passages cannot be accepted until their location is confirmed. Turn the option off to leave the result waiting for inspection.
 
 ## Attach local reference material
 
@@ -157,6 +163,26 @@ If you keep typing while a response is generated, an answer based on the earlier
 
 You can discuss a comment during the pass. **Ask after this section** queues one question: the current section completes, Codex answers the question, and the remaining review stays paused until **Continue review**. Only one model request runs at a time. Completed answers are retained, but the unfinished queue does not resume after quitting. A section must fit the 120,000-character request limit; a pass supports up to 40 sections. Use a narrower selection for an oversized section.
 
+## Pasted context
+
+Choose **Actions → Context and reference files… → Paste context…** (also available from paper Side Chat). Paste plain text or Markdown, give it a name and choose **Save and enable for this paper**. The app preserves the supplied text verbatim in local application storage. It does not call Codex when you paste, save, inspect, rename, copy, disable or remove context.
+
+Use **Inspect / copy** to read the saved text, rename it or copy the full text. Uncheck it to keep the document locally but exclude it from future requests. **Remove** deletes a pasted document’s saved copy; removing an ordinary reference only detaches it. Earlier request excerpts may remain in Sources used or conversation records.
+
+Each paste supports up to **2 MB of UTF-8 text**, with up to **12** combined pasted documents/reference locations per paper. A larger paste remains in the form so you can split it. Enabled context is available to reviews and comment discussions through bounded search/read tools; paper Side Chat uses it when **Let Codex read enabled context, references and the current draft** is selected. A large document is not automatically sent or read in full. **Sources used** records actual excerpts and coverage. Use **Paper instructions** for standing guidance and **Import outside feedback…** to convert a report into comments.
+
+## Classic view
+
+**Classic view** switches to a cream writing surface, narrow left controls and a bottom suggestion panel, inspired by the original ModernEditor. **Write / View** switches between the source and the current PDF or text comparison. **Notes** hides the bottom panel for writing; **Details** reveals the original passage and source comparison. **Workspace view** returns to the regular pane layout.
+
+Both layouts use the same live source editor, proposal drafts, comments and Undo history. Switching layout does not save, compile or accept anything. The selected layout is remembered for the paper; Undo remains session-only.
+
+## Files, history and PDF export
+
+Open **Files** in the top bar for source and neighboring resources, saved paper state, attached context, Side Chat and available PDF builds. **Reveal** opens the item’s location in the system file manager; **Copy path** copies its local path. **Saved versions…** opens existing history and comparison controls. The inventory does not delete or restore files.
+
+**Save displayed PDF…** exports the exact displayed PDF, including an older PDF, proposal preview or Changes PDF when selected. Check its status label first. It does not compile, apply proposals or save the source. The same export is in **PDF options (⋯)** or the Changes PDF **Page** menu. **Compile current draft & save PDF…** deliberately compiles the current buffer before exporting; unsaved source remains unsaved. These commands use the native Save dialog, so the PDF goes where you choose.
+
 ## Arrange your workspace
 
 Use **View** in the top bar to choose **Automatic**, **Source + comments**, **PDF + comments**, **Three panes**, **Source + PDF · writing**, or **PDF below · stacked**. Automatic uses three panes in a wide, tall window; smaller windows use **Source / PDF** tabs beside Comments so both have useful reading height. Left and right arrow keys switch between the focused tabs.
@@ -169,11 +195,11 @@ For papers named `main.tex`, an optional **Actions → Compile & layout → Pape
 
 The PDF scrolls continuously across pages. The page field and arrows still let you jump directly, and reopening restores your reading position and zoom. Zoom choices **1.25× fit**, **1.5× fit**, and **2× fit** are relative to **Fit width**, not an absolute printed scale.
 
-Choose **Find** at the bottom of the PDF to search its text. **Enter** or the down arrow advances to a highlighted match; **Shift+Enter** or the up arrow goes back. **Escape** closes search. Matches become available as indexing proceeds; the status shows incomplete or limited searches. Search uses the PDF currently displayed, including an older or candidate preview, and does not search images or change the source.
+Choose **Find** in the PDF toolbar (or the Changes PDF **Page** menu) to search its text. **Enter** or the down arrow advances to a highlighted match; **Shift+Enter** or the up arrow goes back. **Escape** closes search. Matches become available as indexing proceeds; the status shows incomplete or limited searches. Search uses the PDF currently displayed, including an older or candidate preview, and does not search images or change the source.
 
 The comment's **Source · PDF** controls refer to that comment's passage. **Show in PDF** above the source uses the source selection or cursor instead. Navigation runs locally without a Codex request.
 
-**Follow** beside the PDF zoom control is enabled by default; it brings each selected comment’s passage into view. Deliberately moving through comments marks the matching PDF region when its location can be established, preserving zoom and keyboard focus. A closed PDF stays closed, and following pauses during a candidate preview. Background answers do not move your view.
+**PDF options (⋯) → Follow selected comments** is enabled by default; it brings each selected comment’s passage into view. Deliberately moving through comments marks the matching PDF region when its location can be established, preserving zoom and keyboard focus. A closed PDF stays closed, and following pauses during a candidate preview. Background answers do not move your view.
 
 Changing the PDF page, scrolling, changing zoom, or opening Compare cancels a pending jump. The selected comment's amber band and margin bar remain while you read or zoom, with brief emphasis when switching comments. Editing the source, choosing another comment, or opening Compare clears the old marker. Moving to another comment starts following again.
 
@@ -199,7 +225,7 @@ Supply the original definitions of custom mathematical commands. This action pre
 
 Open **Codex Side Chat** in the top bar, or press **Command+Shift+H**. The drawer leaves your workspace in place. Closing it keeps the conversation and unsent question in this window. Select **Editor help** for program questions, even without an open paper, or **This paper** for its own conversation.
 
-Ask, for example, “Why did compilation fail?”, “Explain this lemma”, or “Make this suggestion more compact.” The installed editor version and bundled guides accompany every question. Expand **Context** to choose the current draft, selected passage, current comment, latest error/build details, or enabled reference folders. **Preview what is sent** shows the request; sent messages retain that context for inspection. The current draft can include unsaved changes. Long drafts include only their first 120,000 characters, with an explicit notice; select a later passage when needed.
+Ask, for example, “Why did compilation fail?”, “Explain this lemma”, or “Make this suggestion more compact.” The installed editor version and bundled guides accompany every question. Expand **Context** to choose the current draft, selected passage, current comment, latest error/build details, or enabled context and references. **Preview what is sent** shows the request; sent messages retain that context for inspection. The current draft can include unsaved changes. Long drafts include only their first 120,000 characters, with an explicit notice; select a later passage when needed.
 
 Paste a screenshot with **Command+V**, drop it into the question area, or choose **Attach screenshot…**. Click a thumbnail to enlarge it or × to remove it before sending. Up to three PNG/JPEG screenshots are accepted, each at most 2 MB and 4096 × 4096 pixels. The editor removes image metadata; inspect the visible image itself before sending. Screenshots are sent as images. Older screenshots remain in the saved chat but are not resent automatically—reattach one to ask about its pixels again.
 
@@ -247,7 +273,7 @@ Open **Actions → Settings and Check setup…** or press **Command+,** to choos
 
 **Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It excludes manuscript text, file paths and account details. Expand **Copied setup details** to inspect the copied summary.
 
-**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **1.2.1**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
+**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **1.3.0**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
 
 ## Optional debugging
 

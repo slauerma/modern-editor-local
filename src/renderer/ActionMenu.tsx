@@ -9,5 +9,5 @@ export function ActionMenu({ children, label = 'Actions ▾', menuLabel = 'Edito
     document.addEventListener('pointerdown', pointer); document.addEventListener('keydown', key);
     return () => { document.removeEventListener('pointerdown', pointer); document.removeEventListener('keydown', key); };
   }, [open]);
-  return <div className="actions-menu" ref={root}><button ref={trigger} aria-expanded={open} aria-controls={id} onClick={() => setOpen(v => !v)}>{label}</button>{open && <div id={id} className="actions-popover" aria-label={menuLabel} onClick={e => { if ((e.target as HTMLElement).closest('button')) setOpen(false); }}>{children}</div>}</div>;
+  return <div className="actions-menu" ref={root}><button type="button" ref={trigger} aria-expanded={open} aria-controls={id} onClick={() => setOpen(v => !v)}>{label}</button>{open && <div id={id} className="actions-popover" aria-label={menuLabel} onClick={e => { if ((e.target as HTMLElement).closest('button')) setOpen(false); }}>{children}</div>}</div>;
 }

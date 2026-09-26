@@ -12,7 +12,7 @@ assert(args.length === 0 || args.length === 2 && args[0] === '--playwright-packa
 const require = createRequire(path.join(appRoot, 'package.json'));
 const { _electron } = (args.length ? createRequire(path.resolve(args[1])) : require)('playwright');
 const root = path.join(appRoot, '.test-runs', 'changes-desktop-' + Date.now()), copy = path.join(root, 'desktop');
-const evidence = path.join(appRoot, 'test-evidence', 'changes-desktop-' + Date.now());
+const evidence = process.env.ME_TEST_EVIDENCE || path.join(appRoot, 'test-evidence', 'changes-desktop-' + Date.now());
 await fs.mkdir(copy, { recursive: true }); await fs.mkdir(evidence, { recursive: true });
 await fs.cp(path.join(appRoot, 'dist'), path.join(copy, 'dist'), { recursive: true });
 await fs.symlink(path.join(appRoot, 'node_modules'), path.join(copy, 'node_modules'), 'dir');
@@ -79,7 +79,13 @@ async function refresh() {
 }
 async function snapshot(name) { await page.waitForTimeout(400); await page.screenshot({ path: path.join(evidence, name + '.png') }); }
 async function pdfGeometry() {
-  return pane().locator('.pdf-scroll').evaluate(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,top:el.scrollTop,left:el.scrollLeft,zoom:el.parentElement.querySelector('[aria-label="PDF zoom"]').value};});
+  const menu=pane().locator('.compact-pdf-controls .actions-menu > button');
+  await menu.click();const zoom=await pane().getByLabel('PDF zoom').inputValue();await menu.click();
+  return pane().locator('.pdf-scroll').evaluate((el,zoom)=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,top:el.scrollTop,left:el.scrollLeft,zoom};},zoom);
+}
+async function setPdfZoom(value) {
+  const menu=pane().locator('.compact-pdf-controls .actions-menu > button');
+  await menu.click();await pane().getByLabel('PDF zoom').selectOption(value);await menu.click();
 }
 async function nativeFind() {
   await application.evaluate(({Menu})=>{
@@ -115,11 +121,11 @@ try {
   await button('Close Codex context').click(); await button('Start review').click();
   await poll(async()=>await application.evaluate(()=>globalThis.__comparisonProbe.reviewPrompts.length)===1 && await button('Review with Codex').isEnabled(),'local review completed');
   assert.deepEqual(await application.evaluate(()=>globalThis.__comparisonProbe.reviewPrompts[0]),previewed,'The exact previewed template and local-edit policy reach Codex through IPC');
-  await button('Review with Codex').click(); await localEdits.uncheck();
+  await button('Review with Codex').click(); await localEdits.uncheck();await button('Save paper guidance').click();
   await button('Start review').click();
   await poll(async()=>await application.evaluate(()=>globalThis.__comparisonProbe.reviewPrompts.length)===2 && await button('Review with Codex').isEnabled(),'ordinary review completed');
   assert.equal(await application.evaluate(()=>globalThis.__comparisonProbe.reviewPrompts[1].editPolicy),undefined,'The option can be disabled without losing author instructions');
-  await button('Review with Codex').click(); await localEdits.check();
+  await button('Review with Codex').click(); await localEdits.check();await button('Save paper guidance').click();
   await button('Review section by section').click();
   await page.getByText(/Section review complete/).waitFor();
   await button('Dismiss section progress').click();
@@ -199,7 +205,7 @@ try {
     assert.deepEqual(await pdfGeometry(),stable,'Opening baseline/settings leaves PDF bounds and position unchanged');
     await pane().locator('.changes-options > summary').press('Escape');
     assert(!await pane().getByLabel('Text diff baseline').isVisible());
-    await pane().getByRole('button',{name:'Find',exact:true}).click();
+    await pane().locator('.compact-pdf-controls .actions-menu > button').click();await pane().getByRole('button',{name:'Find in PDF…',exact:true}).click();
     assert(await pane().getByLabel('Find in PDF').isVisible());
     assert.deepEqual(await pdfGeometry(),stable,'Opening PDF search never moves the page');
     await pane().getByRole('button',{name:'Close PDF search',exact:true}).click();
@@ -224,7 +230,7 @@ try {
     assert.deepEqual(await application.evaluate(()=>({builds:globalThis.__comparisonProbe.builds,plans:globalThis.__comparisonProbe.arrangements})),toggleCounts,'Why makes no compile or Codex request');
   }
   await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1660,1100));
-  receipt.checks.push('One-row header / bottom page controls / options, search and reason overlays preserve PDF bounds, scroll and zoom at wide and narrow widths / raw LaTeX collapsed');
+  receipt.checks.push('One-row header with page controls / options, search and reason overlays preserve PDF bounds, scroll and zoom at wide and narrow widths / raw LaTeX collapsed');
   // A simultaneous mode choice and explicit update must not restart after Stop.
   const cancelCount = await application.evaluate(()=>{globalThis.__comparisonProbe.holdPersist=true;return globalThis.__comparisonProbe.builds;});
   await page.evaluate(()=>{const pane=document.querySelector('.changes-pdf-pane'),format=pane.querySelector('[aria-label="Viewer format"]');format.value='changes-clean';format.dispatchEvent(new Event('change',{bubbles:true}));pane.querySelector('[aria-label="Refresh Changes PDF"]').click();});
@@ -268,7 +274,7 @@ try {
   assert((await pane().innerText()).includes('Change not shown.'));
   // At fit width this one-page fixture is too short to scroll the marker
   // behind the panel. A normal reader zoom gives the regression room.
-  await pane().getByLabel('PDF zoom').selectOption('1.5');
+  await setPdfZoom('1.5');
   await pane().getByLabel('Comparison change').selectOption('0');
   await pane().locator('[data-change-note="change-1"].selected').waitFor({state:'attached'});
   const selectedNote = pane().locator('[data-change-note="change-1"].selected');
@@ -308,7 +314,7 @@ try {
   await page.waitForTimeout(100);
   assert.deepEqual(await pdfGeometry(),withAllowance,'Why toggles stay stationary with final-page scroll allowance');
   await selectedNote.evaluate((el,top)=>{el.style.top=top;},originalMarkerTop);
-  await pane().getByLabel('PDF zoom').selectOption('1');
+  await setPdfZoom('1');
   await pane().getByLabel('Comparison change').selectOption('0');
   await poll(noteUncovered,'fit-width marker remains unobscured');
   await snapshot('07-omitted-changes');

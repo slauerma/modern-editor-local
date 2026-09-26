@@ -30,7 +30,9 @@ export class ResultInbox {
     const captured = this.ports.input();
     if (!captured || this.ports.locked() || captured.projectId !== this.owner || captured.review.rootFile !== result.rootFile) return false;
     const same = await sourceHash(captured.text) === result.sourceHash;
-    if (automatic && !same) return false;
+    if (automatic && result.kind === 'review') {
+      if (result.autoAddComments === false || (!same && result.autoAddComments !== true)) return false;
+    } else if (automatic && !same) return false;
     const now = this.ports.input();
     if (!now || now.projectId !== captured.projectId || now.text !== captured.text || this.ports.locked()) return false;
     if (automatic && result.kind === 'reply' && !now.review.comments.some(c => c.id === result.commentId && c.original === result.original)) return false;

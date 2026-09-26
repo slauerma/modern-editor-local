@@ -1,3 +1,4 @@
+import { defaultEditPreferences } from '../src/shared/paper-guidance.ts';
 import * as previewTools from '../src/shared/proposal-preview.ts';
 import { documentMode, documentModeNotice } from '../src/shared/document-mode.ts';
 import { test } from 'node:test';
@@ -58,12 +59,12 @@ function fixture(text = quote) {
     finishClose: async () => { states.events.push('closed'); },
   };
   const scope: any = {
-    EditorState, Transaction, isolateHistory, undo, redo, documentMode, documentModeNotice, attachmentPromptContext, defaultKeymap, historyKeymap, commentSchema, crypto, defaultWorkspace, workspaceSchema, ...reviewTools, ...stateTools, ...preambleTools, ...contextTools, ...acceptanceTools, ...previewTools,
+    defaultEditPreferences, EditorState, Transaction, isolateHistory, undo, redo, documentMode, documentModeNotice, attachmentPromptContext, defaultKeymap, historyKeymap, commentSchema, crypto, defaultWorkspace, workspaceSchema, ...reviewTools, ...stateTools, ...preambleTools, ...contextTools, ...acceptanceTools, ...previewTools,
     document: { body: {}, activeElement: {} }, requestAnimationFrame: (callback: () => void) => { states.frame = callback; }, setCompareOpen: () => {},
     lastSource: { current: null }, lastReviewTop: { current: 0 }, revealPdf: () => {}, revealSource: () => {}, workspaceValues: { current: defaultWorkspace() }, restoredSource: { current: null }, laterRef: { current: false }, discussionLock: { current: false }, followPending: { current: null }, followTasks: { current: new LatestTask() },
     sourcePosition: () => defaultWorkspace().source,
     previewJob: { current: null }, previewCache: { current: null }, representation: 'pdf', pdfPosition: {page:1,zoom:1.25}, docMode: 'latex', build: null, candidateBuild: null, preambleRun: { current: null }, buildRun: { current: null }, sectionRun: { current: null }, comparisonPosition: { current: {} },
-    warningAcceptance: null,
+    warningAcceptance: null, laterOnly: false,
     approvedBuildInputs: { current: undefined }, buildHelpEpoch: { current: 0 }, buildRetry: null,
     displayedBuild: { current: null }, pdfRequest: { current: 0 }, keyboardReviewFocus: { current: null },
     gate: { current: gate }, window: { editor: api }, view: { current: editor }, projectRef: { current: p }, reviewRef: { current: review }, activeRef: { current: c.id }, historyRef: { current: false }, active: c,
@@ -72,7 +73,7 @@ function fixture(text = quote) {
     choose: (v: string) => { scope.activeRef.current = v; }, move: () => {},
   };
   for (const setter of ['Preview', 'PreviewPosition', 'DocMode', 'Representation', 'SessionText', 'ComparisonBase', 'Layout', 'CompactTab', 'DisplayName', 'ChangesOpen', 'CommentsHidden', 'ReviewBusy', 'ReviewOpen', 'CandidatePosition', 'DiscussionBusy', 'LaterOnly', 'PaneSizes', 'ToolbarCollapsed', 'FollowComments', 'Busy', 'AiBusy', 'PreambleBusy', 'LastAttempt', 'Build', 'PdfText', 'DependencyStale', 'PdfOpen', 'PdfJump', 'PdfNavigation', 'PdfLocating', 'ViewCandidate', 'CandidateBuild', 'ShowHistory', 'NotesOpen', 'Project', 'CompareOpen', 'Baseline', 'Effort', 'FastMode', 'Engine', 'Text', 'SavedText', 'PdfPosition', 'FindOpen', 'FindNotice', 'ActiveId', 'PaperInstructions', 'SavedInstructions', 'SectionProgress', 'ContextOpen', 'OverviewOpen', 'InboxOpen', 'ContextText']) scope['set' + setter] = (value: any) => { states[setter] = value; };
-  for (const setter of ['BuildRetry', 'ReferenceState', 'SourcesOpen']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  for (const setter of ['BuildRetry', 'ReferenceState', 'SourcesOpen', 'FilesOpen', 'ChangesExport', 'Inspection', 'GuidanceOpen', 'SavedPreferences', 'LocalEditsOnly', 'PreserveVoice', 'Classic', 'ClassicSurface', 'ClassicDetails']) scope['set' + setter] = (value: any) => { states[setter] = value; };
   states.changeEvents = { accepted: 0, saved: 0 };
   scope.setChangeEvents = (value: any) => { states.changeEvents = typeof value === 'function' ? value(states.changeEvents) : value; };
   scope.setWarningAcceptance = (value: any) => { states.WarningAcceptance = value; scope.warningAcceptance = value; };

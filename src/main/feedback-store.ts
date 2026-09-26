@@ -3,6 +3,7 @@ import path from 'node:path';
 import { feedbackRecordSchema, type FeedbackRecord, type FeedbackList } from '../shared/feedback.ts';
 import { privateDirectory, readJSON, writeJSON } from './files.ts';
 import type { ProjectService } from './project-service.ts';
+import { z } from 'zod';
 
 // Raw advice is retained separately from the manuscript, including failed requests.
 export class FeedbackStore {
@@ -14,6 +15,15 @@ export class FeedbackStore {
     if (this.projects.get(projectId).name !== checked.rootFile) throw new Error('Feedback belongs to another paper.');
     await writeJSON(path.join(await this.directory(projectId), `${checked.createdAt.replace(/[^0-9]/g, '')}-${checked.id}.json`), checked);
     return checked;
+  }
+  async get(projectId: string, id: string): Promise<FeedbackRecord> {
+    z.string().uuid().parse(id);
+    const directory = await this.directory(projectId);
+    const files = (await fs.readdir(directory)).filter(file => file === id + '.json' || new RegExp('^\\d{17}-' + id + '\\.json$').test(file));
+    if (files.length !== 1) throw new Error('The saved feedback could not be identified for this paper.');
+    const record = feedbackRecordSchema.parse(await readJSON(path.join(directory, files[0])));
+    if (record.id !== id || record.rootFile !== this.projects.get(projectId).name) throw new Error('Feedback belongs to another paper.');
+    return record;
   }
   async list(projectId: string): Promise<FeedbackList> {
     const directory = await this.directory(projectId), items: FeedbackRecord[] = [], notices: string[] = [];

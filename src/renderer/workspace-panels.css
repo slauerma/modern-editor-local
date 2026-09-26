@@ -1,3 +1,13 @@
 .references-drawer { flex-shrink:0; max-height:min(50vh,500px); overflow:auto; border-bottom:1px solid #d7e0d7; background:#fff; padding:1rem 1.5rem; }
 .references-drawer[hidden] { display:none; }
 .references-drawer>.recovery-heading { margin-bottom:.75rem; }
+.files-panel { width: min(920px, 94vw); max-height: 85vh; overflow: auto; background: #fbfcf9; border: 1px solid #cddbc6; border-radius: 10px; padding: 1.25rem; box-shadow: 0 10px 36px #23362130; }
+.files-panel h2 { margin: 0; font-size: 20px; }
+.files-actions, .chat-context-links { display: flex; gap: 12px; padding: 10px 0; }
+.chat-context-links { padding: 6px 16px; font-size: 12px; }
+.files-pdf { margin: 8px 0; padding: 12px; background: #eef3ea; border-radius: 6px; }
+.files-pdf button { margin-right: 8px; }
+.file-inventory-item { display: flex; align-items: center; gap: 8px; border-top: 1px solid #dce2d8; padding: 10px 0; }
+.file-inventory-item > div { flex: 1; min-width: 0; }
+.file-inventory-item small, .file-inventory-item code { display: block; overflow-wrap: anywhere; font-size: 11px; color: #667364; margin-top: 3px; }
+.files-panel > p { font-size: 12px; color: #667364; }

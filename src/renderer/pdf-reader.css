@@ -15,4 +15,24 @@
 .pdf-match-count { font-size:12px; color:#50634d; white-space:nowrap; }
 .pdf-search-status { font-size:12px; color:#53644b; line-height:1.5; margin-top:5px; }
 .pdf-search-status button { font-size:12px; padding:0 3px; border:0; background:none; text-decoration:underline; }
+/* Moving controls into the shared header must not make search resize the PDF. */
+.pdf-reader.hosted-controls { position: relative; }
+.hosted-controls > .pdf-search, .hosted-controls > .changes-pdf-notice { position: absolute; bottom: calc(8px + var(--preview-space,0px)); left: 8px; right: 8px; z-index: 30; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 3px 18px #23362126; }
+.pdf-toolbar-slot { flex: 1; min-width: 0; display: flex; justify-content: flex-end; }
+.pdf-toolbar-slot .pdf-controls { border: 0; padding: 0; gap: 4px; height: 32px; flex: 1; min-width: 0; background: transparent; }
+.pdf-page-controls { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.pdf-toolbar-slot .pdf-page-controls input { width: 38px; padding: 2px; }
+.pdf-toolbar-slot .pdf-state { max-width: 90px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-size: 10px; }
+.pdf-toolbar-slot select { max-width: 85px; font-size: 11px; }
+.pdf-toolbar-slot button { font-size: 12px; padding: 4px 5px; }
+.pdf-toolbar-slot .pdf-controls .actions-menu { margin-left: auto; }
+.pdf-toolbar-slot .actions-popover { z-index: 65; width: 240px; max-width: calc(100vw - 32px); display: block; padding: 12px; top: calc(100% + 6px); }
+.pdf-toolbar-slot .actions-popover small { display: block; padding: .5rem; max-width: 250px; white-space: normal; }
+.pdf-toolbar-slot .actions-popover .pdf-page-controls button { display: inline; }
+.pdf-toolbar-slot .actions-popover .pdf-page-controls input { width: 55px; }
+.changes-pdf-tools { flex: 0 0 auto; }
+.compact-pdf-controls .actions-popover select { display: block; width: calc(100% - 1rem); max-width: none; margin: .5rem; }
+.viewer-controls { flex-wrap: nowrap !important; gap: 6px; }
+.viewer-controls > label:first-child { font-size: 0; }
+.viewer-controls > label:first-child select { max-width: 112px; font-size: 12px; }
 @media (forced-colors:active) { .continuous-pdf .textLayer .pdf-find-hit { background:Highlight; forced-color-adjust:none; opacity:.45; } .continuous-pdf .textLayer .pdf-find-hit.active { outline:2px solid CanvasText; opacity:.75; } }

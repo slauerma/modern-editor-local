@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { EditorAPI } from '../shared/contracts.ts';
 const api: EditorAPI = {
+  projectFiles: projectId => ipcRenderer.invoke('project:files', projectId),
+  fileAction: (projectId, id, action) => ipcRenderer.invoke('project:file-action', { projectId, id, action }),
+  exportPdf: (projectId, buildId) => ipcRenderer.invoke('build:export-pdf', { projectId, buildId }),
   debugState: () => ipcRenderer.invoke('debug:state'),
   configureDebug: settings => ipcRenderer.invoke('debug:configure', settings),
   deleteDebug: ids => ipcRenderer.invoke('debug:delete', ids),
@@ -29,9 +32,15 @@ const api: EditorAPI = {
   clearAttachments: projectId => ipcRenderer.invoke('attachments:clear', projectId),
   referenceState: projectId => ipcRenderer.invoke('references:state', projectId),
   addReferences: (projectId, folder) => ipcRenderer.invoke('references:add', { projectId, folder }),
+  pasteContext: (projectId, input) => ipcRenderer.invoke('references:paste', { projectId, input }),
+  inspectContext: (projectId, id) => ipcRenderer.invoke('references:inspect-paste', { projectId, id }),
+  renameContext: (projectId, id, name) => ipcRenderer.invoke('references:rename-paste', { projectId, id, name }),
+  copyContext: (projectId, id) => ipcRenderer.invoke('references:copy-paste', { projectId, id }),
   changeReference: (projectId, id, enabled) => ipcRenderer.invoke('references:change', { projectId, id, enabled }),
   sourcesUsed: projectId => ipcRenderer.invoke('references:sources', projectId),
   convertFeedback: input => ipcRenderer.invoke('codex:feedback', input),
+  prepareFeedback: input => ipcRenderer.invoke('feedback:prepare', input),
+  resumeFeedback: input => ipcRenderer.invoke('codex:feedback-resume', input),
   savedFeedback: projectId => ipcRenderer.invoke('feedback:list', projectId),
   openProject: () => ipcRenderer.invoke('project:open'),
   resumeProject: () => ipcRenderer.invoke('project:resume'),
@@ -46,6 +55,7 @@ const api: EditorAPI = {
   setEffort: (projectId, effort) => ipcRenderer.invoke('project:effort', { projectId, effort }),
   setFastMode: (projectId, fastMode) => ipcRenderer.invoke('project:fast-mode', { projectId, fastMode }),
   setPaperInstructions: (projectId, instructions) => ipcRenderer.invoke('project:instructions', { projectId, instructions }),
+  setPaperGuidance: (projectId, instructions, preferences) => ipcRenderer.invoke('project:guidance', { projectId, instructions, preferences }),
   setWorkspace: (projectId, workspace) => ipcRenderer.invoke('project:workspace', { projectId, workspace }),
   pinBaseline: input => ipcRenderer.invoke('comparison:pin', input),
   chooseBaseline: id => ipcRenderer.invoke('comparison:choose', id),

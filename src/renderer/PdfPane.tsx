@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom';
+import { ActionMenu } from './ActionMenu.tsx';
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref, type RefObject } from 'react';
 import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy, type RenderTask } from 'pdfjs-dist';
 import workerURL from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -11,7 +13,7 @@ GlobalWorkerOptions.workerSrc = workerURL;
 
 export type PdfChangeTarget = { buildId: string; id: string; requestId: number };
 export type PdfPaneHandle = { find: () => void };
-type Props = { findHandle?: Ref<PdfPaneHandle>; bottomOverlay?: RefObject<HTMLElement>; bottomControls?: boolean; hideState?: boolean; onFind?: () => void; changeTarget?: PdfChangeTarget | null; hideClose?: boolean; hideFollow?: boolean; showChangeNotes?: boolean; changeIds?: string[]; onChangeNote?: (id: string) => void; build: Build | null; freshness: string; position: PdfPosition; visible?: boolean; followComments: boolean; onFollowChange: (value: boolean) => void; jump?: PdfJump | null; onPositionChange: (position: Partial<PdfPosition>) => void; onUserNavigate: () => void; onClose: () => void };
+type Props = { toolbarHost?: RefObject<HTMLDivElement>; compactControls?: boolean; onExport?: () => void; findHandle?: Ref<PdfPaneHandle>; bottomOverlay?: RefObject<HTMLElement>; bottomControls?: boolean; hideState?: boolean; onFind?: () => void; changeTarget?: PdfChangeTarget | null; hideClose?: boolean; hideFollow?: boolean; showChangeNotes?: boolean; changeIds?: string[]; onChangeNote?: (id: string) => void; build: Build | null; freshness: string; position: PdfPosition; visible?: boolean; followComments: boolean; onFollowChange: (value: boolean) => void; jump?: PdfJump | null; onPositionChange: (position: Partial<PdfPosition>) => void; onUserNavigate: () => void; onClose: () => void };
 type Loaded = { id: string; document: PDFDocumentProxy; sizes: PdfPageSize[] };
 const positionKey = (position: PdfPosition) => [position.page, position.zoom, position.scrollX ?? 0, position.scrollY ?? 0, !!position.flow].join(':');
 const noMatches: PdfSearchMatch[] = [];
@@ -94,7 +96,9 @@ function RenderedPage({ pdf, layout, matches, active, onReady, changeIds, showCh
   </>;
 }
 
-export function PdfPane({ findHandle, bottomOverlay, bottomControls = false, hideState = false, onFind, changeTarget, hideClose = false, hideFollow = false, changeIds, showChangeNotes = false, onChangeNote, build, freshness, position, visible = true, followComments, onFollowChange, jump, onPositionChange, onUserNavigate, onClose }: Props) {
+export function PdfPane({ toolbarHost, compactControls = false, onExport, findHandle, bottomOverlay, bottomControls = false, hideState = false, onFind, changeTarget, hideClose = false, hideFollow = false, changeIds, showChangeNotes = false, onChangeNote, build, freshness, position, visible = true, followComments, onFollowChange, jump, onPositionChange, onUserNavigate, onClose }: Props) {
+  const [controlsHost, setControlsHost] = useState<HTMLDivElement | null>(null);
+  useLayoutEffect(() => { setControlsHost(toolbarHost?.current ?? null); }, [toolbarHost, visible]);
   const [loaded, setLoaded] = useState<Loaded | null>(null), [error, setError] = useState(''), [progress, setProgress] = useState('');
   const [view, setView] = useState({ width: 440, height: 600, top: 0 }), [pageDraft, setPageDraft] = useState(String(position.page));
   const scroll = useRef<HTMLDivElement>(null), paperList = useRef<HTMLDivElement>(null), findInput = useRef<HTMLInputElement>(null);
@@ -290,16 +294,24 @@ export function PdfPane({ findHandle, bottomOverlay, bottomControls = false, hid
   const matchStatus = searching ? 'Searching…' : query.trim() ? result.matches.length ? `${active ? selection.index + 1 : 0} / ${result.matches.length}${result.limited ? '+' : ''}` : index.status === 'indexing' ? 'No matches yet' : 'No matches' : 'Find text in this PDF';
   const totalHeight = layouts.length ? layouts.at(-1)!.top + layouts.at(-1)!.height : 0;
   const stateLabel = !build ? 'No PDF yet' : build.purpose === 'comparison' || build.purpose === 'proposal' ? freshness : freshness.includes('Preview') ? 'Preview · not applied' : freshness.includes('Candidate') ? 'Candidate · not applied' : build.dependenciesVerified === false || freshness.includes('verification') ? 'Unverified inputs' : freshness.includes('matches') ? 'Current draft' : 'Earlier PDF';
-  return <section hidden={!visible} className={"pdf-reader continuous-pdf" + (bottomControls ? " bottom-controls" : "")} aria-label="Compiled PDF" onKeyDown={event => {
+  const pageControls = <div className="pdf-page-controls"><button type="button" disabled={!pdf || page <= 1} onClick={() => changePage(page - 1)} aria-label="Previous PDF page">‹</button><input aria-label="PDF page number" type="number" min={1} max={pdf?.numPages ?? 1} disabled={!pdf} value={pageDraft} onChange={event => { userNavigate(); setPageDraft(event.target.value); }} onBlur={goToPage} /><span>/ {pdf?.numPages ?? '–'}</span><button type="button" disabled={!pdf || page >= pdf.numPages} onClick={() => changePage(page + 1)} aria-label="Next PDF page">›</button></div>;
+  const zoomControl = <select aria-label="PDF zoom" value={position.zoom} onChange={event => { userNavigate(); callbacks.current.onPositionChange({ zoom: Number(event.target.value) }); }}><option value={1}>Fit width</option><option value={1.25}>1.25× fit</option><option value={1.5}>1.5× fit</option><option value={2}>2× fit</option></select>;
+  const menuItems = <>
+    {compactControls && <>{pageControls}{zoomControl}<button type="button" onClick={openFind}>Find in PDF…</button></>}
+    {!hideFollow && <button type="button" className="pdf-follow" aria-label="PDF follows comments" aria-pressed={followComments} onClick={() => onFollowChange(!followComments)}>Follow selected comments</button>}
+    <button type="button" disabled={!build?.success} onClick={() => onExport?.()}>Save displayed PDF…</button>
+    <small>{freshness}</small>
+  </>;
+  const controls = <form className={'pdf-controls' + (compactControls ? ' compact-pdf-controls' : '')} onSubmit={event => { event.preventDefault(); goToPage(); }}>
+    {!hideState && !compactControls && <span className={`pdf-state ${stateLabel === 'Current draft' ? 'current' : 'older'}`} title={freshness} aria-label={freshness}>{stateLabel}</span>}
+    {!compactControls && <>{pageControls}{zoomControl}<button type="button" className="pdf-find-toggle" aria-expanded={findOpen} onClick={() => findOpen ? setFindOpen(false) : openFind()}>Find</button></>}
+    <ActionMenu label={compactControls ? `Page ${page} ▾` : '⋯'} menuLabel="PDF options"><div>{menuItems}</div></ActionMenu>
+    {!hideClose && <button type="button" className="icon" onClick={onClose} aria-label="Close PDF">×</button>}
+  </form>;
+  return <section hidden={!visible} className={"pdf-reader continuous-pdf" + (bottomControls ? " bottom-controls" : "") + (toolbarHost ? " hosted-controls" : "")} aria-label="Compiled PDF" onKeyDown={event => {
     if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'f') { event.preventDefault(); event.stopPropagation(); openFind(); }
   }}>
-    <form className="pdf-controls" onSubmit={event => { event.preventDefault(); goToPage(); }}>
-      <span hidden={hideState} className={`pdf-state ${stateLabel === 'Current draft' ? 'current' : 'older'}`} title={freshness} aria-label={freshness}>{stateLabel}</span>
-      <button type="button" disabled={!pdf || page <= 1} onClick={() => changePage(page - 1)} aria-label="Previous PDF page">‹</button><input aria-label="PDF page number" type="number" min={1} max={pdf?.numPages ?? 1} disabled={!pdf} value={pageDraft} onChange={event => { userNavigate(); setPageDraft(event.target.value); }} onBlur={goToPage} /><span>/ {pdf?.numPages ?? '–'}</span><button type="button" disabled={!pdf || page >= pdf.numPages} onClick={() => changePage(page + 1)} aria-label="Next PDF page">›</button>
-      <select aria-label="PDF zoom" value={position.zoom} onChange={event => { userNavigate(); callbacks.current.onPositionChange({ zoom: Number(event.target.value) }); }}><option value={1}>Fit width</option><option value={1.25}>1.25× fit</option><option value={1.5}>1.5× fit</option><option value={2}>2× fit</option></select>
-      {!hideFollow && <button type="button" className="pdf-follow" aria-label="PDF follows comments" title="Follow comments: bring each selected comment’s passage into view" aria-pressed={followComments} onClick={() => onFollowChange(!followComments)}>Follow</button>}
-      <button type="button" className="pdf-find-toggle" aria-expanded={findOpen} onClick={() => findOpen ? setFindOpen(false) : openFind()}>Find</button>{!hideClose && <button type="button" className="icon" onClick={onClose} aria-label="Close PDF">×</button>}
-    </form>
+    {toolbarHost ? controlsHost && createPortal(controls, controlsHost) : controls}
     {findOpen && <div className="pdf-search" role="search" aria-label="Search PDF">
       <form className="pdf-search-controls" onSubmit={event => { event.preventDefault(); stepMatch(1); }}>
         <input ref={findInput} aria-label="Find in PDF" value={query} maxLength={PDF_SEARCH_QUERY_LIMIT} placeholder="Find in PDF…" onChange={event => { setQuery(event.target.value); setSelection({ key: '', index: -1 }); setSearchTarget(null); }} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setFindOpen(false); scroll.current?.focus(); } else if (event.key === 'Enter' && event.shiftKey) { event.preventDefault(); stepMatch(-1); } }} />

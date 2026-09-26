@@ -102,3 +102,31 @@ test('a second arrival during manual adoption is fetched automatically when that
   for (let i = 0; i < 100 && f.stored.length; i++) await new Promise(resolve => setTimeout(resolve, 2));
   assert.equal(f.state.field(commentsField).length, 3); assert.equal(f.stored.length, 0); assert.equal(f.shown.length, 0);
 });
+
+test('Add comments when ready appends to a changed draft while preserving old decisions and selection', async () => {
+  const f=fixture(), incoming=result([comment('ready','A second claim.')]);
+  assert.equal(incoming.kind,'review');
+  f.setStored([{...incoming,autoAddComments:true} as WaitingResult]);
+  f.dispatch({selection:{anchor:source.length}});
+  f.dispatch({effects:patchComments.of([{id:'old',fields:{draft:'My own wording'}}])});
+  f.dispatch(applyProposal(f.state,'old'));
+  const text=f.state.doc.toString(), cursor=f.state.selection.main.head;
+  await f.inbox.refresh();
+  assert.equal(f.shown.length,0);assert.equal(f.stored.length,0);
+  assert.equal(f.state.doc.toString(),text);assert.equal(f.input().review.activeId,'old');
+  assert.equal(f.state.selection.main.head,cursor);
+  assert.equal(f.state.field(commentsField)[0].decision,'applied');
+  assert.equal(f.state.field(commentsField)[0].draft,'My own wording');
+  assert.equal(f.state.field(commentsField)[1].id,'ready');
+});
+
+test('disabled automatic inclusion keeps even a fresh result waiting, while stale uncertain matches never become applicable', async () => {
+  const f=fixture();f.setStored([{...result(),autoAddComments:false} as WaitingResult]);
+  await f.inbox.refresh();assert.equal(f.shown.length,1);assert.equal(f.state.field(commentsField).length,1);
+  await f.inbox.handle(f.shown[0].id,'adopted');assert.equal(f.state.field(commentsField).length,2);
+  const other=fixture();other.dispatch({changes:{from:0,to:source.length,insert:'The earlier passage is gone.'}});
+  other.setStored([{...result(),autoAddComments:true} as WaitingResult]);
+  await other.inbox.refresh();assert.equal(other.state.field(commentsField).length,2);
+  assert.notEqual(other.state.field(commentsField)[1].validity,'current');
+  assert.equal(other.state.doc.toString(),'The earlier passage is gone.');
+});

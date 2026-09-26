@@ -1,0 +1,37 @@
+/* A presentation of the same editor and review state, inspired by ModernEditor. */
+.classic-app { background: #fffff8; color: #1a1a1a; }
+.classic-app .unified-toolbar { background: #fffff8; }
+.workspace.layout-classic { display: grid; grid-template-columns: 68px minmax(0,1fr); grid-template-rows: minmax(0,1fr) minmax(180px,32%); gap: 0; background: #fffff8; }
+.workspace.layout-classic.comments-hidden { grid-template-columns: 68px minmax(0,1fr); grid-template-rows: minmax(0,1fr); }
+.classic-tools { grid-column: 1; grid-row: 1 / -1; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 6px; border-right: 1px solid #e8e5d9; overflow: auto; }
+.classic-tools button { padding: 8px 2px; font-size: 11px; background: #fffff8; border-color: #dfddcf; }
+.classic-tools button[aria-pressed=true] { background: #f5eacb; border-color: #b4a276; }
+.workspace.layout-classic .source-pane, .workspace.layout-classic .pdf-pane { grid-column: 2; grid-row: 1; min-width: 0; border: 0; }
+.workspace.layout-classic .pane-divider { display: none; }
+.workspace.layout-classic .source-pane, .workspace.layout-classic .editor-host, .workspace.layout-classic .cm-editor, .workspace.layout-classic .cm-scroller { background: #fffff8; }
+.workspace.layout-classic .cm-content { max-width: 80ch; margin-inline: auto; padding: 36px 28px 80px; font-size: 17px; line-height: 1.7; }
+.workspace.layout-classic.plain-document .cm-content { font-family: Georgia, 'Times New Roman', serif; font-size: 18px; }
+.workspace.layout-classic .cm-gutters { display: none; }
+.workspace.layout-classic .cm-activeLine { background: transparent; }
+.workspace.layout-classic .review-mark { background: #fff0ad; text-decoration: none; }
+.workspace.layout-classic .review-active { background: #f8d8df; }
+.workspace.layout-classic .review-rail { grid-column: 2; grid-row: 2; display: grid; grid-template-columns: minmax(0,1fr) 245px; grid-template-rows: auto auto minmax(0,1fr); min-height: 0; border-top: 1px solid #d4cbb2; background: #fffff8; }
+.workspace.layout-classic .review-rail[hidden] { display: none; }
+.workspace.layout-classic .review-heading { grid-column: 1 / -1; padding: 6px 16px; }
+.workspace.layout-classic .review-nav { grid-column: 1; padding: 2px 16px; }
+.workspace.layout-classic .review-content { grid-column: 1; min-height: 0; overflow: auto; padding: 6px 16px; }
+.workspace.layout-classic .comment-card { border: 0; padding: 0 10px; background: transparent; max-width: 960px; margin: auto; }
+.workspace.layout-classic .comment-card h1 { font-size: 16px; margin: 4px 0; }
+.workspace.layout-classic .explanation { margin: 6px 0; }
+.workspace.layout-classic .comment-location { float: right; }
+.workspace.layout-classic:not(.classic-details) .original-passage, .workspace.layout-classic:not(.classic-details) .proposal-diff { display: none; }
+.workspace.layout-classic .review-decisions { grid-column: 2; grid-row: 2 / 4; border: 0; border-left: 1px solid #e8e5d9; padding: 10px; overflow: auto; }
+.workspace.layout-classic .comment-actions { display: flex; flex-wrap: wrap; }
+.workspace.layout-classic .decision-secondary, .workspace.layout-classic .decision-meta { flex-wrap: wrap; }
+.workspace.layout-classic .review-decisions .review-action { flex: 1; min-width: 90px; }
+.workspace.layout-classic .decision-meta span { font-size: 10px; }
+.workspace.layout-classic .review-progress { grid-column: 1 / -1; }
+.proposal-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.accepted-inspection { display: flex; flex-direction: column; gap: 8px; }
+.accepted-inspection span { font-size: 12px; }
+.comment-actions[hidden], .decision-secondary[hidden] { display: none; }

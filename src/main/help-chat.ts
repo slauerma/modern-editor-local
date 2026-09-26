@@ -9,11 +9,12 @@ import { digest, privateDirectory, readJSON, writeJSON } from './files.ts';
 import type { ProjectService } from './project-service.ts';
 import type { CodexClient } from './codex-client.ts';
 import type { ReferenceService, ReferenceSession } from './reference-service.ts';
+import { paperGuidance } from '../shared/paper-guidance.ts';
 
 // Chat state stays in app-owned storage, separate from source, recovery and
 // review sidecars. An unreadable/full chat must never prevent opening a paper.
 export class HelpChat {
-  private previews = new Map<string, { input: ChatInput; owner: string; turn: ChatTurn; passage: string; stamp: string; expires: number }>();
+  private previews = new Map<string, { input: ChatInput; owner: string; turn: ChatTurn; passage: string; stamp: string; guidance: string; expires: number }>();
   private operation: Promise<unknown> | null = null;
   private generation = 0;
   private unsaved = new Map<string, { record: ChatRecord; previous: string }>();
@@ -21,6 +22,11 @@ export class HelpChat {
   readonly write: typeof writeJSON;
   constructor(projects: ProjectService, client: CodexClient, directory: string, help: () => Promise<ChatHelp>, references?: ReferenceService, write = writeJSON) { this.projects = projects; this.client = client; this.directory = directory; this.help = help; this.references = references; this.write = write; }
   private owner(scope: ChatScope) { return scope.projectId ? this.projects.get(scope.projectId).path : 'editor-help'; }
+  private guidance(input: ChatInput) {
+    if (!input.projectId || input.paper === 'none' && !input.includeComment && !input.includeReferences) return '';
+    const paper = this.projects.get(input.projectId);
+    return JSON.stringify(paperGuidance(paper.paperInstructions, paper.editPreferences));
+  }
   private async file(owner: string) { await fs.mkdir(path.dirname(this.directory), { recursive: true, mode: 0o700 }); await privateDirectory(path.dirname(this.directory), path.basename(this.directory)); return path.join(this.directory, digest(owner) + '.json'); }
   private async load(owner: string) {
     try { const record = chatRecordSchema.parse(await readJSON(await this.file(owner), CHAT_LIMITS.recordBytes)); if (record.owner !== owner) throw new Error('Wrong conversation owner.'); return record; }
@@ -77,13 +83,14 @@ export class HelpChat {
     const input = chatInputSchema.parse(raw), owner = this.owner(input), record = await this.load(owner);
     if (this.unsaved.has(owner)) throw new Error('Retry saving this chat before sending another question. The last answer remains available.');
     if (record.turns.length >= CHAT_LIMITS.turns) throw new Error('This chat has reached 100 exchanges. Clear it to begin another; the saved conversation is unchanged.');
-    const built = chatContext(input, await this.help(), record.turns, input.projectId ? this.projects.get(input.projectId).paperInstructions : '');
+    const help = await this.help(), guidance = this.guidance(input);
+    const built = chatContext(input, help, record.turns, input.projectId ? this.projects.get(input.projectId).paperInstructions : '', input.projectId ? this.projects.get(input.projectId).editPreferences : undefined);
     const turn = chatTurnSchema.parse({ id: randomUUID(), createdAt: new Date().toISOString(), message: input.message, context: JSON.stringify(built.context, null, 2), labels: built.labels, images: input.images, status: 'pending', ...(input.projectId ? { sourceHash: digest(input.source) } : {}) });
     // Reserve enough for the largest permitted reply/proposal before contacting
     // Codex. A rejected append preserves the complete previous readable record.
     try { serializeJSON({ ...record, turns: [...record.turns, turn] }, CHAT_LIMITS.recordBytes - 2_000_000); }
     catch { throw new Error('This chat is near its 16 MB storage limit. Remove screenshots or clear the conversation; saved history was preserved.'); }
-    const id = randomUUID(); this.previews.clear(); this.previews.set(id, { input, owner, turn, passage: built.passage, stamp: digest(serializeJSON(record)), expires: Date.now() + 10 * 60 * 1000 });
+    const id = randomUUID(); this.previews.clear(); this.previews.set(id, { input, owner, turn, passage: built.passage, guidance, stamp: digest(serializeJSON(record)), expires: Date.now() + 10 * 60 * 1000 });
     return { id, context: turn.context, labels: turn.labels, images: turn.images };
   }
   send(scope: ChatScope, previewId: string, progress: (message: string) => void): Promise<ChatTurn> {
@@ -97,6 +104,7 @@ export class HelpChat {
     const prepared = this.previews.get(previewId); this.previews.delete(previewId);
     if (!prepared || prepared.owner !== this.owner(scope) || prepared.expires < Date.now()) throw new Error('Chat context expired or belongs to another paper. Preview it again.');
     const { input, owner, turn } = prepared, record = await this.load(owner);
+    if (prepared.guidance !== this.guidance(input)) throw new Error('Paper guidance changed. Preview the question again to use the saved instructions.');
     if (prepared.stamp !== digest(serializeJSON(record))) throw new Error('This conversation changed. Preview the question again.');
     const stopped = () => { if (generation !== this.generation) throw new Error('Chat request cancelled.'); };
     stopped();

@@ -1,7 +1,13 @@
 import { z } from 'zod';
 
 export const REFERENCE_LIMITS = { roots: 12, calls: 40, characters: 120_000, searchFiles: 12, matches: 12, receipts: 20 } as const;
-export type ReferenceRoot = { id: string; name: string; kind: 'file' | 'folder'; enabled: boolean; available: boolean };
+export const PASTED_CONTEXT_BYTES = 2_000_000;
+export const pastedContextSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  text: z.string().min(1).max(PASTED_CONTEXT_BYTES).refine(text => !!text.trim() && !text.includes('\0'), 'Paste nonempty plain text without NUL characters.')
+}).strict();
+export type PastedContext = z.infer<typeof pastedContextSchema>;
+export type ReferenceRoot = { id: string; name: string; kind: 'file' | 'folder' | 'paste'; enabled: boolean; available: boolean; bytes?: number; createdAt?: string };
 export type ReferenceState = { roots: ReferenceRoot[]; notices: string[] };
 export const sourceUseSchema = z.object({
   action: z.enum(['read', 'search']), name: z.string().max(500), location: z.string().max(1000),
@@ -19,4 +25,4 @@ export type SourcesHistory = { items: SourcesReceipt[]; notices: string[] };
 export const referenceToolNames = ['references_list', 'references_search', 'references_read'] as const;
 export const referenceListSchema = z.object({ query: z.string().max(200).optional(), offset: z.number().int().min(0).max(1000).optional() }).strict();
 export const referenceSearchSchema = z.object({ query: z.string().trim().min(1).max(200), fileId: z.string().max(100).optional(), offset: z.number().int().min(0).max(1000).optional(), startPage: z.number().int().min(1).max(100000).optional() }).strict();
-export const referenceReadSchema = z.object({ fileId: z.string().min(1).max(100), pages: z.string().max(160).optional(), lines: z.string().max(80).optional() }).strict();
+export const referenceReadSchema = z.object({ fileId: z.string().min(1).max(100), pages: z.string().max(160).optional(), lines: z.string().max(80).optional(), offset: z.number().int().min(0).max(PASTED_CONTEXT_BYTES).optional() }).strict();

@@ -8,10 +8,11 @@ import { useDialogFocus } from './use-dialog-focus.ts';
 import './help-chat.css';
 
 type Props = {
+  guidanceKey: string;
   open: boolean; projectId: string | null; paperName: string; paperPath: string; blocked: boolean; status: string;
   close(): void; capture(paper: boolean): Omit<ChatInput, 'message' | 'images' | 'paper' | 'includeComment' | 'includeDiagnostics' | 'includeReferences'>;
   send(projectId: string | null, previewId: string): Promise<ChatTurn>;
-  add(turn: ChatTurn): Promise<void>; go(turn: ChatTurn, pdf: boolean): void; sources(): void;
+  add(turn: ChatTurn): Promise<void>; go(turn: ChatTurn, pdf: boolean): void; sources(): void; context(): void; guidance(): void;
 };
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': Error: /, '');
 
@@ -33,6 +34,7 @@ export function HelpChatDrawer(props: Props) {
   return <aside className="help-chat-drawer" aria-label="Codex Side Chat" hidden={!props.open} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); props.close(); } }}>
     <header className="chat-heading"><div><strong>Codex Side Chat</strong><span>Ask Codex about the editor or your paper</span></div><button aria-label="Close Codex Side Chat" onClick={props.close}>×</button></header>
     <div className="chat-scope"><label>Conversation<select aria-label="Chat conversation" value={paper ? 'paper' : 'editor'} disabled={props.blocked} onChange={e => setEditorOnly(e.target.value === 'editor')}><option value="editor">Editor help · no paper context</option>{props.projectId && <option value="paper">This paper · {props.paperName}</option>}</select></label></div>
+    {paper && <div className="chat-context-links"><button className="text-button" onClick={props.context}>Context / paste…</button><button className="text-button" onClick={props.guidance}>Paper instructions…</button></div>}
     <Conversation key={paper ? props.paperPath : 'editor-help'} {...props} paper={paper} />
   </aside>;
 }
@@ -65,10 +67,11 @@ function Conversation(props: Props & { paper: boolean }) {
   }, [id]);
   useEffect(() => { if (props.open) entry.current?.focus({ preventScroll: true }); }, [props.open]);
   useEffect(() => { if (props.open && list.current) list.current.scrollTop = list.current.scrollHeight; }, [state.turns.length, state.turns.at(-1)?.status]);
+  useEffect(() => { setPreview(null); previewInput.current = ''; }, [props.guidanceKey]);
   function changed(action: () => void) { action(); setPreview(null); previewInput.current = ''; }
   function input(): ChatInput { return { ...props.capture(props.paper), projectId: id, message, images, paper, includeComment: props.paper && comment, includeDiagnostics: diagnostics, includeReferences: props.paper && references }; }
   async function prepare() {
-    const value = input(), fingerprint = JSON.stringify(value);
+    const value = input(), fingerprint = JSON.stringify([value, props.paper ? props.guidanceKey : null]);
     if (preview && previewInput.current === fingerprint) return preview;
     const ready = await window.editor.previewChat(value);
     if (!alive.current) throw new Error('This conversation is no longer displayed.');
@@ -115,7 +118,7 @@ function Conversation(props: Props & { paper: boolean }) {
   }
   return <>
     <div className="chat-transcript" ref={list} aria-label="Chat messages" tabIndex={0}>
-      {!state.turns.length && <div className="chat-empty"><p>{props.paper ? 'Ask about a proof, a suggestion, or an error in this paper.' : 'Ask how to use Modern Editor or explain an error. Paper source and reference folders are excluded. Any screenshots or error details you choose to include are still sent.'}</p><p className="muted">Replies cannot change your source. You choose which ideas become comments.</p></div>}
+      {!state.turns.length && <div className="chat-empty"><p>{props.paper ? 'Ask about a proof, a suggestion, or an error in this paper.' : 'Ask how to use Modern Editor or explain an error. Paper source, saved guidance and references are excluded. Any screenshots or error details you choose to include are still sent.'}</p><p className="muted">Replies cannot change your source. You choose which ideas become comments.</p></div>}
       {state.notices.map((notice, i) => <p key={i} className="muted">{notice}</p>)}
       {state.needsSave && <button disabled={busy} onClick={() => void retry()}>Retry saving chat</button>}
       {state.turns.map(turn => <article className="chat-turn" key={turn.id}>
@@ -132,7 +135,7 @@ function Conversation(props: Props & { paper: boolean }) {
     <div className="chat-composer" onPaste={e => { const files = [...e.clipboardData.items].filter(item => item.kind === 'file').map(item => item.getAsFile()).filter((f): f is File => !!f); if (files.length) { e.preventDefault(); void attach(files); } }} onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); e.stopPropagation(); void attach([...e.dataTransfer.files]); } }}>
       <details className="chat-context-options"><summary>Context · {paper === 'draft' ? 'Current draft' : paper === 'passage' ? 'Selected passage' : 'Editor Help'}{comment && props.paper ? ' · Comment' : ''}{diagnostics ? ' · Errors' : ''}{references && props.paper ? ' · References' : ''}{images.length ? ` · ${images.length} screenshot(s)` : ''}</summary>
         <p>Bundled Help and the installed editor version are always included. Up to 12 recent exchanges accompany follow-ups. Older screenshots are saved but are not resent automatically.</p>
-        {props.paper && <><label>Paper context<select disabled={busy} value={paper} onChange={e => changed(() => setPaper(e.target.value as ChatInput['paper']))}><option value="draft">Current draft (up to 120,000 characters)</option><option value="passage">Selected passage</option><option value="none">No source text</option></select></label><label><input type="checkbox" checked={comment} disabled={busy} onChange={e => changed(() => setComment(e.target.checked))} /> Current comment and recent discussion</label><label><input type="checkbox" checked={references} disabled={busy} onChange={e => changed(() => setReferences(e.target.checked))} /> Let Codex read enabled reference folders and the current draft</label></>}
+        {props.paper && <><label>Paper context<select disabled={busy} value={paper} onChange={e => changed(() => setPaper(e.target.value as ChatInput['paper']))}><option value="draft">Current draft (up to 120,000 characters)</option><option value="passage">Selected passage</option><option value="none">No source text</option></select></label><label><input type="checkbox" checked={comment} disabled={busy} onChange={e => changed(() => setComment(e.target.checked))} /> Current comment and recent discussion</label><label><input type="checkbox" checked={references} disabled={busy} onChange={e => changed(() => setReferences(e.target.checked))} /> Let Codex read enabled context, references and the current draft</label></>}
         <label><input type="checkbox" checked={diagnostics} disabled={busy} onChange={e => changed(() => setDiagnostics(e.target.checked))} /> Latest error and compilation details</label>
         <button disabled={busy || !message.trim() || failedLoad} onClick={() => void previewContext()}>Preview what is sent</button>{props.paper && <button onClick={props.sources}>Sources used…</button>}
       </details>

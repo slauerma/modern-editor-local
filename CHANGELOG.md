@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 — Writing workflow and outside feedback
+
+- Save large named pasted context locally, enable it per paper, and inspect, copy, rename, disable or remove it later.
+- Reuse original wording in a proposal; Accept & compile stays for PDF inspection until Next.
+- Add Classic view with a cream writing surface, left controls and bottom suggestions, preserving the live editor and Undo.
+- Share saved paper instructions and minimal-edit preferences across paper reviews and discussions.
+- Combine PDF controls in one toolbar; expose exact PDF export and Files & history.
+- Convert saved context or pasted numbered reviews into resumable comment batches, preserving original item numbers and completed results after interruption.
+- Add completed review comments automatically without moving the current selection or interrupting Undo; keep manual inspection available.
+
 ## 1.2.1 — PDF viewing and comparison reliability
 
 - Keep PDF reading stable at fit width and preserve the selected change, open explanation and reading position during Changes PDF refreshes.

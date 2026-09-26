@@ -1,3 +1,7 @@
+import { FilesPanel } from './FilesPanel.tsx';
+import { useDialogFocus } from './use-dialog-focus.ts';
+import './classic-view.css';
+import { defaultEditPreferences, paperGuidance } from '../shared/paper-guidance.ts';
 import { HelpChatDrawer } from './HelpChatDrawer.tsx';
 import { editorAuthor, predecessorCredit } from '../shared/editor-credits.ts';
 import { ReviewProgress } from './ReviewProgress.tsx';
@@ -16,7 +20,8 @@ import './workspace-panels.css';
 import { AttachmentPanel } from './AttachmentPanel.tsx';
 import { attachmentPromptContext, type AttachmentPreview } from '../shared/attachments.ts';
 import { FeedbackPanel } from './FeedbackPanel.tsx';
-import { feedbackContext } from '../shared/feedback.ts';
+import { feedbackComments, type FeedbackRecord } from '../shared/feedback.ts';
+import { feedbackBatchContext, type PrepareFeedback } from '../shared/feedback-batches.ts';
 import { SettingsPanel } from './SettingsPanel.tsx';
 import { HelpPanel } from './HelpPanel.tsx';
 import { sourcePosition, restoreSourcePosition, restoringWorkspace, LatestTask } from './workspace-state.ts';
@@ -69,7 +74,11 @@ const highlights = ViewPlugin.fromClass(class {
 const errorText = (e: unknown) => (e instanceof Error && e.name === 'ZodError' ? 'This review change exceeds a size/count limit or contains invalid data. The existing review was kept.' : e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': Error: /, '');
 
 export function App() {
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [changesExport, setChangesExport] = useState<{ id: string; label: string } | null>(null);
   const [helpChatOpen, setHelpChatOpen] = useState(false);
+  const [autoAddComments, setAutoAddComments] = useState(true);
+  const [feedbackContextId, setFeedbackContextId] = useState<string | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false), [helpOpen, setHelpOpen] = useState(false), [feedbackOpen, setFeedbackOpen] = useState(false);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false), [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreview | null>(null);
   const attachmentReturnReview = useRef(false);
@@ -84,6 +93,7 @@ export function App() {
   const previewCache = useRef<PreviewState | null>(null);
   const [previewInspection, setPreviewInspection] = useState<{ buildId: string; status: 'checking' | 'valid' | 'changed' | 'unavailable' } | null>(null);
   const [previewPosition, setPreviewPosition] = useState<PdfPosition>({ page: 1, zoom: 1 });
+  const [inspection, setInspection] = useState<{ id: string; next: string | null } | null>(null);
   const [comments, setComments] = useState<Comment[]>([]), [activeId, setActiveId] = useState<string | null>(null);
   const comparisonReasonsKey = useMemo(() => JSON.stringify(comments.filter(c => c.decision === 'applied' || c.id === preview?.commentId)
     .map(c => [c.id, c.explanation, c.replacement, c.draft, c.appliedText, c.messages])), [comments, preview?.commentId]);
@@ -96,7 +106,10 @@ export function App() {
   const [engine, setEngine] = useState<Engine>('pdflatex'), [showHistory, setShowHistory] = useState(false), [notesOpen, setNotesOpen] = useState(false), [canUndo, setCanUndo] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false), [commentsHidden, setCommentsHidden] = useState(false);
   const [aiBusy, setAiBusy] = useState(false), [reviewOpen, setReviewOpen] = useState(false), [instructions, setInstructions] = useState<string>(reviewPresets[0].instructions);
-  const [localEditsOnly, setLocalEditsOnly] = useState(true);
+  const [localEditsOnly, setLocalEditsOnly] = useState(true), [preserveVoice, setPreserveVoice] = useState(true);
+  const [guidanceOpen, setGuidanceOpen] = useState(false), [savedPreferences, setSavedPreferences] = useState(defaultEditPreferences());
+  const guidanceDialog = useRef<HTMLElement>(null);
+  useDialogFocus(guidanceDialog, () => setGuidanceOpen(false), { open: guidanceOpen });
   const [discussionBusy, setDiscussionBusy] = useState(false), discussionLock = useRef(false);
   const [preambleBusy, setPreambleBusy] = useState(false), preambleRun = useRef<{ cancelled: boolean } | null>(null);
   const buildRun = useRef<{ cancelled: boolean } | null>(null);
@@ -130,6 +143,7 @@ export function App() {
   }, [busy, locked, project?.id]);
   const writer = useRef(new RecoveryWriter<BufferInput>(value => window.editor.persist(value), e => setError('Recovery could not be saved: ' + errorText(e))));
   const host = useRef<HTMLDivElement>(null), view = useRef<EditorView | null>(null), projectRef = useRef<Project | null>(null), reviewRef = useRef<Review | null>(null), activeRef = useRef<string | null>(null);
+  const pdfToolbar = useRef<HTMLDivElement>(null);
   const ordinaryPdfFind = useRef<PdfPaneHandle>(null), changesPdfFind = useRef<PdfPaneHandle>(null), textDiffFind = useRef<TextDiffPaneHandle>(null);
   const commandRef = useRef<(command: string) => void>(() => {});
   const historyRef = useRef(false), laterRef = useRef(false);
@@ -143,13 +157,15 @@ export function App() {
   const [effort, setEffort] = useState<Effort>('medium'), [effortBusy, setEffortBusy] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
   const [paperInstructions, setPaperInstructions] = useState(''), [savedInstructions, setSavedInstructions] = useState('');
+  const guidanceDirty = paperInstructions !== savedInstructions || localEditsOnly !== savedPreferences.localEditsOnly || preserveVoice !== savedPreferences.preserveVoice;
   const [contextText, setContextText] = useState(''), [contextOpen, setContextOpen] = useState(false), [overviewOpen, setOverviewOpen] = useState(false);
   const [sectionProgress, setSectionProgress] = useState<SectionProgress | null>(null), sectionRun = useRef<SectionReview | null>(null);
   const [toolbarCollapsed, setToolbarCollapsed] = useState(false), [paneSizes, setPaneSizes] = useState([.28, .33, .39]);
   const comparisonPosition = useRef<ComparisonPosition>({}), workspace = useRef<HTMLDivElement>(null);
+  const [classic, setClassic] = useState(false), [classicSurface, setClassicSurface] = useState<'source' | 'pdf'>('source'), [classicDetails, setClassicDetails] = useState(false);
   const [layout, setLayout] = useState<WorkspaceState['layout']>('auto'), [compactTab, setCompactTab] = useState<WorkspaceState['compactTab']>('source'), [displayName, setDisplayName] = useState('');
   const [workspaceSize, setWorkspaceSize] = useState({ width: window.innerWidth, height: window.innerHeight - 90 });
-  const arrangement = resolveLayout(layout, commentsHidden, pdfOpen, workspaceSize), showSource = arrangement !== 'pdf-comments' && (arrangement !== 'tabs' || compactTab === 'source'), showPdf = ['three','pdf-comments','writing','stacked'].includes(arrangement) && pdfOpen || arrangement === 'tabs' && compactTab === 'pdf';
+  const arrangement = classic ? 'classic' : resolveLayout(layout, commentsHidden, pdfOpen, workspaceSize), showSource = classic ? classicSurface === 'source' : arrangement !== 'pdf-comments' && (arrangement !== 'tabs' || compactTab === 'source'), showPdf = classic ? classicSurface === 'pdf' : ['three','pdf-comments','writing','stacked'].includes(arrangement) && pdfOpen || arrangement === 'tabs' && compactTab === 'pdf';
   const lastSource = useRef<WorkspaceState['source'] | null>(null), lastReviewTop = useRef(0);
   useLayoutEffect(() => {
     const node = workspace.current; if (!node) return;
@@ -165,7 +181,7 @@ export function App() {
     if (!commentsHidden && reviewScroll.current) reviewScroll.current.scrollTop = lastReviewTop.current;
   }, [showSource, commentsHidden, project?.id]);
   const workspaceValues = useRef(defaultWorkspace()), restoredSource = useRef<WorkspaceState['source'] | null>(null);
-  workspaceValues.current = { ...workspaceValues.current, pdf: { page: pdfPosition.page, zoom: pdfPosition.zoom as WorkspaceState['pdf']['zoom'], scrollX: pdfPosition.scrollX ?? 0, scrollY: pdfPosition.scrollY ?? 0, flow: pdfPosition.flow }, pdfBuildId: build?.id ?? project?.workspace?.pdfBuildId ?? null, pdfOpen, commentsHidden, paneSizes: paneSizes as WorkspaceState['paneSizes'], toolbarCollapsed, changesOpen, layout, compactTab, displayName, followComments, reviewView: showHistory ? 'history' : laterOnly ? 'later' : 'pending' };
+  workspaceValues.current = { ...workspaceValues.current, pdf: { page: pdfPosition.page, zoom: pdfPosition.zoom as WorkspaceState['pdf']['zoom'], scrollX: pdfPosition.scrollX ?? 0, scrollY: pdfPosition.scrollY ?? 0, flow: pdfPosition.flow }, pdfBuildId: build?.id ?? project?.workspace?.pdfBuildId ?? null, pdfOpen, commentsHidden, paneSizes: paneSizes as WorkspaceState['paneSizes'], toolbarCollapsed, changesOpen, layout, classic, classicSurface, compactTab, displayName, followComments, reviewView: showHistory ? 'history' : laterOnly ? 'later' : 'pending' };
   const workspaceWriter = useRef(new RecoveryWriter<{ projectId: string; workspace: WorkspaceState }>(value => window.editor.setWorkspace(value.projectId, value.workspace), e => setNotice('Reading position could not be saved. Source recovery is separate. ' + errorText(e))));
   const workspaceCallback = useRef<() => void>(() => {}); workspaceCallback.current = scheduleWorkspace;
 
@@ -179,7 +195,8 @@ export function App() {
   useEffect(() => { setCandidatePosition({ page: 1, zoom: pdfPosition.zoom }); }, [candidateBuild?.id]);
   const bulkPlan = useMemo(() => bulkAcceptancePlan(text, comments), [text, comments]);
   const pending = comments.filter(c => c.decision === 'open'), laterCount = pending.filter(c => c.later).length, visible = comments.filter(c => commentVisible(c, showHistory, laterOnly));
-  const active = visible.find(c => c.id === activeId), dirty = !!project && text !== savedText;
+  const inspecting = inspection && comments.find(c => c.id === inspection.id && c.decision === 'applied');
+  const active = inspecting || visible.find(c => c.id === activeId), dirty = !!project && text !== savedText;
   const completeDocument = useMemo(() => documentMode(text) === 'latex', [text]);
   const previewCurrent = !!preview && preview.projectId === project?.id && preview.source === text && preview.engine === engine && !!active && active.id === preview.commentId && proposalSignature(active) === preview.candidate.signature;
   const previewPdfStatus = preview?.build && previewInspection?.buildId === preview.build.id ? previewInspection.status : 'checking';
@@ -188,7 +205,7 @@ export function App() {
   useEffect(() => { view.current?.dispatch({ effects: language.current.reconfigure(docMode === 'latex' ? [StreamLanguage.define(stex), syntaxHighlighting(defaultHighlightStyle), bracketMatching()] : []) }); }, [docMode, project?.id]);
 
   useEffect(() => {
-    setAttachmentPreview(null); setAttachmentPending(false); setAttachmentBusy(false); setAttachmentsOpen(false); setFeedbackOpen(false); setReferenceState({ roots: [], notices: [] }); setSourcesOpen(false);
+    setAttachmentPreview(null); setAttachmentPending(false); setAttachmentBusy(false); setAttachmentsOpen(false); setFeedbackOpen(false); setFeedbackContextId(undefined); setReferenceState({ roots: [], notices: [] }); setSourcesOpen(false);
     const id = project?.id;
     return () => { if (id) void window.editor.clearAttachments(id).catch(() => {}); };
   }, [project?.id]);
@@ -235,14 +252,14 @@ export function App() {
     cancelPdfNavigation(); view.current?.destroy(); view.current = null;
     const saved = p.workspace ?? defaultWorkspace(); workspaceValues.current = saved; restoredSource.current = p.workspace?.source ?? null; lastSource.current = saved.source; lastReviewTop.current = 0;
     projectRef.current = p; reviewRef.current = p.review; activeRef.current = p.review.activeId;
-    setActiveId(p.review.activeId); setProject(p); setEngine(p.engine); setEffort(p.effort); setFastMode(p.fastMode ?? false);
-    setPaperInstructions(p.paperInstructions ?? ''); setSavedInstructions(p.paperInstructions ?? ''); setSectionProgress(null);
+    setFilesOpen(false); setChangesExport(null); setInspection(null); setActiveId(p.review.activeId); setProject(p); setEngine(p.engine); setEffort(p.effort); setFastMode(p.fastMode ?? false);
+    setGuidanceOpen(false); setSavedPreferences(p.editPreferences ?? defaultEditPreferences()); setLocalEditsOnly(p.editPreferences?.localEditsOnly ?? true); setPreserveVoice(p.editPreferences?.preserveVoice ?? true); setPaperInstructions(p.paperInstructions ?? ''); setSavedInstructions(p.paperInstructions ?? ''); setSectionProgress(null);
     setContextOpen(false); setContextText(''); setOverviewOpen(false); setInboxOpen(false); setBaseline(p.baseline); setCompareOpen(false); comparisonPosition.current = {};
     setDocMode(mode); setRepresentation(mode === 'text' ? 'text' : 'pdf'); setSessionText(p.sessionBaseline?.text ?? p.text); setComparisonBase('session'); setPreview(null); previewCache.current = null;
     setText(p.text); setSavedText(p.recovered ? '\u0000recovered-unsaved' : p.text);
     setBuild(p.restoredPdf?.build ?? null); displayedBuild.current = p.restoredPdf?.build ?? null;
     setLastAttempt(null); setBuildRetry(null); approvedBuildInputs.current = undefined; buildHelpEpoch.current++; setDependencyStale(!!p.restoredPdf); setPdfText(p.restoredPdf?.text ?? '');
-    setPdfPosition(saved.pdf); setPdfOpen(mode === 'text' || saved.pdfOpen); setCommentsHidden(saved.commentsHidden ?? false); setPaneSizes(saved.paneSizes); setToolbarCollapsed(saved.toolbarCollapsed); setFollowComments(saved.followComments); setChangesOpen(saved.changesOpen ?? true); setLayout(mode === 'text' && !saved.pdfOpen ? 'auto' : saved.layout ?? 'auto'); setCompactTab(saved.compactTab ?? 'source'); setDisplayName(saved.displayName ?? '');
+    setClassic(saved.classic ?? false); setClassicSurface(saved.classicSurface ?? 'source'); setClassicDetails(false); setPdfPosition(saved.pdf); setPdfOpen(mode === 'text' || saved.pdfOpen); setCommentsHidden(saved.commentsHidden ?? false); setPaneSizes(saved.paneSizes); setToolbarCollapsed(saved.toolbarCollapsed); setFollowComments(saved.followComments); setChangesOpen(saved.changesOpen ?? true); setLayout(mode === 'text' && !saved.pdfOpen ? 'auto' : saved.layout ?? 'auto'); setCompactTab(saved.compactTab ?? 'source'); setDisplayName(saved.displayName ?? '');
     setWarningAcceptance(null); setCandidateBuild(null); setViewCandidate(false); setError(''); setNotice([...p.notices, documentModeNotice(p.text)].filter(Boolean).join(' '));
     historyRef.current = saved.reviewView === 'history'; setShowHistory(historyRef.current); laterRef.current = saved.reviewView === 'later'; setLaterOnly(laterRef.current);
     setFindOpen(false); setFindNotice(''); setStatus(p.recovered ? 'Unsaved work recovered' : 'Paper opened');
@@ -330,6 +347,8 @@ export function App() {
   }
   function choose(id: string | null, reveal = true, follow = false) {
     if (gate.current.locked) return;
+    if (inspection) setStatus('Ready');
+    setInspection(null);
     if (id !== activeRef.current) leavePreview();
     cancelPdfNavigation();
     const items = view.current?.state.field(commentsField) ?? [];
@@ -342,6 +361,7 @@ export function App() {
   }
   function move(delta: number) {
     const editor = view.current; if (!editor) return;
+    if (inspection && delta > 0) { const next = inspection.next; setInspection(null); choose(next, true, true); return; }
     choose(nextCommentId(editor.state.field(commentsField), activeRef.current, delta, historyRef.current, laterRef.current), true, true);
   }
   function showReviewHistory(value: boolean) {
@@ -365,13 +385,14 @@ export function App() {
       editor.dispatch(tr); return true;
     } catch (e) { setError(errorText(e)); return false; }
   }
-  function appendReview(incoming: Comment[], recordHistory = false) {
-    setCommentsHidden(false);
+  function appendReview(incoming: Comment[], recordHistory = false, keepPlace = false) {
+    if (!keepPlace) setCommentsHidden(false);
     const editor = view.current; if (!editor || gate.current.locked) return;
     const existing = editor.state.field(commentsField), merged = mergeComments(existing, incoming);
     const transaction = editor.state.update({ effects: recordHistory ? alterComments.of({ add: merged.slice(existing.length), remove: [] }) : loadComments.of(merged), annotations: recordHistory ? isolateHistory.of('full') : Transaction.addToHistory.of(false) });
     validateTransaction(transaction);
     editor.dispatch(transaction);
+    if (keepPlace && activeRef.current) return;
     historyRef.current = false; setShowHistory(false); laterRef.current = false; setLaterOnly(false); choose(merged[existing.length]?.id ?? activeRef.current);
   }
   function addAuthorComment() {
@@ -426,7 +447,7 @@ export function App() {
   useEffect(() => {
     const current = input(); if (current && !gate.current.locked) writer.current.schedule(current);
   }, [project?.id, text, comments, activeId]);
-  useEffect(() => { scheduleWorkspace(); }, [project?.id, pdfPosition, pdfOpen, commentsHidden, paneSizes, toolbarCollapsed, changesOpen, layout, compactTab, displayName, followComments, laterOnly, showHistory, build?.id]);
+  useEffect(() => { scheduleWorkspace(); }, [project?.id, pdfPosition, pdfOpen, commentsHidden, paneSizes, toolbarCollapsed, changesOpen, layout, classic, classicSurface, compactTab, displayName, followComments, laterOnly, showHistory, build?.id]);
   useEffect(() => () => { writer.current.clearTimers(); workspaceWriter.current.clearTimers(); }, []);
   async function close(toHome = false) {
     if (toHome && !projectRef.current) return;
@@ -643,12 +664,22 @@ export function App() {
           await flush();
         });
         if (!applied) return;
-        move(1); setStatus(`${ids.length === 1 ? 'Suggestion' : `${ids.length} suggestions`} applied · source not yet saved`);
+        if (acceptId && ids.length === 1) { setInspection({ id: acceptId, next: nextCommentId(captured.review.comments, acceptId, 1, false, laterOnly) }); revealPdf(); } else move(1);
+        setStatus(`${ids.length === 1 ? 'Suggestion' : `${ids.length} suggestions`} applied · inspect the PDF, then Next · source not yet saved`);
       } else setStatus(!valid ? 'Compiled snapshot · project inputs changed during compilation' : result.clean ? 'Compiled successfully' : 'Compiled with warnings');
       setBuild(result); setPdfText(candidate); setDependencyStale(!valid); setViewCandidate(false); if (c) setCandidateBuild(null); if (!c) setPdfOpen(true);
       if (options?.selectedPaths) approvedBuildInputs.current = options.selectedPaths;
       if (!c && result.inputSelection?.mode === 'dependencies') setStatus(`Prepared ${result.inputSelection.fileCount} required files, ${(result.inputSelection.totalBytes / 1_000_000).toFixed(1)} MB · ${result.clean ? 'compiled successfully' : 'compiled with warnings'}`);
       displayedBuild.current = result;
+      if (acceptId && ids.length === 1) {
+        const appliedComment = editor.state.field(commentsField).find(item => item.id === acceptId);
+        if (appliedComment && appliedComment.to > appliedComment.from) {
+          const request = ++pdfRequest.current;
+          try { const location = await window.editor.locatePdf({ projectId: captured.projectId, buildId: result.id, text: candidate, from: appliedComment.from, to: appliedComment.to });
+            if (!stopped() && request === pdfRequest.current && editor.state.doc.toString() === candidate && location.kind === 'mapped') { setPdfPosition(p => ({ ...p, page: location.page })); setPdfJump({ ...location, requestId: request, persistent: true }); }
+          } catch { /* The accepted source/PDF remain usable without a mapped marker. */ }
+        }
+      }
       return result;
     } catch (e) { if (!job.cancelled || applied) { setError(applied ? 'The suggestion is applied in the editor, but recovery could not be saved. Keep the window open; retry Save, export the source, or Undo. ' + errorText(e) : errorText(e)); setStatus(applied ? 'Suggestion applied · recovery needs attention' : 'Ready'); } } finally {
       if (job.cancelled && !applied && !gate.current.closing) setStatus('Compilation cancelled · suggestion not applied');
@@ -685,7 +716,7 @@ export function App() {
       });
       if (!applied) return;
       setBuild(receipt.build); setPdfText(receipt.candidate); setDependencyStale(false); setViewCandidate(false); setCandidateBuild(null); setPdfOpen(true); displayedBuild.current = receipt.build;
-      move(1); setStatus(`${receipt.ids.length === 1 ? 'Suggestion' : `${receipt.ids.length} suggestions`} applied despite warnings · Undo available · source not yet saved`);
+      if (receipt.ids.length === 1) { const id = receipt.ids[0]; setInspection({ id, next: nextCommentId(editor.state.field(commentsField), id, 1, false, laterOnly) }); revealPdf(); } else move(1); setStatus(`${receipt.ids.length === 1 ? 'Suggestion' : `${receipt.ids.length} suggestions`} applied despite warnings · Undo available · source not yet saved`);
     } catch (e) { setError((applied ? 'The changes are applied, but recovery could not be saved. Keep the window open; retry Save, export or Undo. ' : '') + errorText(e)); }
     finally { if (job.cancelled && !applied) setStatus('Acceptance cancelled · source unchanged'); if (buildRun.current === job) buildRun.current = null; setBusy(false); done(); }
   }
@@ -719,10 +750,10 @@ export function App() {
   function toggleComments() { stopPendingPdfNavigation(); if (commentsHidden) revealComments(true); else { setCommentsHidden(true); if (document.activeElement?.closest('.review-rail')) revealSource(true); } }
   function stopReview() { void (sectionRun.current ? sectionRun.current.stop() : cancelCodex()).catch(e => setError(errorText(e))); }
   function togglePdf() { if (showPdf) closePdf(); else revealPdf(); }
-  function closePdf() { cancelPdfNavigation(); setPdfOpen(false); setCompactTab('source'); }
-  function changeLayout(next: WorkspaceState['layout']) { setCompareOpen(false); captureWorkspace(); stopPendingPdfNavigation(); setLayout(next); setCommentsHidden(next === 'writing'); if (next !== 'source-comments') setPdfOpen(true); }
+  function closePdf() { setClassicSurface('source'); cancelPdfNavigation(); setPdfOpen(false); setCompactTab('source'); }
+  function changeLayout(next: WorkspaceState['layout']) { setClassic(false); setCompareOpen(false); captureWorkspace(); stopPendingPdfNavigation(); setLayout(next); setCommentsHidden(next === 'writing'); if (next !== 'source-comments') setPdfOpen(true); }
   function switchSurface(next: WorkspaceState['compactTab']) { captureWorkspace(); stopPendingPdfNavigation(); setCompactTab(next); }
-  function revealSource(focus = false) { captureWorkspace(); setCompactTab('source'); if (layout === 'pdf-comments') setLayout('source-comments'); if (focus) requestAnimationFrame(() => view.current?.focus()); }
+  function revealSource(focus = false) { if (classic) setClassicSurface('source'); captureWorkspace(); setCompactTab('source'); if (!classic && layout === 'pdf-comments') setLayout('source-comments'); if (focus) requestAnimationFrame(() => view.current?.focus()); }
   function goToSource(from: number, to = from) {
     const editor = view.current, paper = projectRef.current;
     if (!editor || !paper || from < 0 || to < from || to > editor.state.doc.length) return;
@@ -736,7 +767,7 @@ export function App() {
       editor.focus();
     });
   }
-  function revealPdf() { captureWorkspace(); setPdfOpen(true); setCompactTab('pdf'); if (layout === 'source-comments') setLayout('pdf-comments'); }
+  function revealPdf() { if (classic) setClassicSurface('pdf'); captureWorkspace(); setPdfOpen(true); setCompactTab('pdf'); if (!classic && layout === 'source-comments') setLayout('pdf-comments'); }
   function changeFollowing(value: boolean) { cancelPdfNavigation(); setFollowComments(value); }
   useEffect(() => {
     const pending = followPending.current;
@@ -897,7 +928,7 @@ export function App() {
   async function saveInstructions() {
     const p = projectRef.current; if (!p || aiBusy) return;
     const done = gate.current.begin('instructions'); if (!done) return;
-    try { await window.editor.setPaperInstructions(p.id, paperInstructions); p.paperInstructions = paperInstructions; setSavedInstructions(paperInstructions); setStatus('Paper instructions saved'); }
+    try { const preferences = { localEditsOnly, preserveVoice }; await window.editor.setPaperGuidance(p.id, paperInstructions, preferences); p.paperInstructions = paperInstructions; p.editPreferences = preferences; setSavedInstructions(paperInstructions); setSavedPreferences(preferences); setStatus('Paper guidance saved · applies to reviews, discussions and paper chat'); }
     catch (e) { setError(errorText(e)); } finally { done(); }
   }
   function resizePane(index: number, pixels: number, neighbor = index + 1) {
@@ -920,16 +951,32 @@ export function App() {
     setNotesOpen(true); requestAnimationFrame(() => document.getElementById('reply')?.focus());
   }
   async function cancelCodex() { codexCancelEpoch.current++; await window.editor.cancelCodex(); }
-  async function convertFeedback(label: string, feedback: string) {
+  async function prepareFeedback(values: Omit<PrepareFeedback, 'projectId' | 'text'>) {
+    const captured = input(); if (!captured) throw new Error('Open a paper first.');
+    const done = gate.current.begin('results'); if (!done) throw new Error('Wait for the current operation.');
+    try { await flush(); return await window.editor.prepareFeedback({ ...values, projectId: captured.projectId, text: captured.text }); }
+    finally { done(); }
+  }
+  async function convertFeedback(record: FeedbackRecord, all: boolean, autoAdd: boolean) {
     const epoch = codexCancelEpoch.current;
     const captured = input(); if (!captured) throw new Error('Open a paper first.');
     const done = gate.current.begin('codex'); if (!done || aiBusy) { done?.(); throw new Error('Wait for the current Codex request.'); }
     setAiBusy(true); setError('');
     try { await flush(); if (gate.current.closing || epoch !== codexCancelEpoch.current) throw new Error('Feedback request cancelled before sending.');
-      const request = { projectId: captured.projectId, text: captured.text, label, feedback };
-      setContextText(JSON.stringify(feedbackContext(request, projectRef.current?.paperInstructions), null, 2));
-      const result = await window.editor.convertFeedback(request);
-      setStatus('Outside feedback converted · choose which comments to add'); return result;
+      let result = record;
+      do {
+        setContextText(JSON.stringify(feedbackBatchContext(result), null, 2));
+        result = await window.editor.resumeFeedback({ projectId: captured.projectId, id: record.id, all: false });
+        if (autoAdd && !gate.current.closing) {
+          const current = input();
+          if (current?.projectId === captured.projectId) {
+            const incoming = feedbackComments(result, current.text, current.review.comments);
+            if (incoming.length) { appendReview(incoming, false, true); await flush(); }
+          }
+        }
+        if (gate.current.closing || epoch !== codexCancelEpoch.current) break;
+      } while (all && result.status !== 'complete');
+      setStatus(autoAdd ? 'New feedback comments added · your place is preserved' : 'Feedback batch saved · choose which comments to add'); return result;
     } finally { setAiBusy(false); done(); }
   }
   async function adoptFeedback(incoming: Comment[], expectedText: string) {
@@ -941,27 +988,27 @@ export function App() {
   function reviewRequest() {
     const captured = input(), selection = view.current?.state.selection.main;
     if (!captured || !selection) throw new Error('Open a paper first.');
-    return { projectId: captured.projectId, text: captured.text, from: selection.empty ? 0 : selection.from, to: selection.empty ? captured.text.length : selection.to, instructions, localEditsOnly, attachmentPreviewId: attachmentPreview?.id, requestId: crypto.randomUUID() };
+    return { projectId: captured.projectId, text: captured.text, from: selection.empty ? 0 : selection.from, to: selection.empty ? captured.text.length : selection.to, instructions, localEditsOnly, autoAddComments, attachmentPreviewId: attachmentPreview?.id, requestId: crypto.randomUUID() };
   }
   function previewContext(reply = false) {
     try {
       const captured = input(); if (!captured) return;
-      const payload = reply && active ? replyContext({ projectId: captured.projectId, text: captured.text, comment: active, message: active.replyDraft.trim() || deeperQuestion }, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview)) : reviewContext(reviewRequest(), projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview));
+      const payload = reply && active ? replyContext({ projectId: captured.projectId, text: captured.text, comment: active, message: active.replyDraft.trim() || deeperQuestion }, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences) : reviewContext(reviewRequest(), projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences);
       setContextText(JSON.stringify(payload, null, 2)); setContextOpen(true);
     } catch (e) { setError(errorText(e)); }
   }
   async function startSections() {
-    const captured = input(); if (!captured || aiBusy || effortBusy || attachmentBusy || attachmentPending || paperInstructions !== savedInstructions) return;
+    const captured = input(); if (!captured || aiBusy || effortBusy || attachmentBusy || attachmentPending || guidanceDirty) return;
     try { reviewSections(captured.text); } catch (e) { setError(errorText(e)); return; }
     const done = gate.current.begin('codex'); if (!done) return;
     setAiBusy(true); setReviewBusy(true); setCommentsHidden(false); setError(''); setReviewOpen(false); setSectionProgress(null);
     const references = attachmentPreview;
     const runner = new SectionReview({ request: request => {
-      setContextText(JSON.stringify(reviewContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview)), null, 2));
+      setContextText(JSON.stringify(reviewContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences), null, 2));
       return window.editor.requestReview({ ...request, attachmentPreviewId: references?.id });
     }, delivered: () => inbox.current!.refresh(), cancel: () => window.editor.cancelCodex(), changed: setSectionProgress });
     sectionRun.current = runner;
-    try { await runner.run({ projectId: captured.projectId, text: captured.text, instructions, localEditsOnly }); }
+    try { await runner.run({ projectId: captured.projectId, text: captured.text, instructions, localEditsOnly, autoAddComments }); }
     catch (e) { setError(errorText(e) + ' Completed sections remain available.'); }
     finally { sectionRun.current = null; setAiBusy(false); setReviewBusy(false); done(); }
   }
@@ -971,7 +1018,7 @@ export function App() {
     setAiBusy(true); setReviewBusy(true); setCommentsHidden(false); setError(''); setReviewOpen(false); setSectionProgress(null);
     try {
       const request = reviewRequest();
-      setContextText(JSON.stringify(reviewContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview)), null, 2));
+      setContextText(JSON.stringify(reviewContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences), null, 2));
       const added = await window.editor.requestReview(request);
       if (!gate.current.closing) { setStatus(`Codex returned ${added.length} comments`); await inbox.current!.refresh(); }
     } catch (e) { setError(errorText(e) + ' Completed review results are kept in .modern-editor/documents/<document-id>/reviews.'); setStatus('Codex review stopped'); } finally { setAiBusy(false); setReviewBusy(false); done(); }
@@ -990,7 +1037,7 @@ export function App() {
     const request = { projectId: captured.projectId, text: captured.text, comment: c, message, requestId: crypto.randomUUID(), deeper, attachmentPreviewId: attachmentPreview?.id };
     const perform = async () => {
       await flush(); if (gate.current.closing || epoch !== codexCancelEpoch.current || projectRef.current?.id !== captured.projectId) return;
-      setContextText(JSON.stringify(replyContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview)), null, 2));
+      setContextText(JSON.stringify(replyContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences), null, 2));
       await window.editor.replyToComment(request);
       if (!gate.current.closing) { await inbox.current!.refresh(); setStatus('Codex replied · inspect suggested wording in the discussion'); }
     };
@@ -1047,6 +1094,13 @@ export function App() {
     setHelpChatOpen(false); setCompareOpen(false);
     if (pdf) showInPdf(c); else goToSource(c.from, c.to);
   }
+  async function savePdfSnapshot(id?: string) {
+    const p = projectRef.current, shown = id ?? displayedBuild.current?.id;
+    if (!p || !shown) { setNotice('Compile or preview a PDF first.'); return; }
+    try { const result = await window.editor.exportPdf(p.id, shown); if (result && projectRef.current?.id === p.id) setStatus('PDF saved · ' + result.path); }
+    catch (e) { setError(errorText(e)); }
+  }
+  async function compileAndExportPdf() { setFilesOpen(false); const result = await compile(); if (result?.success) await savePdfSnapshot(result.id); }
   function findInFocusedPane() {
     // Every viewer stays mounted. Route to the active instance, never to the
     // first search field inside the shared container (which may be hidden).
@@ -1059,15 +1113,16 @@ export function App() {
   const freshness = !build ? 'No PDF compiled yet' : text !== pdfText ? 'PDF is older than the current source' : dependencyStale ? inputInspection === 'changed' ? 'PDF inputs have changed since compilation' : 'PDF inputs need verification' : build.engine !== engine ? 'PDF uses a different LaTeX engine' : dirty ? 'PDF matches the current unsaved source' : 'PDF matches the current source';
 
   const comparisonBaselineControl = !preview && <label className="comparison-baseline">Against<select aria-label="Text diff baseline" disabled={comparisonBusy} value={comparisonBase} onChange={e => { const value = e.target.value; if (value === 'choose') void keepComparison(); else if (value === 'saved') toggleComparison(); else setComparisonBase(value as 'session' | 'pinned'); }}><option value="session">Session start</option>{baseline && <option value="pinned">{baseline.name}</option>}<optgroup label="Other versions"><option value="choose">Choose version…</option><option value="saved">Saved versions…</option></optgroup></select></label>;
-  return <><main className="app-shell" aria-busy={locked} {...(locked ? { inert: '' } : {})}>
+  return <><main className={`app-shell ${classic && project ? 'classic-app' : ''}`} aria-busy={locked} {...(locked ? { inert: '' } : {})}>
     <header className={`app-header unified-toolbar ${toolbarCollapsed ? 'collapsed' : ''}`}>
       <div className="brand-mark" title="Modern Editor">M</div><div className="file-name" title={project?.path}><strong>{project ? (displayName ? `${displayName} · ${project.name}` : project.name) : 'Modern Editor'}</strong>{project && <span className={dirty ? 'unsaved' : 'saved'}>{dirty ? 'Unsaved source' : 'Source saved'}</span>}{project && <button className="close-project" title="Return home; unsaved source and comments are kept in recovery" onClick={() => void close(true)}>Close project</button>}</div>
-      {!toolbarCollapsed && <div className="toolbar-actions">{project && <><button onClick={() => doHistory()} disabled={!canUndo || compareOpen}>Undo</button><button onClick={() => void save()}>Save</button><button onClick={() => setReviewOpen(v => !v)} disabled={aiBusy || busy || effortBusy || compareOpen}>Review with Codex</button>{docMode === 'latex' ? <button className="primary" title="Compile current draft · Command+T or Command+B" aria-keyshortcuts="Meta+T Meta+B Control+T Control+B" onClick={() => void compile()} disabled={busy}>{busy ? 'Working…' : 'Compile'}</button> : completeDocument ? <button onClick={switchToPdf}>Switch to PDF</button> : <button onClick={() => void addPreambleAndCompile()} disabled={busy || aiBusy || effortBusy || !text.trim()} title="Ask Codex for a wrapper, check it once, then add it as one undoable edit">Add preamble…</button>}<ActionMenu label="View ▾" menuLabel="Workspace view"><div>{([['auto', 'Automatic'], ['source-comments', 'Source + comments'], ['pdf-comments', 'PDF + comments'], ['three', 'Three panes'], ['writing', 'Source + PDF · writing'], ['stacked', 'PDF below · stacked']] as const).map(([mode, label]) => <button key={mode} aria-pressed={mode === 'writing' ? commentsHidden : layout === mode && !commentsHidden} onClick={() => changeLayout(mode)}>{docMode === 'text' ? label.replaceAll('PDF', 'Text diff') : label}</button>)}<button onClick={() => setPaneSizes([.28, .33, .39])}>Reset pane widths</button></div></ActionMenu></>}
+      {!toolbarCollapsed && <div className="toolbar-actions">{project && !classic && <><button onClick={() => doHistory()} disabled={!canUndo || compareOpen}>Undo</button><button onClick={() => void save()}>Save</button><button onClick={() => setReviewOpen(v => !v)} disabled={aiBusy || busy || effortBusy || compareOpen}>Review with Codex</button>{docMode === 'latex' ? <button className="primary" title="Compile current draft · Command+T or Command+B" aria-keyshortcuts="Meta+T Meta+B Control+T Control+B" onClick={() => void compile()} disabled={busy}>{busy ? 'Working…' : 'Compile'}</button> : completeDocument ? <button onClick={switchToPdf}>Switch to PDF</button> : <button onClick={() => void addPreambleAndCompile()} disabled={busy || aiBusy || effortBusy || !text.trim()} title="Ask Codex for a wrapper, check it once, then add it as one undoable edit">Add preamble…</button>}<ActionMenu label="View ▾" menuLabel="Workspace view"><div>{([['auto', 'Automatic'], ['source-comments', 'Source + comments'], ['pdf-comments', 'PDF + comments'], ['three', 'Three panes'], ['writing', 'Source + PDF · writing'], ['stacked', 'PDF below · stacked']] as const).map(([mode, label]) => <button key={mode} aria-pressed={mode === 'writing' ? commentsHidden : layout === mode && !commentsHidden} onClick={() => changeLayout(mode)}>{docMode === 'text' ? label.replaceAll('PDF', 'Text diff') : label}</button>)}<button onClick={() => setPaneSizes([.28, .33, .39])}>Reset pane widths</button></div></ActionMenu></>}
         <ActionMenu><div><strong>Paper</strong>{project && <button onClick={() => void close(true)}>Close project</button>}<button onClick={() => void open()} disabled={busy || aiBusy}>Open paper…</button><button onClick={() => void open(false, false, true)} disabled={busy || aiBusy}>New draft</button><button onClick={() => void open(true)} disabled={busy || aiBusy}>New sample</button><button onClick={() => void inspectRecovery()}>Recover source…</button>{project && <><button onClick={() => void exportSource()}>Export source…</button>{project.name.toLowerCase().endsWith('.txt') && completeDocument && <button onClick={() => void exportSource(false, 'tex')}>Export LaTeX copy…</button>}<button onClick={() => void importReview()} disabled={busy || aiBusy}>Import JSON…</button></>}</div>
-          {project && <><div><strong>Writing</strong><button disabled={aiBusy || busy} onClick={() => setFeedbackOpen(true)}>Import outside feedback…</button><button onClick={() => showAttachments()}>Reference folders and files…</button><button onClick={() => setSourcesOpen(true)}>Sources used…</button><button onClick={addAuthorComment} disabled={compareOpen}>Add comment to selection</button><button onClick={openFind} disabled={compareOpen}>Find…</button><button onClick={toggleComparison}>Compare versions…</button><button onClick={() => { setInboxOpen(true); void inbox.current!.refresh(); }}>Waiting Codex results…</button><button disabled={!contextText} onClick={() => setContextOpen(true)}>Latest Codex context…</button><label>Codex effort<select aria-label="Codex effort" value={effort} disabled={aiBusy || busy || effortBusy} onChange={e => void changeEffort(e.target.value as Effort)}><option value="low">Quick</option><option value="medium">Standard</option><option value="high">Deep</option><option value="max">Max</option></select></label><label className="fast-mode-control"><span><input type="checkbox" aria-label="Fast mode" checked={fastMode} disabled={aiBusy || busy || effortBusy} onChange={e => void changeFastMode(e.target.checked)} /> Fast mode</span><small>Faster responses · increased usage</small></label></div>
+          {project && <><div><strong>Writing</strong><button disabled={aiBusy || busy} onClick={() => { setFeedbackContextId(undefined); setFeedbackOpen(true); }}>Import outside feedback…</button><button onClick={() => showAttachments()}>Context and reference files…</button><button onClick={() => setGuidanceOpen(true)}>Paper instructions…</button><button onClick={() => setSourcesOpen(true)}>Sources used…</button><button onClick={addAuthorComment} disabled={compareOpen}>Add comment to selection</button><button onClick={openFind} disabled={compareOpen}>Find…</button><button onClick={toggleComparison}>Compare versions…</button><button onClick={() => { setInboxOpen(true); void inbox.current!.refresh(); }}>Waiting Codex results…</button><button disabled={!contextText} onClick={() => setContextOpen(true)}>Latest Codex context…</button><label>Codex effort<select aria-label="Codex effort" value={effort} disabled={aiBusy || busy || effortBusy} onChange={e => void changeEffort(e.target.value as Effort)}><option value="low">Quick</option><option value="medium">Standard</option><option value="high">Deep</option><option value="max">Max</option></select></label><label className="fast-mode-control"><span><input type="checkbox" aria-label="Fast mode" checked={fastMode} disabled={aiBusy || busy || effortBusy} onChange={e => void changeFastMode(e.target.checked)} /> Fast mode</span><small>Faster responses · increased usage</small></label></div>
           <div><strong>Compile &amp; layout</strong>{docMode === 'latex' && <label>LaTeX engine<select aria-label="LaTeX engine" value={engine} disabled={busy} onChange={e => void changeEngine(e.target.value as Engine)}><option value="pdflatex">pdfLaTeX</option><option value="lualatex">LuaLaTeX</option><option value="xelatex">XeLaTeX</option></select></label>}<button onClick={() => void addPreambleAndCompile()} disabled={busy || aiBusy || effortBusy || compareOpen || !text.trim() || completeDocument}>Add preamble…</button><button disabled={busy} title="Remove older cached PDFs. Other papers may need compiling again when reopened; source and saved reading positions are kept." onClick={() => void clearBuilds()}>Clear older builds</button><label><span><input type="checkbox" aria-label="Show comments" checked={!commentsHidden} onChange={toggleComments} /> Show comments</span></label><label>Paper display name<input aria-label="Paper display name" maxLength={80} value={displayName} placeholder={project.name} onChange={e => setDisplayName(e.target.value)} /></label><button onClick={() => setToolbarCollapsed(true)}>Hide toolbar</button></div></>}
           <div><strong>Help &amp; setup</strong><button onClick={() => setSettingsOpen(true)}>Settings and Check setup…</button><button onClick={() => setHelpOpen(true)}>Help and shortcuts…</button></div>
         </ActionMenu></div>}
+      {project && <button className="files-toggle" onClick={() => setFilesOpen(true)}>Files</button>}{project && <button className="classic-toggle" aria-pressed={classic} onClick={() => { captureWorkspace(); stopPendingPdfNavigation(); setCompareOpen(false); setClassic(v => !v); }}>{classic ? 'Workspace view' : 'Classic view'}</button>}
       <button aria-pressed={helpChatOpen} title="Codex Side Chat · Command/Ctrl+Shift+H" onClick={() => setHelpChatOpen(v => !v)}>Codex Side Chat</button>
       <button className="toolbar-toggle" aria-label={toolbarCollapsed ? 'Show toolbar' : 'Hide toolbar'} title="Show/hide toolbar · ⌘⇧M" onClick={() => setToolbarCollapsed(v => !v)}>{toolbarCollapsed ? 'Show controls ▾' : '⌃'}</button>
     </header>
@@ -1080,15 +1135,27 @@ export function App() {
           <label>Template<select aria-label="Review template" value={reviewPresets.find(p => p.instructions === instructions)?.id ?? 'custom'} title="Choose a template to replace the instructions below" onChange={e => { const preset = reviewPresets.find(p => p.id === e.target.value); if (preset) setInstructions(preset.instructions); }}>
             {reviewPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<option value="custom" disabled>Custom instructions</option>
           </select></label>
-          <label className="local-edits"><input type="checkbox" checked={localEditsOnly} onChange={e => setLocalEditsOnly(e.target.checked)} />Smallest local edits only</label>
+          <label className="local-edits"><input disabled={aiBusy}  type="checkbox" checked={localEditsOnly} onChange={e => setLocalEditsOnly(e.target.checked)} />Smallest local edits only</label>{guidanceDirty && <button disabled={aiBusy} onClick={() => void saveInstructions()}>Save paper guidance</button>}
         </div>
         <p className="review-policy-note">{localEditsOnly ? 'One small, independent edit per suggestion. Broader concerns become discussion comments.' : 'Suggestions may include larger rewrites when your instructions call for them.'}</p>
         <label>Instructions for this review<textarea maxLength={10000} value={instructions} onChange={e => setInstructions(e.target.value)} /></label>
-        <details><summary>Saved paper instructions{paperInstructions !== savedInstructions ? ' · unsaved' : ''}</summary><p>Notation, assumptions and style preferences included in reviews and discussions for this document.</p><textarea aria-label="Paper instructions" maxLength={10000} value={paperInstructions} onChange={e => setPaperInstructions(e.target.value)} /><button disabled={aiBusy || paperInstructions === savedInstructions} onClick={() => void saveInstructions()}>Save paper instructions</button></details>
-        <div className="request-actions"><button className="primary" disabled={aiBusy || attachmentBusy || attachmentPending || paperInstructions !== savedInstructions} onClick={() => void requestReview()}>Start review</button><button disabled={aiBusy || attachmentBusy || attachmentPending || paperInstructions !== savedInstructions} onClick={() => void startSections()}>Review section by section</button><button onClick={() => previewContext()}>Preview context sent to Codex</button><button onClick={() => showAttachments(true)}>Attach context{referenceState.roots.some(r => r.enabled) ? ` (${referenceState.roots.filter(r => r.enabled).length})` : attachmentPreview ? ` (${attachmentPreview.selections.length})` : '…'}</button></div>
-        <p>Section review uses a fixed copy of this source, one section at a time. You may keep editing; results from an earlier draft wait for inspection. Pause finishes the current section; Stop cancels the remaining work.</p>
+        <details><summary>Saved paper instructions{guidanceDirty ? ' · unsaved' : ''}</summary><p>Notation, assumptions and style preferences included in reviews and discussions for this document.</p><textarea aria-label="Paper instructions" maxLength={10000} value={paperInstructions} onChange={e => setPaperInstructions(e.target.value)} /><button disabled={aiBusy || !guidanceDirty} onClick={() => void saveInstructions()}>Save paper instructions</button></details>
+        <label className="local-edits"><input type="checkbox" disabled={aiBusy} checked={autoAddComments} onChange={e => setAutoAddComments(e.target.checked)} /> Add comments when ready</label>
+        <p className="review-policy-note">New comments join the queue without changing your current selection. Uncertain source matches stay flagged. Uncheck to inspect results in Waiting Codex results first.</p>
+        <div className="request-actions"><button className="primary" disabled={aiBusy || attachmentBusy || attachmentPending || guidanceDirty} onClick={() => void requestReview()}>Start review</button><button disabled={aiBusy || attachmentBusy || attachmentPending || guidanceDirty} onClick={() => void startSections()}>Review section by section</button><button onClick={() => previewContext()}>Preview context sent to Codex</button><button onClick={() => showAttachments(true)}>Attach context{referenceState.roots.some(r => r.enabled) ? ` (${referenceState.roots.filter(r => r.enabled).length})` : attachmentPreview ? ` (${attachmentPreview.selections.length})` : '…'}</button></div>
+        <p>Section review uses a fixed copy of this source, one section at a time. You may keep editing; source matches are checked again on arrival. Pause finishes the current section; Stop cancels the remaining work.</p>
       </section>}
-      <div className="references-drawer" hidden={!attachmentsOpen}><div className="recovery-heading"><strong>Local references</strong><button aria-label="Close local references" onClick={closeAttachments}>×</button></div><ReferencePanel key={`references-${project.id}`} projectId={project.id} disabled={aiBusy || locked} onState={setReferenceState} showSources={() => setSourcesOpen(true)} /><details className="reference-excerpts"><summary>Choose exact excerpts (optional)</summary><AttachmentPanel key={project.id} api={{ inventory: () => window.editor.attachmentInventory(project.id), chooseFiles: () => window.editor.chooseAttachments(project.id, false), chooseFolder: () => window.editor.chooseAttachments(project.id, true), preview: selections => window.editor.previewAttachments(project.id, selections), remove: id => window.editor.removeAttachment(project.id, id), clear: () => window.editor.clearAttachments(project.id) }} preview={attachmentPreview} onPreview={setAttachmentPreview} disabled={aiBusy || locked} onBusyChange={setAttachmentBusy} onPendingChange={setAttachmentPending} /></details></div>
+      {guidanceOpen && <div className="workspace-panel-backdrop"><section ref={guidanceDialog} tabIndex={-1} className="workspace-panel guidance-panel" role="dialog" aria-modal="true" aria-label="Paper instructions">
+        <div className="recovery-heading"><h2>Paper instructions</h2><button aria-label="Close paper instructions" onClick={() => setGuidanceOpen(false)}>×</button></div>
+        <p>For {project.name}. Saved guidance accompanies reviews, section reviews, comment discussions, outside-feedback conversion and paper chat. Editor-only help stays separate.</p>
+        <label><input type="checkbox" disabled={aiBusy} checked={localEditsOnly} onChange={e => setLocalEditsOnly(e.target.checked)} /> Smallest local edits only</label>
+        <label><input type="checkbox" disabled={aiBusy} checked={preserveVoice} onChange={e => setPreserveVoice(e.target.checked)} /> Keep changes minimal and preserve my voice</label>
+        <label>Standing instructions<textarea aria-label="Standing paper instructions" maxLength={10000} value={paperInstructions} onChange={e => setPaperInstructions(e.target.value)} placeholder="Notation, assumptions, things not to change…" /></label>
+        <details><summary>Inspect effective guidance</summary><pre>{JSON.stringify(paperGuidance(paperInstructions, { localEditsOnly, preserveVoice }), null, 2)}</pre></details>
+        <button className="primary" disabled={aiBusy || !guidanceDirty} onClick={() => void saveInstructions()}>Save paper guidance</button><button onClick={() => { setPaperInstructions(savedInstructions); setLocalEditsOnly(savedPreferences.localEditsOnly); setPreserveVoice(savedPreferences.preserveVoice); }}>Discard unsaved guidance</button>
+        <p>{guidanceDirty ? 'Unsaved guidance. Save before requesting a review; existing requests keep their captured instructions.' : 'Saved locally. Saving alone sends nothing to Codex.'}</p>
+      </section></div>}
+      <div className="references-drawer" hidden={!attachmentsOpen}><div className="recovery-heading"><strong>Local references</strong><button aria-label="Close local references" onClick={closeAttachments}>×</button></div><ReferencePanel key={`references-${project.id}`} projectId={project.id} disabled={aiBusy || locked} onState={setReferenceState} showSources={() => setSourcesOpen(true)} convert={id => { setAttachmentsOpen(false); setFeedbackContextId(id); setFeedbackOpen(true); }} /><details className="reference-excerpts"><summary>Choose exact excerpts (optional)</summary><AttachmentPanel key={project.id} api={{ inventory: () => window.editor.attachmentInventory(project.id), chooseFiles: () => window.editor.chooseAttachments(project.id, false), chooseFolder: () => window.editor.chooseAttachments(project.id, true), preview: selections => window.editor.previewAttachments(project.id, selections), remove: id => window.editor.removeAttachment(project.id, id), clear: () => window.editor.clearAttachments(project.id) }} preview={attachmentPreview} onPreview={setAttachmentPreview} disabled={aiBusy || locked} onBusyChange={setAttachmentBusy} onPendingChange={setAttachmentPending} /></details></div>
       {sourcesOpen && <SourcesUsedPanel projectId={project.id} close={() => setSourcesOpen(false)} />}
       {attachmentPending && !attachmentsOpen && <button className="waiting-alert" onClick={() => showAttachments()}>Selected references need a preview before asking Codex</button>}
       {contextOpen && <section className="context-preview" aria-label="Codex context preview"><div className="recovery-heading"><strong>Codex context</strong><button className="icon" aria-label="Close Codex context" onClick={() => setContextOpen(false)}>×</button></div><p>This shows the latest preview or request. Starting a request updates it to the actual payload, including saved instructions and nearby source. This is the initial text supplied to Codex. Enabled reference folders/files may supply additional excerpts through reading tools during the request; Sources used records those results afterwards. Optional manually selected excerpts are also included. Selecting references makes no model request; asking Codex sends relevant text to the configured service.</p><pre tabIndex={0}>{contextText || 'Preview a review or discussion to see its context.'}</pre></section>}
@@ -1100,7 +1167,19 @@ export function App() {
       {error && <div className="error-bar" role="alert"><span>{error}</span>{error.includes('another editor') && <button disabled={busy || aiBusy} onClick={() => void open(false, true)}>Reload disk</button>}<button className="icon" aria-label="Dismiss error" onClick={() => setError('')}>×</button></div>}
       {buildRetry && <BuildPreparationPanel key={buildRetry.id} preparation={buildRetry.preparation} disabled={busy || aiBusy || locked} stale={text !== buildRetry.source || buildRetry.acceptIds.length > 0 && JSON.stringify(buildRetry.acceptIds.map(id => comments.find(c => c.id === id))) !== buildRetry.comment} prepare={() => buildAssistance() as Promise<BuildInputHelpPreview>} ask={preview => buildAssistance(preview) as Promise<import('../shared/build-input-help.ts').BuildInputHelpResult>} compile={(selectedPaths, limits) => void compile(buildRetry.acceptId, undefined, { selectedPaths, limits, acceptIds: buildRetry.acceptIds })} />}
       {pdfNavigation && <div className="pdf-navigation" role="status"><span>{pdfNavigation.reason}</span>{pdfNavigation.target && <button disabled={busy || pdfLocating} onClick={() => void navigatePdf(pdfNavigation.target!, true)}>Compile and show</button>}<button className="icon" aria-label="Dismiss PDF navigation" onClick={cancelPdfNavigation}>×</button></div>}
-      <div ref={workspace} className={`workspace layout-${arrangement} ${commentsHidden ? 'comments-hidden' : ''}`} data-surface={compactTab} style={{ ...(compareOpen ? { display: 'none' } : {}), '--source-fr': paneSizes[0] * 100 + 'fr', '--review-fr': paneSizes[1] * 100 + 'fr', '--pdf-fr': paneSizes[2] * 100 + 'fr' } as CSSProperties}>
+      <div ref={workspace} className={`workspace layout-${arrangement} ${commentsHidden ? 'comments-hidden' : ''} ${classicDetails ? 'classic-details' : ''} ${docMode === 'text' ? 'plain-document' : ''}`} data-surface={compactTab} style={{ ...(compareOpen ? { display: 'none' } : {}), '--source-fr': paneSizes[0] * 100 + 'fr', '--review-fr': paneSizes[1] * 100 + 'fr', '--pdf-fr': paneSizes[2] * 100 + 'fr' } as CSSProperties}>
+        {classic && <nav className="classic-tools" aria-label="Classic writing controls">
+          <button title="Write" aria-pressed={classicSurface === 'source'} onClick={() => setClassicSurface('source')}>Write</button>
+          <button title="PDF or text comparison" aria-pressed={classicSurface === 'pdf'} onClick={() => { setClassicSurface('pdf'); setPdfOpen(true); }}>View</button>
+          <button title="Review with Codex" disabled={aiBusy || busy} onClick={() => setReviewOpen(v => !v)}>Review</button>
+          <button title="Save source" onClick={() => void save()}>Save</button>
+          <button title="Undo" disabled={!canUndo} onClick={() => doHistory()}>Undo</button>
+          <button title="Compile current draft" disabled={busy || docMode !== 'latex'} onClick={() => void compile()}>Compile</button>
+          <button title="Context and reference files" onClick={() => showAttachments()}>Context</button>
+          <button title="Paper instructions" onClick={() => setGuidanceOpen(true)}>Guide</button>
+          <button aria-pressed={!commentsHidden} title="Show or hide bottom suggestions" onClick={toggleComments}>Notes</button>
+          <button aria-pressed={classicDetails} title="Original passage and detailed source diff" onClick={() => setClassicDetails(v => !v)}>Details</button>
+        </nav>}
         {arrangement === 'tabs' && <div className="surface-tabs" role="tablist" aria-label="Paper surface" onKeyDown={e => { if (['ArrowLeft','ArrowRight'].includes(e.key)) { e.preventDefault(); const next = compactTab === 'source' ? 'pdf' : 'source'; switchSurface(next); requestAnimationFrame(() => document.getElementById(`tab-${next}`)?.focus()); } }}>{(['source','pdf'] as const).map(surface => <button key={surface} id={`tab-${surface}`} role="tab" aria-selected={compactTab === surface} aria-controls={`${surface}-surface`} tabIndex={compactTab === surface ? 0 : -1} onClick={() => switchSurface(surface)}>{surface === 'source' ? 'Source' : representation === 'text' ? 'Text diff' : representation === 'changes' ? 'Changes PDF' : 'PDF'}</button>)}</div>}
         <section id="source-surface" className="source-pane" hidden={!showSource} aria-label="Source editor"><div className="pane-heading"><span>{docMode === 'text' ? 'Text source' : 'LaTeX source'}</span><span className="source-pane-tools">{commentsHidden && <button className="text-button restore-comments" onClick={() => revealComments(true)} title="Show comments · Command+2"><span aria-hidden="true">{reviewBusy ? '◌ ' : ''}</span>Show comments{pending.length ? ` (${pending.length})` : ''}</button>}{docMode === 'latex' && <button className="text-button" disabled={busy || pdfLocating} title="Show the source selection or cursor in the displayed PDF" onClick={() => showInPdf()}>{pdfLocating ? 'Locating…' : 'Show in PDF'}</button>}</span></div>{findOpen && <form className="source-search" aria-label="Find in source" onSubmit={e => { e.preventDefault(); find(); }} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setFindOpen(false); view.current?.focus(); } if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); find(true); } }}><input ref={searchInput} aria-label="Find text in source" placeholder="Find exact text…" value={query} onChange={e => { setQuery(e.target.value); setFindNotice(''); }} /><button type="button" aria-label="Previous source match" onClick={() => find(true)}>↑</button><button type="submit" aria-label="Next source match">↓</button><span role="status">{findNotice}</span><button type="button" aria-label="Close source search" className="icon" onClick={() => { setFindOpen(false); view.current?.focus(); }}>×</button></form>}<div ref={host} className="editor-host" /></section>
         {!commentsHidden && <PaneDivider label="Resize paper and comments" extraClass="review-divider" onMove={delta => arrangement === 'pdf-comments' ? resizePane(2, delta, 1) : resizePane(0, delta)} />}
@@ -1116,13 +1195,13 @@ export function App() {
         }}>
           <div className="review-heading"><strong>Comments</strong><button className="text-button" aria-expanded={overviewOpen} onClick={() => setOverviewOpen(v => !v)}>Overview</button><button className="text-button" aria-pressed={laterOnly} onClick={showLater}>Later ({laterCount})</button><button className="text-button" onClick={() => showReviewHistory(!historyRef.current)}>{showHistory ? 'Pending' : 'History'}</button><ActionMenu label="More ▾" menuLabel="Comment actions"><div><button disabled={busy || locked || !bulkPlan.ids.length} onClick={acceptAll}>Accept all applicable suggestions ({bulkPlan.ids.length})</button><small>{docMode === 'text' ? 'Apply together without compiling. ' : 'Compile once, then apply together. '}{bulkPlan.leftPending} other pending comments stay for individual review; Later is kept. One Undo restores all changes.</small><button disabled={busy || locked || !pending.some(c => !c.later)} onClick={dismissPending}>Dismiss pending comments ({pending.filter(c => !c.later).length})</button><small>Keep Later comments. Retain History and discussions. Undo restores the whole action.</small></div></ActionMenu><button className="icon hide-comments" aria-label="Hide comments" title="Hide comments while writing · Command+2 brings them back" onClick={toggleComments}>×</button></div>
           {reviewBusy && <ReviewProgress section={sectionProgress} compact={!!active || visible.length > 0} pause={() => sectionRun.current?.pause()} resume={() => sectionRun.current?.resume()} stop={stopReview} />}
-          {(!reviewBusy || visible.length > 0) && <nav className="review-nav"><button aria-label="Previous comment" title="Previous comment · Shift+P" aria-keyshortcuts="Shift+P" onClick={() => move(-1)} disabled={!visible.length}>← Previous</button><span>{visible.length && visible.some(c => c.id === activeId) ? `${visible.findIndex(c => c.id === activeId) + 1} of ${visible.length}` : 'Complete'}</span><button aria-label="Next comment" title="Next comment · Shift+N" aria-keyshortcuts="Shift+N" onClick={() => move(1)} disabled={!visible.length}>Next →</button></nav>}
+          {(!reviewBusy || visible.length > 0) && <nav className="review-nav"><button aria-label="Previous comment" title="Previous comment · Shift+P" aria-keyshortcuts="Shift+P" onClick={() => move(-1)} disabled={!visible.length}>← Previous</button><span>{inspecting ? 'Applied · inspecting' : visible.length && visible.some(c => c.id === activeId) ? `${visible.findIndex(c => c.id === activeId) + 1} of ${visible.length}` : 'Complete'}</span><button aria-label="Next comment" title="Next comment · Shift+N" aria-keyshortcuts="Shift+N" onClick={() => move(1)} disabled={!visible.length && !inspecting}>Next →</button></nav>}
           <div className="review-content" ref={reviewScroll} onScroll={e => { if (!commentsHidden) lastReviewTop.current = e.currentTarget.scrollTop; }}>
           {overviewOpen && <CommentOverview comments={comments} activeId={activeId} onChoose={c => { historyRef.current = c.decision !== 'open'; setShowHistory(historyRef.current); laterRef.current = c.decision === 'open' && c.later; setLaterOnly(laterRef.current); choose(c.id, true, true); }} />}
           {active ? <article className="comment-card"><div className="comment-location"><span className="passage-links"><button className="text-button" title="Go to this comment’s passage in the source" onClick={() => { if (['current', 'stale'].includes(active.validity) && active.to > active.from) goToSource(active.from, active.to); else revealSource(true); }}>Source</button>{docMode === 'latex' && <><span aria-hidden="true">·</span><button className="text-button" aria-label="Show comment in PDF" disabled={busy || pdfLocating || active.validity !== 'current'} title="Show this comment’s current passage in the displayed PDF" onClick={() => showInPdf(active)}>PDF</button></>}</span></div><h1>{active.title}</h1><p className="explanation">{active.explanation}</p>
             {active.replacement !== null && active.original && active.validity !== 'current' && active.decision === 'open' && <div className="stale-notice"><p>{active.validity === 'unconfirmed' ? 'Check placement: this comment needs confirmation because its source context changed.' : `The passage is ${active.validity}.`} This suggestion cannot be applied yet.</p><p>Select the exact original words in the source, then confirm their placement.</p><button onClick={confirmPassage} disabled={busy}>Attach to selected text</button></div>}
             {active.replacement === null && (active.validity !== 'current' || active.questionOriginal !== undefined) ? <QuestionPassage text={text} comment={active} disabled={busy} onLink={linkQuestion} /> : active.original ? <div className="original-passage"><div id="original-label">Original</div><ReadableArea label="original" resetKey={active.id}><pre aria-labelledby="original-label" tabIndex={0}>{active.original}</pre></ReadableArea></div> : <p className="muted">General advice without a source quotation. Discuss it, keep it for later, or resolve it after reviewing the paper.</p>}
-            {active.replacement !== null ? <><label htmlFor="replacement">Proposed replacement</label><ReadableArea label="replacement" resetKey={active.id}><textarea id="replacement" className="sized-replacement" rows={2} maxLength={100000} spellCheck={false} value={active.draft ?? active.replacement} onChange={e => patch(active.id, { draft: e.target.value })} disabled={active.decision !== 'open'} /></ReadableArea><ProposalPreview text={text} comment={active} open={changesOpen} onOpenChange={setChangesOpen} /></> : <div className="question-note">A question for the author · no source replacement</div>}
+            {active.replacement !== null ? <><div className="proposal-heading"><label htmlFor="replacement">Proposed replacement</label>{active.decision === 'open' && <button className="text-button" onClick={() => { if (patch(active.id, { draft: active.original }, true)) { setStatus('Original copied into the proposal · Undo restores the previous proposal'); requestAnimationFrame(() => document.getElementById('replacement')?.focus()); } }}>Use original</button>}</div><ReadableArea label="replacement" resetKey={active.id}><textarea id="replacement" className="sized-replacement" rows={2} maxLength={100000} spellCheck={false} value={active.draft ?? active.replacement} onChange={e => patch(active.id, { draft: e.target.value })} disabled={active.decision !== 'open'} /></ReadableArea><ProposalPreview text={text} comment={active} open={changesOpen} onOpenChange={setChangesOpen} /></> : <div className="question-note">A question for the author · no source replacement</div>}
             {notesOpen && <div className="discussion"><h2>Discuss this comment</h2>{active.messages.map((m, i) => <DiscussionMessage key={i} message={m} comment={active} onUse={proposal => {
               if (patch(active.id, { replacement: proposal.replacement, draft: undefined, packages: proposal.packages }, true)) {
                 setStatus('Proposal updated · Accept changes the paper; Undo restores your previous proposal');
@@ -1137,13 +1216,14 @@ export function App() {
           </article> : reviewBusy ? null : <div className="empty-comments"><h2>{laterOnly ? 'No comments for later' : visible.length ? 'Choose a comment' : 'No pending comments'}</h2><p>Request a Codex review or import saved comments to work through suggestions beside the source.</p><button onClick={() => setReviewOpen(true)} disabled={aiBusy || busy || effortBusy || compareOpen}>Review with Codex</button></div>}
           </div>
           {active && <div className="review-decisions" aria-label="Comment decisions">
-            <div className="comment-actions">
+            {inspecting && <div className="accepted-inspection" role="status"><strong>Applied · inspect the PDF</strong><span>Undo is available. Save writes the source.</span><button className="primary" onClick={e => { if (e.detail > 1) return; move(1); }}>Next comment →</button></div>}
+            <div className="comment-actions" hidden={!!inspecting}>
               {active.replacement === null && <button className="primary" disabled={busy || active.decision !== 'open'} onClick={() => finishComment('resolved')}>Resolve</button>}
               {active.replacement !== null && <button className="primary review-action" aria-label="Accept" title="Apply without compiling and move to the next comment · Shift+A while focused on comments" aria-keyshortcuts="Shift+A Alt+Enter" disabled={busy || active.decision !== 'open' || active.validity !== 'current'} onClick={() => void acceptWithoutCompile(active.id)}><span>Accept</span><kbd aria-hidden="true">Shift+A</kbd></button>}
               <button className="review-action" aria-label="Reject" title="Reject and move on · Shift+R while focused on comments. Kept in History; Undo restores it." aria-keyshortcuts="Shift+R" disabled={busy || active.decision !== 'open'} onClick={() => finishComment('dismissed')}><span>Reject</span><kbd aria-hidden="true">Shift+R</kbd></button>
               <button className="review-action" aria-label="Skip" title="Skip · Shift+S while focused on comments" aria-keyshortcuts="Shift+S Alt+ArrowRight" onClick={() => move(1)} disabled={busy}><span>Skip</span><kbd aria-hidden="true">Shift+S</kbd></button>
             </div>
-            <div className="decision-secondary"><button className="discuss-action" aria-expanded={notesOpen} title="Discuss this comment · Shift+D" onClick={() => notesOpen ? setNotesOpen(false) : focusDiscussion()}>{notesOpen ? 'Hide discussion' : 'Discuss'}<kbd aria-hidden="true">Shift+D</kbd></button>{active.replacement !== null && <button className="preview-suggestion" disabled={busy || active.decision !== 'open'} onClick={() => void previewSuggestion()} title="Inspect the proposed draft without applying or saving it">Preview</button>}{docMode === 'latex' && active.replacement !== null && <button className="accept-compile" disabled={busy || active.decision !== 'open' || active.validity !== 'current'} onClick={() => void compile(active.id)} title="Check compilation of the suggestion and listed packages before applying, then move to the next comment. Undo is available.">Accept &amp; compile</button>}</div>
+            <div className="decision-secondary" hidden={!!inspecting}><button className="discuss-action" aria-expanded={notesOpen} title="Discuss this comment · Shift+D" onClick={() => notesOpen ? setNotesOpen(false) : focusDiscussion()}>{notesOpen ? 'Hide discussion' : 'Discuss'}<kbd aria-hidden="true">Shift+D</kbd></button>{active.replacement !== null && <button className="preview-suggestion" disabled={busy || active.decision !== 'open'} onClick={() => void previewSuggestion()} title="Inspect the proposed draft without applying or saving it">Preview</button>}{docMode === 'latex' && active.replacement !== null && <button className="accept-compile" disabled={busy || active.decision !== 'open' || active.validity !== 'current'} onClick={() => void compile(active.id)} title="Check compilation of the suggestion and listed packages before applying, then inspect its PDF. Choose Next when ready. Undo is available.">Accept &amp; compile</button>}</div>
             <div className="decision-meta"><ActionMenu label="Comment options ▾" menuLabel="Selected comment actions"><div>{active.decision === 'open' && <button className="text-button" aria-pressed={active.later} onClick={markLater}>{active.later ? 'Return to pending' : 'Later'}</button>}{active.decision === 'open' && active.replacement !== null && <button className="text-button" onClick={() => finishComment('resolved')}>Mark addressed manually</button>}{['dismissed', 'resolved'].includes(active.decision) && <button className="text-button" onClick={() => { if (patch(active.id, { decision: 'open' }, true)) { historyRef.current = false; setShowHistory(false); choose(active.id); } }}>Reopen</button>}<button className="text-button" disabled={discussionBusy || effortBusy || attachmentBusy || attachmentPending || (aiBusy && !sectionRun.current?.canDiscuss)} title="Ask Codex to reconsider this comment with high effort. Your draft stays unchanged." onClick={() => { setNotesOpen(true); void discuss(true); }}>Think more</button><button className="text-button" onClick={() => previewContext(true)}>Preview request</button><button className="text-button" onClick={() => showAttachments()}>Attach context{referenceState.roots.some(r => r.enabled) ? ` (${referenceState.roots.filter(r => r.enabled).length})` : attachmentPreview ? ` (${attachmentPreview.selections.length})` : '…'}</button></div></ActionMenu><span>Accept edits the draft · Save writes the file</span></div>
           </div>}
         </aside>
@@ -1151,7 +1231,7 @@ export function App() {
         <section id="pdf-surface" className="pdf-pane viewer-pane" hidden={!showPdf || compareOpen} aria-label="Document viewer">
           {representation !== 'changes' && <div className="viewer-controls"><label>View<select aria-label="Viewer format" value={representation} onChange={e => { cancelPdfNavigation(); setRepresentation(e.target.value as 'pdf' | 'text' | 'changes'); }}><option value="text">Text diff</option>{docMode === 'latex' && <><option value="pdf">PDF</option><option value="changes">Changes PDF</option></>}</select></label>
             {representation !== 'pdf' && comparisonBaselineControl}
-            <button className="icon viewer-close" aria-label="Hide viewer" onClick={closePdf}>×</button>
+            <div className="pdf-toolbar-slot" ref={pdfToolbar} hidden={representation !== 'pdf'} /><button className="icon viewer-close" aria-label="Hide viewer" onClick={closePdf}>×</button>
           </div>}
           {preview ? <div className="preview-banner"><strong role="status">{representation === 'pdf' && preview.build ? previewPdfLabel : !previewCurrent ? 'Preview out of date' : preview.state === 'building' ? 'Preparing preview…' : representation === 'pdf' && (!preview.build || preview.state === 'unavailable') ? 'Preview not possible' : 'Preview · not applied'}</strong>
             <button onClick={leavePreview}>Return to draft</button>
@@ -1161,9 +1241,9 @@ export function App() {
             {preview.build && preview.build.diagnostics.length > 0 && <details><summary>Preview build warnings ({preview.build.diagnostics.length})</summary>{preview.build.diagnostics.map((d, i) => <p key={i}>{d.message}</p>)}</details>}
             </div></details>
           </div> : representation === 'text' ? <p className="viewer-caption">{comparisonBase === 'pinned' && baseline ? baseline.name : 'Session start'} → Current draft · {dirty ? 'includes unsaved edits' : 'saved'} · Save keeps the comparison fixed</p> : null}
-          <ChangesPdfPane reasonsKey={comparisonReasonsKey} findHandle={changesPdfFind} key={project.id + ':changes'} input={{ projectId: project.id, before: preview?.source ?? (comparisonBase === 'pinned' && baseline ? baseline.text : sessionText), after: preview?.candidate.text ?? text, name: preview ? 'Current draft' : comparisonBase === 'pinned' && baseline ? baseline.name : 'Session start', engine, proposalId: preview?.commentId, selectedPaths: approvedBuildInputs.current }} visible={showPdf && !compareOpen && representation === 'changes'} disabled={busy || aiBusy || locked} proposalCurrent={!preview || previewCurrent} previewRequest={preview?.requestedAt} events={changeEvents} work={comparisonWork} baselineControl={comparisonBaselineControl} onFormat={format => { cancelPdfNavigation(); setRepresentation(format); }} onClose={closePdf} onSource={goToSource} onText={() => setRepresentation('text')} />
+          <ChangesPdfPane onExportReady={setChangesExport} onExport={id => void savePdfSnapshot(id)} reasonsKey={comparisonReasonsKey} findHandle={changesPdfFind} key={project.id + ':changes'} input={{ projectId: project.id, before: preview?.source ?? (comparisonBase === 'pinned' && baseline ? baseline.text : sessionText), after: preview?.candidate.text ?? text, name: preview ? 'Current draft' : comparisonBase === 'pinned' && baseline ? baseline.name : 'Session start', engine, proposalId: preview?.commentId, selectedPaths: approvedBuildInputs.current }} visible={showPdf && !compareOpen && representation === 'changes'} disabled={busy || aiBusy || locked} proposalCurrent={!preview || previewCurrent} previewRequest={preview?.requestedAt} events={changeEvents} work={comparisonWork} baselineControl={comparisonBaselineControl} onFormat={format => { cancelPdfNavigation(); setRepresentation(format); }} onClose={closePdf} onSource={goToSource} onText={() => setRepresentation('text')} />
           <TextDiffPane findHandle={textDiffFind} key={project.id} original={preview?.source ?? (comparisonBase === 'pinned' && baseline ? baseline.text : sessionText)} text={preview?.candidate.text ?? text} visible={showPdf && !compareOpen && representation === 'text'} focusKey={preview ? preview.commentId + preview.candidate.signature : active?.id} focusAt={preview?.candidate.from ?? (active?.validity === 'current' ? active.from : undefined)} />
-          <PdfPane findHandle={ordinaryPdfFind} bottomControls hideClose visible={showPdf && !compareOpen && representation === 'pdf'} followComments={preview ? false : followComments} onFollowChange={changeFollowing} jump={preview ? (previewPdfCurrent && preview.state === 'ready' ? preview.jump : null) : pdfJump} build={preview?.build ?? (viewCandidate ? candidateBuild : build)} freshness={preview?.build ? previewPdfLabel : viewCandidate ? 'Candidate PDF · not applied' : freshness} position={preview?.build ? previewPosition : viewCandidate ? candidatePosition : pdfPosition} onPositionChange={change => (preview?.build ? setPreviewPosition : viewCandidate ? setCandidatePosition : setPdfPosition)(previous => ({ ...previous, ...change }))} onUserNavigate={stopPendingPdfNavigation} onClose={closePdf} />
+          <PdfPane onExport={() => void savePdfSnapshot()} toolbarHost={pdfToolbar} findHandle={ordinaryPdfFind} hideClose visible={showPdf && !compareOpen && representation === 'pdf'} followComments={preview ? false : followComments} onFollowChange={changeFollowing} jump={preview ? (previewPdfCurrent && preview.state === 'ready' ? preview.jump : null) : pdfJump} build={preview?.build ?? (viewCandidate ? candidateBuild : build)} freshness={preview?.build ? previewPdfLabel : viewCandidate ? 'Candidate PDF · not applied' : freshness} position={preview?.build ? previewPosition : viewCandidate ? candidatePosition : pdfPosition} onPositionChange={change => (preview?.build ? setPreviewPosition : viewCandidate ? setCandidatePosition : setPdfPosition)(previous => ({ ...previous, ...change }))} onUserNavigate={stopPendingPdfNavigation} onClose={closePdf} />
         </section>
       </div>
       {compareOpen && <ComparePane plain={docMode === 'text'} projectId={project.id} onSavedVersion={compareSavedVersion} position={comparisonPosition.current} baseline={baseline ?? project.sessionBaseline ?? null} text={text} dirty={dirty} pending={comparisonBusy} onChoose={() => void keepComparison()} onPin={name => void keepComparison(name)} onReturn={returnToSource} />}
@@ -1171,8 +1251,9 @@ export function App() {
       {lastAttempt && (!lastAttempt.success || lastAttempt.diagnostics.length > 0) && <details className="build-diagnostics" open={!lastAttempt.success}><summary>Build details · {lastAttempt.diagnostics.length} messages</summary><div>{lastAttempt.diagnostics.map((d, i) => <button key={i} onClick={() => { if (d.line && view.current && (!d.file || d.file === project.name)) { const line = view.current.state.doc.line(Math.min(d.line, view.current.state.doc.lines)); goToSource(line.from); } }}>{d.file}{d.line ? `:${d.line} ` : ''}{d.message}</button>)}<details><summary>Recent build output</summary><p>Shows up to the last 30,000 characters of captured output.</p><pre>{lastAttempt.log}</pre></details></div></details>}
       <footer><span role="status">{status}</span><span>{pending.length} open · {comments.filter(c => c.decision === 'applied').length} applied</span><span className="footer-pdf">{representation === 'changes' ? 'Changes PDF · separate comparison view' : preview ? 'Preview · not applied to the source' : viewCandidate ? 'Candidate PDF · not applied to the source' : docMode === 'text' ? 'Text mode · comparison includes unsaved edits' : build ? freshness : 'Comments saved separately in JSON'}</span>{preambleBusy ? <button onClick={() => void cancelPreamble()}>Cancel preamble</button> : <>{busy && <button onClick={() => void cancelCompilation()}>Cancel compilation</button>}{aiBusy && !sectionRun.current && <button onClick={() => void cancelCodex().catch(e => setError(errorText(e)))}>Cancel Codex</button>}</>}</footer>
     </>}
-    {project && <FeedbackPanel key={project.id} projectId={project.id} open={feedbackOpen} text={text} comments={comments} disabled={busy || aiBusy || locked || effortBusy || paperInstructions !== savedInstructions} onClose={() => setFeedbackOpen(false)} onConvert={convertFeedback} onAdopt={adoptFeedback} onPreview={(label, feedback) => { const current = input(); if (!current) return; setContextText(JSON.stringify(feedbackContext({ projectId: current.projectId, text: current.text, label, feedback }, projectRef.current?.paperInstructions), null, 2)); setFeedbackOpen(false); setContextOpen(true); }} />}
-    <PendingChats projectId={project?.id ?? null} status={error} /><HelpChatDrawer open={helpChatOpen} projectId={project?.id ?? null} paperName={project?.name ?? ""} paperPath={project?.path ?? ""} blocked={busy || aiBusy || locked || effortBusy} status={status} close={() => setHelpChatOpen(false)} capture={captureChat} send={sendChat} add={addChatComment} go={(turn, pdf) => { void goChatPassage(turn, pdf).catch(e => setError(errorText(e))); }} sources={() => setSourcesOpen(true)} />
+    {project && filesOpen && <FilesPanel projectId={project.id} close={() => setFilesOpen(false)} history={() => { setFilesOpen(false); toggleComparison(); }} context={() => { setFilesOpen(false); showAttachments(); }} pdfLabel={representation === 'changes' ? changesExport?.label ?? 'No Changes PDF available yet' : preview ? previewPdfLabel : viewCandidate ? 'Candidate PDF · not applied' : freshness} savePdf={representation === 'changes' ? changesExport ? () => { setFilesOpen(false); void savePdfSnapshot(changesExport.id); } : undefined : displayedBuild.current?.success ? () => { setFilesOpen(false); void savePdfSnapshot(); } : undefined} compilePdf={docMode === 'latex' && !busy ? () => void compileAndExportPdf() : undefined} />}
+    {project && <FeedbackPanel key={project.id} projectId={project.id} open={feedbackOpen} contextId={feedbackContextId} text={text} comments={comments} disabled={busy || aiBusy || locked || effortBusy || guidanceDirty} onClose={() => setFeedbackOpen(false)} onPrepare={prepareFeedback} onConvert={convertFeedback} onPause={cancelCodex} onAdopt={adoptFeedback} onPreview={record => { setContextText(JSON.stringify(feedbackBatchContext(record), null, 2)); setFeedbackOpen(false); setContextOpen(true); }} />}
+    <PendingChats projectId={project?.id ?? null} status={error} /><HelpChatDrawer guidanceKey={JSON.stringify([savedInstructions, savedPreferences])} open={helpChatOpen} projectId={project?.id ?? null} paperName={project?.name ?? ""} paperPath={project?.path ?? ""} blocked={busy || aiBusy || locked || effortBusy} status={status} close={() => setHelpChatOpen(false)} capture={captureChat} send={sendChat} add={addChatComment} go={(turn, pdf) => { void goChatPassage(turn, pdf).catch(e => setError(errorText(e))); }} context={() => { setHelpChatOpen(false); showAttachments(); }} guidance={() => { setHelpChatOpen(false); setGuidanceOpen(true); }} sources={() => setSourcesOpen(true)} />
     {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} disabled={busy || aiBusy || locked} />}
     {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
   </main>{locked && <div className="work-barrier" role="status">{gate.current.closing ? 'Finishing pending work and saving recovery before closing…' : gate.current.committing ? 'Recording changes…' : 'Opening paper…'}</div>}</>;

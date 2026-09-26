@@ -1,4 +1,5 @@
 import type { FeedbackRequest, FeedbackRecord, FeedbackList } from './feedback.ts';
+import type { PrepareFeedback, ResumeFeedback } from './feedback-batches.ts';
 import type { AttachmentInventory, AttachmentPreview, AttachmentSelection } from './attachments.ts';
 import type { ToolSettings, ToolSettingsState, SetupCheck, CopiedSetupDetails } from './tool-settings.ts';
 import type { ReferenceState, SourcesHistory } from './references.ts';
@@ -52,11 +53,12 @@ export const workspaceSchema = z.object({
   pdfBuildId: z.string().uuid().nullable(), pdfOpen: z.boolean(), commentsHidden: z.boolean().default(false),
   paneSizes: z.tuple([fractionSchema, fractionSchema, fractionSchema]).refine(v => v.every(n => n >= .05) && Math.abs(v.reduce((a, b) => a + b, 0) - 1) < .001, 'Invalid pane proportions'),
   layout: z.enum(['auto', 'three', 'source-comments', 'pdf-comments', 'writing', 'stacked']).default('auto'), compactTab: z.enum(['source', 'pdf']).default('source'), displayName: z.string().trim().max(80).default(''),
+  classic: z.boolean().default(false), classicSurface: z.enum(['source', 'pdf']).default('source'),
   changesOpen: z.boolean().default(true), toolbarCollapsed: z.boolean(), followComments: z.boolean(), reviewView: z.enum(['pending', 'later', 'history'])
 });
 export type WorkspaceState = z.infer<typeof workspaceSchema>;
 export function defaultWorkspace(): WorkspaceState {
-  return { schemaVersion: 1, source: { anchor: 0, head: 0, topLine: 1, offset: 0 }, pdf: { page: 1, zoom: 1, scrollX: 0, scrollY: 0 }, pdfBuildId: null, pdfOpen: false, commentsHidden: false, paneSizes: [.28, .33, .39], layout: 'auto', compactTab: 'source', displayName: '', changesOpen: true, toolbarCollapsed: false, followComments: true, reviewView: 'pending' };
+  return { schemaVersion: 1, classic: false, classicSurface: 'source', source: { anchor: 0, head: 0, topLine: 1, offset: 0 }, pdf: { page: 1, zoom: 1, scrollX: 0, scrollY: 0 }, pdfBuildId: null, pdfOpen: false, commentsHidden: false, paneSizes: [.28, .33, .39], layout: 'auto', compactTab: 'source', displayName: '', changesOpen: true, toolbarCollapsed: false, followComments: true, reviewView: 'pending' };
 }
 export const effortSchema = z.enum(['low', 'medium', 'high', 'max']);
 export type Effort = z.infer<typeof effortSchema>;
@@ -71,7 +73,7 @@ export const preambleProposalSchema = z.object({ explanation: z.string().max(400
 export type PreambleProposal = z.infer<typeof preambleProposalSchema>;
 export const preambleRequestSchema = z.object({ projectId: z.string(), text: z.string().min(1).max(120000), engine: engineSchema, previousAttempt: z.object({ proposal: preambleProposalSchema, log: z.string().max(16000) }).optional() });
 export type PreambleRequest = z.infer<typeof preambleRequestSchema>;
-export type Project = { id: string; path: string; name: string; text: string; diskHash: string; review: Review; recovered: boolean; notices: string[]; engine: Engine; effort: Effort; fastMode: boolean; paperInstructions: string; baseline: Baseline | null; sessionBaseline?: Baseline; workspace?: WorkspaceState; restoredPdf?: { build: Build; text: string } };
+export type Project = { id: string; path: string; name: string; text: string; diskHash: string; review: Review; recovered: boolean; notices: string[]; engine: Engine; effort: Effort; fastMode: boolean; paperInstructions: string; editPreferences?: import('./paper-guidance.ts').EditPreferences; baseline: Baseline | null; sessionBaseline?: Baseline; workspace?: WorkspaceState; restoredPdf?: { build: Build; text: string } };
 export type Diagnostic = { severity: 'error' | 'warning'; message: string; line?: number; file?: string };
 export type BuildInputLimits = { maxBytes: number; maxFiles: number };
 export type BuildInputPreparation = { status: 'needs-selection'; reason: string; issues: string[]; requiredPaths: string[]; requiredBytes?: number; requiredFiles?: number; selectedBytes?: number; selectedFiles?: number; inventory: { paths: { relative: string; size: number }[]; truncated: boolean; visitedEntries: number }; limits: BuildInputLimits };
@@ -81,17 +83,20 @@ export const pdfRequestSchema = z.object({ projectId: z.string(), buildId: z.str
 export type PdfRequest = z.infer<typeof pdfRequestSchema>;
 export type BuildValidation = { status: 'valid' | 'changed' | 'deferred' | 'unavailable' };
 export type PdfLocation = { kind: 'mapped'; buildId: string; page: number; x: number; y: number; width: number; height: number } | { kind: 'compile' | 'unavailable'; reason: string };
-export type ReviewRequest = { projectId: string; text: string; from: number; to: number; instructions: string; localEditsOnly?: boolean; attachmentPreviewId?: string; requestId?: string };
+export type ReviewRequest = { projectId: string; text: string; from: number; to: number; instructions: string; localEditsOnly?: boolean; autoAddComments?: boolean; attachmentPreviewId?: string; requestId?: string };
 export type ReplyRequest = { projectId: string; text: string; comment: Comment; message: string; requestId?: string; attachmentPreviewId?: string; deeper?: boolean };
 export type CodexReply = { reply: string; replacement: string | null; packages: string[] };
 const resultBase = { schemaVersion: z.literal(1), id: z.string().uuid(), rootFile: z.string().max(500), sourceHash: z.string().regex(/^[a-f0-9]{64}$/), createdAt: z.string().datetime() };
 export const resultSchema = z.discriminatedUnion('kind', [
-  z.object({ ...resultBase, kind: z.literal('review'), comments: commentsSchema }),
+  z.object({ ...resultBase, kind: z.literal('review'), comments: commentsSchema, autoAddComments: z.boolean().optional() }),
   z.object({ ...resultBase, kind: z.literal('reply'), commentId: z.string().min(1).max(200), original: z.string().max(100000), answer: z.object({ reply: z.string().max(100000), replacement: z.string().max(100000).nullable(), packages: packageListSchema }) })
 ]).superRefine(boundedJSON);
 export type WaitingResult = z.infer<typeof resultSchema>;
 export type SourceRecovery = { name: string; choices: { label: string; text: string }[]; notices: string[] };
 export type EditorAPI = {
+  projectFiles(projectId: string): Promise<import('./project-files.ts').ProjectFiles>;
+  fileAction(projectId: string, id: string, action: 'reveal' | 'copy'): Promise<void>;
+  exportPdf(projectId: string, buildId: string): Promise<import('./project-files.ts').PdfExport | null>;
   debugState(): Promise<import('./debugging.ts').DebugState>;
   configureDebug(settings: import('./debugging.ts').DebugSettings): Promise<import('./debugging.ts').DebugState>;
   deleteDebug(ids: string[] | 'all'): Promise<import('./debugging.ts').DebugState>;
@@ -125,9 +130,15 @@ export type EditorAPI = {
   clearAttachments(projectId: string): Promise<void>;
   referenceState(projectId: string): Promise<ReferenceState>;
   addReferences(projectId: string, folder: boolean): Promise<ReferenceState | null>;
+  pasteContext(projectId: string, input: import('./references.ts').PastedContext): Promise<ReferenceState>;
+  inspectContext(projectId: string, id: string): Promise<import('./references.ts').PastedContext>;
+  renameContext(projectId: string, id: string, name: string): Promise<ReferenceState>;
+  copyContext(projectId: string, id: string): Promise<void>;
   changeReference(projectId: string, id: string, enabled: boolean | null): Promise<ReferenceState>;
   sourcesUsed(projectId: string): Promise<SourcesHistory>;
   convertFeedback(input: FeedbackRequest): Promise<FeedbackRecord>;
+  prepareFeedback(input: PrepareFeedback): Promise<FeedbackRecord>;
+  resumeFeedback(input: ResumeFeedback): Promise<FeedbackRecord>;
   savedFeedback(projectId: string): Promise<FeedbackList>;
   exportSource(input: { name: string; text: string; format?: 'tex' | 'txt' }): Promise<string | null>;
   inspectRecovery(): Promise<SourceRecovery | null>;
@@ -137,6 +148,7 @@ export type EditorAPI = {
   setEffort(projectId: string, effort: Effort): Promise<void>;
   setFastMode(projectId: string, fastMode: boolean): Promise<void>;
   setPaperInstructions(projectId: string, instructions: string): Promise<void>;
+  setPaperGuidance(projectId: string, instructions: string, preferences: import('./paper-guidance.ts').EditPreferences): Promise<void>;
   setWorkspace(projectId: string, workspace: WorkspaceState): Promise<void>;
   pinBaseline(input: { projectId: string; name: string; text: string }): Promise<Baseline>;
   chooseBaseline(projectId: string): Promise<Baseline | null>;

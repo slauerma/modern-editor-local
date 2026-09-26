@@ -5,6 +5,15 @@
 .reference-roots small { display: block; color: #68766c; margin-top: .2rem; }
 .reference-roots input { flex: none; }
 .reference-excerpts { margin: 0 1rem 1rem; }
+.pasted-context { padding: .8rem; margin: .7rem 0; border: 1px solid var(--line); border-radius: 6px; }
+.pasted-context label, .guidance-panel label { display: block; margin: .5rem 0; }
+.pasted-context input:not([type=checkbox]), .pasted-context textarea, .guidance-panel textarea { display: block; width: 100%; box-sizing: border-box; }
+.pasted-context textarea { min-height: 12rem; max-height: 35vh; white-space: pre-wrap; }
+.pasted-context button, .guidance-panel button { margin-right: .4rem; }
+.context-item-actions { display: flex; flex-shrink: 0; gap: .4rem; }
+.guidance-panel { width: min(750px, 90vw); max-height: 80vh; overflow: auto; background: #fbfcf9; border: 1px solid #cddbc6; border-radius: 10px; padding: 1.25rem; }
+.guidance-panel textarea { min-height: 10rem; }
+.guidance-panel pre { white-space: pre-wrap; max-height: 14rem; overflow: auto; }
 .reference-excerpts > summary { cursor: pointer; padding: .5rem 0; }
 .sources-panel { width: min(850px, 92vw); }
 .workspace-panel-backdrop { position:fixed; inset:0; z-index:70; background:#1e30233b; display:flex; justify-content:center; align-items:flex-start; padding:4rem 1rem 2rem; }

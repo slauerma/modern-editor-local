@@ -32,6 +32,8 @@
 !/scripts/generate-compile-fixtures.mjs
 !/scripts/check-discussion-proposals.mjs
 !/scripts/check-codex-isolation.mjs
+!/scripts/check-writing-conveniences.mjs
+!/scripts/check-feedback-batches.mjs
 !/scripts/check-viewer.mjs
 !/scripts/check-changes-pdf.mjs
 !/scripts/check-help-chat.mjs

@@ -14,6 +14,8 @@ import { reviewContext, replyContext } from '../shared/codex-context.ts';
 import type { Effort } from '../shared/contracts.ts';
 import { FeedbackStore } from './feedback-store.ts';
 import { feedbackContext, feedbackRequestSchema, type FeedbackRequest, type FeedbackRecord } from '../shared/feedback.ts';
+import { feedbackBatchContext, nextFeedbackBatch, prepareFeedbackSchema, resumeFeedbackSchema, splitFeedback, type PrepareFeedback, type ResumeFeedback } from '../shared/feedback-batches.ts';
+import { defaultEditPreferences } from '../shared/paper-guidance.ts';
 import type { AttachmentService } from './attachment-service.ts';
 import { attachmentPromptContext } from '../shared/attachments.ts';
 import type { ReferenceService, ReferenceSession } from './reference-service.ts';
@@ -21,6 +23,7 @@ import { buildInputOutputSchema } from '../shared/build-input-help.ts';
 
 const fields = { category: { type: 'string' }, title: { type: 'string' }, explanation: { type: 'string' }, original: { type: 'string' }, before: { type: 'string' }, after: { type: 'string' }, replacement: { type: ['string', 'null'] }, packages: { type: 'array', items: { type: 'string' } } };
 export const reviewOutputSchema = { type: 'object', properties: { comments: { type: 'array', items: { type: 'object', properties: fields, required: Object.keys(fields), additionalProperties: false } } }, required: ['comments'], additionalProperties: false };
+export const feedbackBatchOutputSchema = { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'string' }, comments: reviewOutputSchema.properties.comments }, required: ['itemId', 'comments'], additionalProperties: false } } }, required: ['items'], additionalProperties: false };
 export const replyOutputSchema = { type: 'object', properties: { reply: { type: 'string' }, replacement: fields.replacement, packages: fields.packages }, required: ['reply', 'replacement', 'packages'], additionalProperties: false };
 export const replySchema = z.object({ reply: z.string().max(100000), replacement: z.string().max(100000).nullable(), packages: commentSchema.shape.packages });
 export const preambleOutputSchema = { type: 'object', properties: { explanation: { type: 'string' }, preamble: { type: 'string' }, ending: { type: 'string' }, needsInput: { type: ['string', 'null'] } }, required: ['explanation', 'preamble', 'ending', 'needsInput'], additionalProperties: false };
@@ -34,6 +37,7 @@ export class CodexService {
   readonly referenceFolders?: ReferenceService;
   private active = new Set<Promise<unknown>>();
   private generation = 0;
+  private feedbackRunning = false;
   cancel() { this.generation++; return Promise.all([this.client.cancel(), this.referenceFolders?.stop()]).then(() => {}); }
   constructor(projects: ProjectService, directory: string, attachments?: AttachmentService, referenceFolders?: ReferenceService) { this.projects = projects; this.client = new CodexClient(directory); this.results = new ReviewResults(projects); this.feedback = new FeedbackStore(projects); this.attachments = attachments; this.referenceFolders = referenceFolders; }
   private async references(projectId: string, id?: string) {
@@ -51,6 +55,16 @@ export class CodexService {
   reply(request: ReplyRequest, progress: (message: string) => void) { return this.track(() => this.replyOperation(request, progress)); }
   preamble(request: PreambleRequest, progress: (message: string) => void) { return this.track(() => this.preambleOperation(request, progress)); }
   convertFeedback(request: FeedbackRequest, progress: (message: string) => void) { return this.track(() => this.feedbackOperation(feedbackRequestSchema.parse(request), progress)); }
+  prepareFeedback(input: PrepareFeedback) { return this.track(async () => {
+    const request = prepareFeedbackSchema.parse(input), p = this.projects.get(request.projectId);
+    const context = request.contextId ? await this.referenceFolders?.inspectPaste(p.id, request.contextId) : undefined;
+    if (request.contextId && !context) throw new Error('Saved context is unavailable.');
+    const feedback = context?.text ?? request.feedback!, label = context?.name ?? request.label!;
+    const record: FeedbackRecord = { schemaVersion: 1, id: randomUUID(), rootFile: p.name, createdAt: new Date().toISOString(), label, feedback, source: request.text,
+      status: 'saved', error: '', comments: [], plan: { ...splitFeedback(feedback), paperInstructions: p.paperInstructions, preferences: p.editPreferences ?? defaultEditPreferences() } };
+    return this.feedback.save(p.id, record);
+  }); }
+  resumeFeedback(input: ResumeFeedback, progress: (message: string) => void) { return this.track(() => this.feedbackBatches(resumeFeedbackSchema.parse(input), progress)); }
   arrangeChanges(projectId: string, prompt: string, progress: (message: string) => void) { return this.track(() => this.run(projectId, prompt, arrangementOutputSchema, progress)); }
   planChanges(projectId: string, prompt: string, progress: (message: string) => void) {
     this.projects.get(projectId);
@@ -61,13 +75,49 @@ export class CodexService {
     return this.track(() => this.client.run(prompt, visualCheckOutputSchema, progress, 'medium', false, undefined, { purpose: 'changes', model: changesAgentModel, images }));
   }
   helpBuildInputs(projectId: string, prompt: string, progress: (message: string) => void) { return this.track(() => this.run(projectId, prompt, buildInputOutputSchema, progress)); }
+  private async feedbackBatches(request: ResumeFeedback, progress: (message: string) => void) {
+    if (this.feedbackRunning) throw new Error('A feedback conversion is already running.');
+    this.feedbackRunning = true;
+    const generation = this.generation;
+    let record: FeedbackRecord | undefined;
+    try {
+      record = await this.feedback.get(request.projectId, request.id);
+      if (!record.plan) throw new Error('This older feedback record has no batch plan. Prepare it again to use batches.');
+      do {
+        if (generation !== this.generation) throw new Error('Feedback conversion paused. Completed batches are saved.');
+        const items = nextFeedbackBatch(record);
+        if (!items.length) return record;
+        progress(`Converting feedback · ${record.plan!.items.filter(item => item.complete).length} / ${record.plan!.items.length} items saved · next ${items.length}`);
+        const response = await this.run(request.projectId, JSON.stringify(feedbackBatchContext(record, items)), feedbackBatchOutputSchema, progress, undefined, generation) as { items?: { itemId: string; comments: unknown[] }[] };
+        if (generation !== this.generation) throw new Error('Feedback conversion paused. Completed batches are saved.');
+        if (!response || !Array.isArray(response.items) || response.items.length !== items.length ||
+            items.some((item, i) => response.items![i]?.itemId !== item.id || !Array.isArray(response.items![i].comments) || !response.items![i].comments.length || response.items![i].comments.length > 30)) {
+          throw new Error('Codex did not return every requested feedback item exactly once in order. This batch remains pending; earlier batches are saved.');
+        }
+        const added = response.items.flatMap((result, i) => result.comments.map((raw, j) => {
+          const parsed = commentSchema.parse({ ...(raw as object), id: record!.id + ':' + items[i].id + ':' + (j + 1),
+            decision: 'open', validity: 'missing', reviewedSourceHash: digest(record!.source), reviewedAt: record!.createdAt });
+          return adoptComment(record!.source, { ...parsed, title: ('[' + items[i].number + '] ' + parsed.title).slice(0, 300) });
+        }));
+        const updated = record.plan!.items.map(item => items.some(next => next.id === item.id)
+          ? { ...item, complete: true, commentIds: added.filter(comment => comment.id.startsWith(record!.id + ':' + item.id + ':')).map(comment => comment.id) } : item);
+        // Commit the entire batch together; update memory only after durable save.
+        record = await this.feedback.save(request.projectId, { ...record, error: '', status: updated.every(item => item.complete) ? 'complete' : 'paused',
+          plan: { ...record.plan!, items: updated }, comments: [...record.comments, ...added] });
+      } while (request.all && record.status !== 'complete');
+      return record;
+    } catch (error) {
+      if (record?.plan) await this.feedback.save(request.projectId, { ...record, status: generation !== this.generation ? 'paused' : 'failed', error: (error instanceof Error ? error.message : String(error)).slice(0, 4000) });
+      throw error;
+    } finally { this.feedbackRunning = false; }
+  }
   private async feedbackOperation(request: FeedbackRequest, progress: (message: string) => void) {
     const generation = this.generation;
     const p = this.projects.get(request.projectId), createdAt = new Date().toISOString();
     const record: FeedbackRecord = { schemaVersion: 1, id: randomUUID(), rootFile: p.name, createdAt, label: request.label, feedback: request.feedback, source: request.text, status: 'saved', error: '', comments: [] };
     await this.feedback.save(p.id, record);
     try {
-      const response = await this.run(p.id, JSON.stringify(feedbackContext(request, p.paperInstructions)), reviewOutputSchema, progress, undefined, generation) as { comments?: unknown[] };
+      const response = await this.run(p.id, JSON.stringify(feedbackContext(request, p.paperInstructions, p.editPreferences)), reviewOutputSchema, progress, undefined, generation) as { comments?: unknown[] };
       if (!response || !Array.isArray(response.comments) || response.comments.length > 30) throw new Error('Codex returned an invalid feedback list.');
       const comments = response.comments.map((raw: any) => {
         const c = commentSchema.parse({ ...raw, id: randomUUID(), decision: 'open', validity: 'missing', reviewedSourceHash: digest(request.text), reviewedAt: createdAt });
@@ -105,7 +155,8 @@ export class CodexService {
     if (from < 0 || to < from || to > text.length) throw new Error('Invalid review selection.');
     const passage = text.slice(from, to);
     if (!passage.trim() || passage.length > 120000) throw new Error('Select a passage of at most 120,000 characters for this review.');
-    const prompt = JSON.stringify(reviewContext(request, p.paperInstructions, await this.references(p.id, request.attachmentPreviewId)));
+    const { paperInstructions, editPreferences } = p;
+    const prompt = JSON.stringify(reviewContext(request, paperInstructions, await this.references(p.id, request.attachmentPreviewId), editPreferences));
     const response = await this.run(p.id, prompt, reviewOutputSchema, progress, undefined, generation, { text, kind: 'review' }) as { comments?: unknown[] };
     const home = await this.projects.stateDirectory(p.id), reviews = await privateDirectory(home, 'reviews');
     let comments: Comment[];
@@ -124,14 +175,15 @@ export class CodexService {
     const createdAt = new Date().toISOString();
     comments = comments.map(c => ({ ...c, reviewedSourceHash: digest(text), reviewedAt: createdAt }));
     await writeJSON(path.join(reviews, `codex-${randomUUID()}.json`), { schemaVersion: 1, rootFile: p.name, sourceHash: digest(text), activeId: comments[0]?.id ?? null, comments, updatedAt: createdAt });
-    await this.results.retain(p.id, { schemaVersion: 1, id: request.requestId ?? randomUUID(), kind: 'review', rootFile: p.name, sourceHash: digest(text), comments, createdAt });
+    await this.results.retain(p.id, { schemaVersion: 1, id: request.requestId ?? randomUUID(), kind: 'review', rootFile: p.name, sourceHash: digest(text), comments, createdAt, autoAddComments: request.autoAddComments });
     return comments;
   }
   private async replyOperation(request: ReplyRequest, progress: (message: string) => void): Promise<CodexReply> {
     const generation = this.generation;
     const p = this.projects.get(request.projectId);
     const c = request.comment;
-    const prompt = JSON.stringify(replyContext(request, p.paperInstructions, await this.references(p.id, request.attachmentPreviewId)));
+    const { paperInstructions, editPreferences } = p;
+    const prompt = JSON.stringify(replyContext(request, paperInstructions, await this.references(p.id, request.attachmentPreviewId), editPreferences));
     const response = await this.run(p.id, prompt, replyOutputSchema, progress, request.deeper ? (p.effort === 'max' ? 'max' : 'high') : undefined, generation, { text: request.text, kind: 'reply' });
     // Retain the answer even if its schema or the current discussion limit rejects it.
     const home = await this.projects.stateDirectory(p.id), reviews = await privateDirectory(home, 'reviews');

@@ -233,6 +233,17 @@ export class CompileService {
     if (!record?.build.success) throw new Error('That successful PDF is no longer available. Compile again.');
     return new Uint8Array(await readRegularFile(record.pdf, 100000000));
   }
+  availablePdfs(projectId: string) {
+    this.projects.get(projectId);
+    return [...this.records.values()].filter(r => r.projectId === projectId && r.build.success).slice(-20).reverse().map(r => ({
+      path: r.pdf, name: (r.build.purpose === 'comparison' ? 'Changes PDF' : r.build.purpose === 'proposal' ? 'Proposal preview' : 'Paper PDF') + ' · ' + r.build.id.slice(0,8)
+    }));
+  }
+  async exportPdf(projectId: string, buildId: string) {
+    const paper = this.projects.get(projectId), record = this.records.get(buildId);
+    if (!record || record.projectId !== projectId || !record.build.success) throw new Error('This PDF is no longer available for this paper. Compile or refresh it again.');
+    return { name: path.basename(paper.name, path.extname(paper.name)), bytes: await this.pdf(buildId), purpose: record.build.purpose ?? 'paper', sourceHash: record.build.sourceHash };
+  }
   async restore(projectId: string, buildId: string) {
     const project = this.projects.get(projectId), snapshot = await restorePdf(this.cache, project.path, buildId);
     this.projects.get(projectId);

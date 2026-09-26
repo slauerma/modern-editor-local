@@ -13,7 +13,7 @@ assert(args.length === 0 || args.length === 2 && args[0] === '--playwright-packa
 const require = createRequire(path.join(appRoot, 'package.json'));
 const { _electron } = (args.length ? createRequire(path.resolve(args[1])) : require)('playwright');
 const root = path.join(appRoot, '.test-runs', 'viewer-' + Date.now()), copy = path.join(root, 'desktop');
-const evidence = path.join(appRoot, 'test-evidence', 'viewer-' + Date.now());
+const evidence = process.env.ME_TEST_EVIDENCE || path.join(appRoot, 'test-evidence', 'viewer-' + Date.now());
 await fs.mkdir(copy, { recursive: true }); await fs.mkdir(evidence, { recursive: true });
 await fs.cp(path.join(appRoot, 'dist'), path.join(copy, 'dist'), { recursive: true });
 await fs.symlink(path.join(appRoot, 'node_modules'), path.join(copy, 'node_modules'), 'dir');
@@ -73,7 +73,7 @@ async function snapshot(name) { await page.screenshot({ path: path.join(evidence
 async function pdfGeometry() {
   return page.locator('#pdf-surface > .pdf-reader .pdf-scroll').evaluate(el => {
     const r=el.getBoundingClientRect();
-    return { x:r.x, y:r.y, width:r.width, height:r.height, top:el.scrollTop, left:el.scrollLeft, zoom:el.parentElement.querySelector('[aria-label="PDF zoom"]').value };
+    return { x:r.x, y:r.y, width:r.width, height:r.height, top:el.scrollTop, left:el.scrollLeft, zoom:el.closest('#pdf-surface').querySelector('[aria-label="PDF zoom"]').value };
   });
 }
 async function nativeFind() {
@@ -161,7 +161,7 @@ try {
   await home(); await open(texFile);
   await button('Compile').click(); await page.getByLabel('PDF matches the current source', {exact:true}).waitFor({ timeout:60000 });
   await pdfStaysRendered();
-  await page.getByRole('region', {name:'Compiled PDF',exact:true}).getByLabel('PDF zoom', {exact:true}).selectOption('1.25');
+  await page.locator('#pdf-surface').getByLabel('PDF zoom', {exact:true}).selectOption('1.25');
   const before = await read();
   await page.getByLabel('Proposed replacement', {exact:true}).fill('The allocation is weakly increasing.');
   const draftGeometry = await pdfGeometry();
@@ -189,7 +189,7 @@ try {
   await page.waitForTimeout(400);
   receipt.checks.push('Bottom preview bar / expanded details preserve PDF bounds, scroll and zoom at wide and narrow widths');
   await snapshot('03-pdf-proposal');
-  await button('Return to draft').click(); const cachedAttempts=(await probe()).builds; await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor(); assert.equal((await probe()).builds,cachedAttempts); await button('Return to draft').click(); assert.equal(await page.getByRole('region',{name:'Compiled PDF',exact:true}).getByLabel('PDF zoom',{exact:true}).inputValue(),'1.25');
+  await button('Return to draft').click(); const cachedAttempts=(await probe()).builds; await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor(); assert.equal((await probe()).builds,cachedAttempts); await button('Return to draft').click(); assert.equal(await page.locator('#pdf-surface').getByLabel('PDF zoom',{exact:true}).inputValue(),'1.25');
   await page.getByLabel('PDF matches the current source', {exact:true}).waitFor();
   receipt.checks.push('Real candidate PDF / edited wording / own highlight / unchanged source, decisions and Undo / ordinary PDF and zoom restored');
   // The root and proposal are unchanged, but an external include changes after Preview.
@@ -198,7 +198,7 @@ try {
   await fs.writeFile(includedFile, 'A revised synthetic included paragraph.\n');
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.locator('.preview-banner strong').filter({hasText:'Preview out of date'}).waitFor();
-  assert.equal(await page.locator('.pdf-reader:visible .pdf-state').innerText(), 'Preview out of date');
+  assert.equal(await page.locator('.viewer-controls:visible .pdf-state').innerText(), 'Preview out of date');
   assert.equal(await page.locator('.pdf-passage-marker:visible').count(), 0);
   assert.equal((await probe()).builds, previewBuilds);
   await page.locator('.preview-details > summary').click(); await button('Show text diff').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor();

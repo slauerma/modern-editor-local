@@ -5,6 +5,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { bufferSchema, reviewSchema, commentSchema, engineSchema, effortSchema, fastModeSchema, baselineSchema, paperInstructionsSchema, workspaceSchema } from '../shared/contracts.ts';
 import type { Project, Review, BufferInput, Engine, Effort, Baseline, WorkspaceState } from '../shared/contracts.ts';
+import { editPreferencesSchema, defaultEditPreferences, type EditPreferences } from '../shared/paper-guidance.ts';
 import { prepareDocumentState, readStateFile } from './document-state.ts';
 import { adoptComment, anchorReview } from '../shared/review.ts';
 import { assertRecoveryFits, serializeJSON } from '../shared/persistence.ts';
@@ -115,12 +116,13 @@ export class ProjectService {
       const settingsFile = path.join(home, 'settings.json');
       if (await exists(settingsFile)) {
         try {
-          const settings = await readJSON(settingsFile) as { rootFile: string; engine: unknown; effort?: unknown; fastMode?: unknown; paperInstructions?: unknown };
+          const settings = await readJSON(settingsFile) as { rootFile: string; engine: unknown; effort?: unknown; fastMode?: unknown; paperInstructions?: unknown; editPreferences?: unknown };
           if (settings.rootFile !== name) throw new Error('Different root document');
           p.engine = engineSchema.parse(settings.engine);
           p.effort = effortSchema.parse(settings.effort ?? 'medium');
           p.fastMode = fastModeSchema.parse(settings.fastMode ?? false);
           p.paperInstructions = paperInstructionsSchema.parse(settings.paperInstructions ?? '');
+          p.editPreferences = editPreferencesSchema.parse(settings.editPreferences ?? {});
         } catch { notices.push('Some saved paper settings could not be used. Check the review instructions and selectors; the settings file was kept.'); }
       }
       const baselineFile = path.join(home, 'baseline.json');
@@ -212,23 +214,28 @@ export class ProjectService {
   }
   async setEngine(projectId: string, engine: Engine) { return this.serial(async () => {
     const p = this.get(projectId), checked = engineSchema.parse(engine), dirs = await this.dirs(p);
-    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: checked, effort: p.effort, paperInstructions: p.paperInstructions, fastMode: p.fastMode });
+    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: checked, effort: p.effort, paperInstructions: p.paperInstructions, editPreferences: p.editPreferences ?? defaultEditPreferences(), fastMode: p.fastMode });
     p.engine = checked;
   }); }
   async setEffort(projectId: string, effort: Effort) { return this.serial(async () => {
     const p = this.get(projectId), checked = effortSchema.parse(effort), dirs = await this.dirs(p);
-    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: p.engine, effort: checked, paperInstructions: p.paperInstructions, fastMode: p.fastMode });
+    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: p.engine, effort: checked, paperInstructions: p.paperInstructions, editPreferences: p.editPreferences ?? defaultEditPreferences(), fastMode: p.fastMode });
     p.effort = checked;
   }); }
   async setFastMode(projectId: string, fastMode: boolean) { return this.serial(async () => {
     const p = this.get(projectId), checked = fastModeSchema.parse(fastMode), dirs = await this.dirs(p);
-    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: p.engine, effort: p.effort, paperInstructions: p.paperInstructions, fastMode: checked });
+    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: p.engine, effort: p.effort, paperInstructions: p.paperInstructions, editPreferences: p.editPreferences ?? defaultEditPreferences(), fastMode: checked });
     p.fastMode = checked;
   }); }
   async setPaperInstructions(projectId: string, instructions: string) { return this.serial(async () => {
     const p = this.get(projectId), checked = paperInstructionsSchema.parse(instructions), dirs = await this.dirs(p);
-    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: p.engine, effort: p.effort, paperInstructions: checked, fastMode: p.fastMode });
+    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: p.engine, effort: p.effort, paperInstructions: checked, editPreferences: p.editPreferences ?? defaultEditPreferences(), fastMode: p.fastMode });
     p.paperInstructions = checked;
+  }); }
+  async setPaperGuidance(projectId: string, instructions: string, preferences: EditPreferences) { return this.serial(async () => {
+    const p = this.get(projectId), checked = paperInstructionsSchema.parse(instructions), edits = editPreferencesSchema.parse(preferences), dirs = await this.dirs(p);
+    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: p.engine, effort: p.effort, paperInstructions: checked, editPreferences: edits, fastMode: p.fastMode });
+    p.paperInstructions = checked; p.editPreferences = edits;
   }); }
   async setWorkspace(projectId: string, workspace: WorkspaceState) { return this.serial(async () => {
     const p = this.get(projectId), checked = workspaceSchema.parse(workspace), dirs = await this.dirs(p);

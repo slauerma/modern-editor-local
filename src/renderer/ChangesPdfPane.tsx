@@ -5,7 +5,7 @@ import type { PdfJump, PdfPosition } from './pdf-position.ts';
 import { PdfPane, type PdfChangeTarget, type PdfPaneHandle } from './PdfPane.tsx';
 import { comparisonScreenshots } from './comparison-screenshots.ts';
 
-type Props = { findHandle?: Ref<PdfPaneHandle>; input: ChangesInput; reasonsKey?: string; visible: boolean; disabled: boolean; proposalCurrent: boolean; previewRequest?: number;
+type Props = { onExport: (buildId: string) => void; onExportReady: (pdf: { id: string; label: string } | null) => void; findHandle?: Ref<PdfPaneHandle>; input: ChangesInput; reasonsKey?: string; visible: boolean; disabled: boolean; proposalCurrent: boolean; previewRequest?: number;
   events: { accepted: number; saved: number };
   work: <T>(kind: 'build' | 'arrange', action: () => Promise<T>) => Promise<T>;
   baselineControl: ReactNode; onFormat: (format: 'pdf' | 'text') => void;
@@ -14,7 +14,7 @@ type Snapshot = { key: string; proposal?: string; last: ChangesPresentation; val
 const errorText = (e: unknown) => String(e instanceof Error ? e.message : e).replace(/^Error invoking remote method '[^']+': Error: /, '');
 const label = (p: ChangesPresentation) => p === 'clean' ? 'Clean paper' : 'Revision markup';
 
-export function ChangesPdfPane({ findHandle, input, reasonsKey, visible, disabled, proposalCurrent, previewRequest, events, work, baselineControl, onFormat, onClose, onSource, onText }: Props) {
+export function ChangesPdfPane({ onExport, onExportReady, findHandle, input, reasonsKey, visible, disabled, proposalCurrent, previewRequest, events, work, baselineControl, onFormat, onClose, onSource, onText }: Props) {
   const identity = useMemo(() => JSON.stringify([input.projectId, input.before, input.after, input.name, input.engine, input.proposalId, input.selectedPaths, reasonsKey]), [input.projectId, input.before, input.after, input.name, input.engine, input.proposalId, input.selectedPaths, reasonsKey]);
   const [presentation, setPresentation] = useState<ChangesPresentation>('markup');
   const key = JSON.stringify([identity, presentation]);
@@ -24,7 +24,7 @@ export function ChangesPdfPane({ findHandle, input, reasonsKey, visible, disable
   const [every, setEvery] = useState(5), [settingsReady, setSettingsReady] = useState(false), [paused, setPaused] = useState(false), [refreshRequest, setRefreshRequest] = useState(0);
   const [position, setPosition] = useState<PdfPosition>({ page: 1, zoom: 1 }), [jump, setJump] = useState<PdfJump | null>(null);
   const [noteTarget, setNoteTarget] = useState<PdfChangeTarget | null>(null);
-  const bottomOverlay = useRef<HTMLDivElement>(null);
+  const bottomOverlay = useRef<HTMLDivElement>(null), toolbar = useRef<HTMLDivElement>(null);
   const workRef = useRef(work); workRef.current = work;
   const request = useRef(0), mounted = useRef(true), job = useRef<{ cancelled: boolean; kind: 'build' | 'arrange' | null } | null>(null);
   const current = useRef({ key, visible, proposalCurrent }); current.current = { key, visible, proposalCurrent };
@@ -51,6 +51,10 @@ export function ChangesPdfPane({ findHandle, input, reasonsKey, visible, disable
   const artifact = snapshot?.values[presentation] ?? (snapshot ? snapshot.values[snapshot.last] : undefined);
   const [invalidSnapshot, setInvalidSnapshot] = useState('');
   const fresh = invalidSnapshot !== snapshot?.key && !!artifact && snapshot?.key === identity && artifact.presentation === presentation && proposalCurrent;
+  useEffect(() => {
+    onExportReady(artifact?.build ? { id: artifact.build.id, label: (fresh ? '' : 'Older preview · ') + label(artifact.presentation) + (input.proposalId ? ' · not applied' : '') } : null);
+    return () => onExportReady(null);
+  }, [artifact?.build?.id, artifact?.presentation, fresh, input.proposalId, onExportReady]);
   useEffect(() => {
     if (!visible || !artifact?.build || disabled || working) return;
     let disposed = false, checking = false;
@@ -192,7 +196,7 @@ export function ChangesPdfPane({ findHandle, input, reasonsKey, visible, disable
         </select> : <span className="change-count" title={working ? 'Comparing…' : 'No changes'}>–</span>}
         <button aria-label="Next change" title="Next change" onClick={() => void show(Math.min(changes.length - 1, selected + 1))} disabled={!fresh || !changes.length || selected >= changes.length - 1}>›</button>
       </div>
-      <button className="change-details-toggle text-button" aria-label={noteOpen ? 'Hide explanation' : 'Explain change'} title="Reason for this change" aria-expanded={noteOpen} onClick={() => setNoteOpen(!noteOpen)}>Why?</button>
+      <div ref={toolbar} className="pdf-toolbar-slot changes-pdf-tools" /><button className="change-details-toggle text-button" aria-label={noteOpen ? 'Hide explanation' : 'Explain change'} title="Reason for this change" aria-expanded={noteOpen} onClick={() => setNoteOpen(!noteOpen)}>Why?</button>
       <button className={'changes-refresh' + (!fresh && !working ? ' primary' : '')} aria-label="Refresh Changes PDF" title="Refresh Changes PDF with Sol" onClick={() => { setPaused(false); setRefreshRequest(n => n + 1); }} disabled={blocked}>↻</button>
       <details className="changes-options" onKeyDown={e => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary')?.focus(); e.stopPropagation(); } }}><summary aria-label="Comparison options" title="Baseline and update settings">⋯</summary><div>
         {baselineControl}
@@ -238,8 +242,8 @@ export function ChangesPdfPane({ findHandle, input, reasonsKey, visible, disable
       <p>{working ? 'This can take a few minutes. Your draft stays unchanged.' : artifact && fresh ? changes.length ? 'These changes cannot be marked safely in this PDF view. Their exact differences are available in Text diff.' : 'The current draft matches ' + input.name + '.' : 'Sol arranges the changed passages and may inspect page screenshots. Request Refresh to generate a comparison.'}</p>
       {!working && !!changes.length && <button onClick={onText}>Show exact text diff</button>}
     </div>}
-    <PdfPane findHandle={findHandle} bottomOverlay={bottomOverlay} changeTarget={fresh ? noteTarget : null} visible={visible && !!artifact?.build} build={artifact?.build ?? null} freshness={fresh ? input.proposalId ? 'Not applied' : label(artifact!.presentation) : 'Older preview'} position={position}
-      bottomControls hideState={fresh && !input.proposalId} onFind={() => setNoteOpen(false)} followComments={false} hideFollow hideClose onFollowChange={() => {}} jump={fresh ? jump : null} onPositionChange={change => setPosition(p => ({ ...p, ...change }))}
+    <PdfPane onExport={() => { if (artifact?.build) onExport(artifact.build.id); }} toolbarHost={toolbar} compactControls findHandle={findHandle} bottomOverlay={bottomOverlay} changeTarget={fresh ? noteTarget : null} visible={visible && !!artifact?.build} build={artifact?.build ?? null} freshness={fresh ? input.proposalId ? 'Not applied' : label(artifact!.presentation) : 'Older preview'} position={position}
+      hideState={fresh && !input.proposalId} onFind={() => setNoteOpen(false)} followComments={false} hideFollow hideClose onFollowChange={() => {}} jump={fresh ? jump : null} onPositionChange={change => setPosition(p => ({ ...p, ...change }))}
       onUserNavigate={() => { request.current++; setJump(null); setNoteTarget(null); }} onClose={onClose}
       showChangeNotes={fresh && noteOpen} changeIds={fresh ? changes.map(c => c.id) : []} onChangeNote={id => { const index = fresh ? changes.findIndex(c => c.id === id) : -1; if (index >= 0) { setSelected(index); setNoteOpen(true); } }} />
   </div>;
