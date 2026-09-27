@@ -26,7 +26,7 @@ export const chatInputSchema = z.object({
 });
 export type ChatInput = z.infer<typeof chatInputSchema>;
 export const chatAnswerSchema = z.object({ reply: z.string().trim().min(1).max(20000), suggestion: z.object({
-  title: z.string().min(1).max(300), explanation: z.string().max(10000), original: z.string().min(1).max(100000), before: z.string().max(1000), after: z.string().max(1000), replacement: z.string().max(100000).nullable(), packages: commentSchema.shape.packages
+  title: z.string().min(1).max(300), explanation: z.string().max(10000), original: z.string().min(1).max(100000), before: z.string().max(1000), after: z.string().max(1000), replacement: z.string().max(100000).nullable(), packages: commentSchema.innerType().shape.packages
 }).strict().nullable() }).strict();
 export const chatOutputSchema = { type: 'object', properties: { reply: { type: 'string' }, suggestion: { anyOf: [{ type: 'null' }, { type: 'object', properties: { title: { type: 'string' }, explanation: { type: 'string' }, original: { type: 'string' }, before: { type: 'string' }, after: { type: 'string' }, replacement: { type: ['string','null'] }, packages: { type: 'array', items: { type: 'string' } } }, required: ['title','explanation','original','before','after','replacement','packages'], additionalProperties: false }] } }, required: ['reply','suggestion'], additionalProperties: false };
 export const chatTurnSchema = z.object({

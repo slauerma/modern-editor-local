@@ -92,6 +92,44 @@ test('oversized or invalid pasted text is refused without replacing saved contex
   assert.equal((await f.references.inspectPaste(f.paper.id, saved.roots[0].id)).text, 'Kept verbatim.');
 });
 
+test('a failed context registry write removes only its unregistered payload', async t => {
+  const f = await fixture(t), original = fs.rename.bind(fs);
+  const saved = await f.references.paste(f.paper.id, { name: 'Keep', text: 'Keep this context.' });
+  const registry = path.join(f.references.directory, digest(f.file) + '.json');
+  const previousFiles = (await fs.readdir(f.references.directory)).sort();
+  t.mock.method(fs, 'rename', async (from: any, to: any) => {
+    if (String(to) === registry) throw new Error('Registry write failed');
+    return original(from, to);
+  });
+  await assert.rejects(f.references.paste(f.paper.id, { name: 'Failed paste', text: 'Remove only this unregistered payload.' }), /Registry write failed/);
+  assert.deepEqual((await fs.readdir(f.references.directory)).sort(), previousFiles);
+  assert.deepEqual((await f.references.state(f.paper.id)).roots, saved.roots);
+  assert.equal((await f.references.inspectPaste(f.paper.id, saved.roots[0].id)).text, 'Keep this context.');
+});
+
+test('a registry error after commit preserves and exposes the registered context', async t => {
+  const f = await fixture(t), original = fs.rename.bind(fs);
+  const registry = path.join(f.references.directory, digest(f.file) + '.json');
+  t.mock.method(fs, 'rename', async (from: any, to: any) => {
+    await original(from, to);
+    if (String(to) === registry) throw new Error('Post-commit storage error');
+  });
+  const state = await f.references.paste(f.paper.id, { name: 'Committed paste', text: 'Already saved.' });
+  assert.equal(state.roots.length, 1); assert(state.notices.some(n => /saved|storage/i.test(n)));
+  assert.equal((await f.references.inspectPaste(f.paper.id, state.roots[0].id)).text, 'Already saved.');
+  const reopened = new ReferenceService(f.projects, f.references.directory, f.attachments);
+  assert.equal((await reopened.inspectPaste(f.paper.id, state.roots[0].id)).text, 'Already saved.');
+});
+
+test('simultaneous context writes cannot overwrite another registered paste', async t => {
+  const f = await fixture(t);
+  await Promise.all(['First', 'Second', 'Third'].map(name => f.references.paste(f.paper.id, { name, text: name + ' context' })));
+  const state = await f.references.state(f.paper.id);
+  assert.deepEqual(state.roots.map(r => r.name).sort(), ['First', 'Second', 'Third']);
+  for (const root of state.roots) assert.equal((await f.references.inspectPaste(f.paper.id, root.id)).text, root.name + ' context');
+  assert.equal((await fs.readdir(f.references.directory)).filter(n => n.endsWith('.txt')).length, 3);
+});
+
 test('paper guidance and Classic workspace survive reopen and are shared across all paper request builders', async t => {
   const f = await fixture(t), instructions = 'Keep the established notation.', preferences = { localEditsOnly: false, preserveVoice: true };
   await f.projects.setPaperGuidance(f.paper.id, instructions, preferences);
@@ -136,7 +174,7 @@ test('Files inventory and PDF export use exact paper-scoped artifacts and surviv
   const f = await fixture(t), compiler = new CompileService(f.projects, path.join(f.runtime, 'builds'));
   const pdfPath = path.join(f.root, 'captured.pdf'), bytes = Buffer.from('%PDF-1.4\nSynthetic immutable export\n%%EOF');
   await fs.writeFile(pdfPath, bytes);
-  (compiler as any).records.set('build', { projectId: f.paper.id, pdf: pdfPath, build: { id: 'build', success: true, purpose: 'proposal', sourceHash: digest('Candidate source') } });
+  (compiler as any).records.set('build', { projectId: f.paper.id, pdf: pdfPath, pdfHash: digest(bytes), build: { id: 'build', success: true, purpose: 'proposal', sourceHash: digest('Candidate source') } });
   const snapshot = await compiler.exportPdf(f.paper.id, 'build');
   assert.deepEqual(Buffer.from(snapshot.bytes), bytes); assert.equal(snapshot.purpose, 'proposal'); assert.equal(snapshot.sourceHash, digest('Candidate source'));
   await assert.rejects(compiler.exportPdf('other-project', 'build'), /no longer open/);

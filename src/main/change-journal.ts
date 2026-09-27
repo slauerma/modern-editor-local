@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { wordingReason } from '../shared/alternatives.ts';
 import { proposalPreview } from '../shared/proposal-preview.ts';
 import { z } from 'zod';
 import { ChangeSet } from '@codemirror/state';
@@ -35,19 +36,36 @@ export class ChangeJournal {
     try {
       if (text === this.text) { this.comments = structuredClone(comments); return; }
       const edits = exactChanges(this.text, text).map(c => ({ from: c.fromA, to: c.toA, insert: text.slice(c.fromB, c.toB), removed: this.text.slice(c.fromA, c.toA) }));
+      let mapping = ChangeSet.of(edits, this.text.length);
+      const accepted = comments.flatMap(c => {
+        const prior = this.comments.find(p => p.id === c.id), value = c.appliedText ?? c.draft ?? c.replacement;
+        if (!prior || prior.decision === 'applied' || c.decision !== 'applied' || prior.validity !== 'current' || c.validity !== 'current' || value === null ||
+          this.text.slice(prior.from, prior.to) !== prior.original || text.slice(c.from, c.to) !== value) return [];
+        return [{ from: prior.from, to: prior.to, insert: value }];
+      }).sort((a, b) => a.from - b.from);
+      // A character diff may align repeated letters across adjacent accepted
+      // atoms. Prefer their recorded transaction spans when those edits alone
+      // reconstruct this exact snapshot. Otherwise use the conservative net map.
+      if (accepted.length && accepted.every((e, i) => !i || e.from >= accepted[i - 1].to)) {
+        const pieces: string[] = []; let at = 0;
+        for (const e of accepted) { pieces.push(this.text.slice(at, e.from), e.insert); at = e.to; }
+        pieces.push(this.text.slice(at));
+        if (pieces.join('') === text) mapping = ChangeSet.of(accepted, this.text.length);
+      }
       const reasons: Event['reasons'] = [];
       for (const c of comments) {
         const prior = this.comments.find(p => p.id === c.id);
         if (!prior || prior.decision === 'applied' || c.decision !== 'applied') continue;
-        const oldAt = this.text.indexOf(prior.original), value = c.appliedText ?? c.draft ?? c.replacement;
-        if (value === null || oldAt < 0 || this.text.indexOf(prior.original, oldAt + 1) >= 0) continue;
+        const value = c.appliedText ?? c.draft ?? c.replacement;
+        if (value === null || prior.validity !== 'current' || c.validity !== 'current') continue;
         // A coalesced write can include later typing. Record a reason only when
         // the actual accepted text and original are still established exactly.
-        const at = value ? text.indexOf(value) : c.from;
-        if (at < 0 || (value && text.indexOf(value, at + 1) >= 0)) continue;
-        if (!edits.some(e => e.from <= oldAt + prior.original.length && e.to >= oldAt)) continue;
-        const reply = [...c.messages].reverse().find(m => m.role === 'assistant' && m.proposal?.replacement === value);
-        const explanation = reply?.text ?? c.explanation;
+        const at = c.from;
+        if (prior.to < prior.from || c.to < at || prior.to > this.text.length || c.to > text.length ||
+          this.text.slice(prior.from, prior.to) !== prior.original || text.slice(at, c.to) !== value ||
+          mapping.mapPos(prior.from, -1) !== at || mapping.mapPos(prior.to, 1) !== c.to) continue;
+        if (!edits.some(e => e.from < prior.to && e.to > prior.from || e.from === e.to && e.from >= prior.from && e.from <= prior.to)) continue;
+        const explanation = wordingReason(c);
         if (explanation.length > 12000) continue;
         reasons.push({ from: at, to: at + value.length, text: explanation, edited: value !== c.replacement });
       }
@@ -63,8 +81,7 @@ export class ChangeJournal {
     if (!c || this.liveText !== before) return null;
     try { if (proposalPreview(before, c).text !== after) return null; } catch { return null; }
     const value = c.draft ?? c.replacement;
-    const reply = [...c.messages].reverse().find(m => m.role === 'assistant' && m.proposal?.replacement === value);
-    return { text: reply?.text ?? c.explanation, edited: value !== c.replacement, origin: 'proposal' };
+    return { text: wordingReason(c), edited: value !== c.replacement, origin: 'proposal' };
   }
   explain(before: string, after: string, plan: ComparisonPlan): ComparisonPlan {
     const result = structuredClone(plan); result.notice = this.notice || undefined;
@@ -109,7 +126,16 @@ export class ChangeJournal {
       }
       for (const c of result.changes) {
         const seen = new Set<string>();
-        c.reasons = tracked.filter(r => r.from < c.toB && r.to > c.fromB || r.from === r.to && c.fromB === c.toB && r.from === c.fromB).filter(r => !seen.has(r.text) && !!seen.add(r.text))
+        c.reasons = tracked.filter(r => {
+          if (r.from !== r.to) return r.from < c.toB && r.to > c.fromB;
+          // A deletion leaves a point, often at a paragraph's first byte.
+          // Give it one owner: exact deletion block, then the following block,
+          // or the final block when the point is at EOF.
+          const owner = result.changes.find(x => x.fromB === r.from && x.toB === r.from) ??
+            result.changes.find(x => x.fromB <= r.from && r.from < x.toB) ??
+            (r.from === after.length ? result.changes.findLast(x => x.toB === r.from) : undefined);
+          return owner === c;
+        }).filter(r => !seen.has(r.text) && !!seen.add(r.text))
           .map(r => ({ text: r.text, edited: r.edited, origin: 'accepted' as ChangeReason['origin'] }));
       }
     } catch { result.notice = 'Some recorded reasons could not be mapped. The exact comparison is still shown.'; }

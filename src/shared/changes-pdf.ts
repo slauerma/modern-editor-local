@@ -9,13 +9,14 @@ export type ChangeReason = { text: string; origin: 'accepted' | 'proposal'; edit
 export type ComparisonChange = {
   id: string; fromA: number; toA: number; fromB: number; toB: number;
   oldText: string; newText: string; layout: ChangeLayout; inline: boolean; paired: boolean;
-  omission?: string; reasons: ChangeReason[]; summary?: string; group?: string;
+  omission?: string; omissionKind?: 'source-only' | 'unsupported'; reasons: ChangeReason[]; summary?: string; group?: string;
+  editCount?: number; changedFraction?: number;
 };
 export type ComparisonPlan = { changes: ComparisonChange[]; notice?: string };
 export type ChangesPresentation = 'markup' | 'clean';
 export type ChangesInput = { projectId: string; before: string; after: string; name: string; engine: Engine;
   presentation?: ChangesPresentation; proposalId?: string; layouts?: Record<string, 'inline' | 'paired'>; arrangementId?: string; selectedPaths?: string[] };
-export type ChangesArtifact = { id: string; presentation: ChangesPresentation; build: Build | null; changes: ComparisonChange[]; notice?: string; visual?: import('./changes-agent.ts').ChangesVisual };
+export type ChangesArtifact = { id: string; presentation: ChangesPresentation; build: Build | null; changes: ComparisonChange[]; notice?: string; reused?: boolean; visual?: import('./changes-agent.ts').ChangesVisual };
 export type ArrangementPreview = { id: string; prompt: string };
 export const arrangementSchema = z.object({ groups: z.array(z.object({
   ids: z.array(z.string().max(40)).min(1).max(100),
@@ -161,6 +162,7 @@ function contextSupported(source: string, from: number): string | undefined {
 function supported(text: string, source: string, from: number): string | undefined {
   const context = contextSupported(source, from); if (context) return context;
   if (scanProse(text).unbraced) return 'An unbraced command argument cannot safely receive comparison markup. See Text diff.';
+  if (/\\\\|\\["'\x60^~=.]/.test(text)) return 'Accent and line-break commands cannot be repeated with revision markup. See Text diff.';
   if (/\\verb\*?[^a-zA-Z@]/.test(text)) return 'Literal source examples are shown in Text diff only.';
   let braces = 0, dollars = 0;
   for (let i = 0; i < text.length; i++) {
@@ -193,7 +195,16 @@ function scanProse(text: string) {
   const comments: { from: number; to: number }[] = [];
   // Comments between a control word and its arguments cannot be separated:
   // inserting a margin marker there would change the command's argument.
-  let commandTail = false, unbraced = false;
+  let commandTail = false, linebreakArgument = false, unbraced = false;
+  const skipArgumentSpace = (from: number) => {
+    let at = from;
+    while (at < text.length) {
+      if (/\s/.test(text[at])) { at++; continue; }
+      if (text[at] !== '%') break;
+      const end = text.indexOf('\n', at); at = end < 0 ? text.length : end + 1;
+    }
+    return at;
+  };
   for (let i = 0; i < text.length;) {
     // Inserting prose immediately BEFORE a formula is safe even though the
     // formula's first byte is opaque. Track positions separately from bytes;
@@ -209,7 +220,20 @@ function scanProse(text: string) {
       if (symbol === '[' || symbol === '(') { math = symbol; i += 2; continue; }
       if (symbol === ']' || symbol === ')') { math = ''; commandTail = false; i += 2; continue; }
       const command = /^\\([a-zA-Z@]+)/.exec(text.slice(i));
-      if (!command) { i += 2; continue; }
+      if (!command) {
+        // A control symbol may take an argument too. Keep accents opaque just
+        // like control words; never insert revision macros into their argument.
+        if (symbol && /["'\x60^~=.]/.test(symbol)) commandTail = true;
+        if (symbol === '\\') {
+          // TeX ignores whitespace and comments before optional spacing.
+          // Keep that argument attached even in \\*% note\n[1ex].
+          i += 2; let at = skipArgumentSpace(i);
+          if (text[at] === '*') { i = at + 1; at = skipArgumentSpace(i); }
+          if (text[at] === '[') { i = at; commandTail = true; linebreakArgument = true; }
+          continue;
+        }
+        i += 2; continue;
+      }
       // Display environments are opaque, just like dollar math. An unchanged
       // formula may contain arbitrary math macros; none of its bytes receive
       // inline markup. Rejecting them here also discarded ordinary prose on
@@ -228,7 +252,11 @@ function scanProse(text: string) {
     if (text[i] === '{') { commandTail = false; group++; i++; continue; }
     if (text[i] === '}') { group--; i++; continue; }
     if (!math && !group && !environment && (commandTail || option) && text[i] === '[') { option++; i++; continue; }
-    if (!math && !group && !environment && option && text[i] === ']') { option--; i++; continue; }
+    if (!math && !group && !environment && option && text[i] === ']') {
+      option--; i++;
+      if (!option && linebreakArgument) { commandTail = false; linebreakArgument = false; }
+      continue;
+    }
     if (!group && !option && !math && !environment && commandTail && /\S/.test(text[i])) unbraced = true;
     if (!group && !option && !math && !environment && !commandTail && !/[&#_^~]/.test(text[i])) mask[i] = 1;
     if (!group && !option && !math && !environment && /\S/.test(text[i])) commandTail = false;
@@ -279,8 +307,15 @@ export function comparisonPlan(before: string, after: string): ComparisonPlan {
       ? 'The change is outside the ordinary document body.'
       : inline ? undefined : repeated;
     const paired = !fragment && !repeated && !omission && !!oldText.trim() && !!newText.trim() && (!inline || !/[\\{}$%&#_^~]/.test(oldText + newText));
-    const layout: ChangeLayout = omission ? 'omitted' : !oldText.trim() ? 'added' : !newText.trim() ? 'removed' : inline && (!paired || changed < 160 && changed < (oldText.length + newText.length) * .45) ? 'inline' : 'paired';
-    return { ...c, id: `change-${i + 1}`, oldText, newText, layout, inline: inline && !omission, paired, omission, reasons: [] };
+    const changedFraction = changed / Math.max(1, oldText.length + newText.length);
+    // Plain, complete prose paragraphs only. Never turn a comment-joined
+    // fragment or a passage containing math/commands into repeated paragraphs.
+    const denseRewrite = paired && inline && ((edits?.length ?? 0) >= 3 && changedFraction >= .3 || changed >= 160 || changed >= 80 && changedFraction >= .45);
+    const layout: ChangeLayout = omission ? 'omitted' : !oldText.trim() ? 'added' : !newText.trim() ? 'removed' : inline && !denseRewrite ? 'inline' : 'paired';
+    const sourceNote = (s: string) => !s || /^%[^\r\n]*(?:\r?\n)?$/.test(s);
+    const omissionKind = omission ? sourceNote(oldText) && sourceNote(newText) ? 'source-only' : 'unsupported' : undefined;
+    return { ...c, id: `change-${i + 1}`, oldText, newText, layout, inline: inline && !omission && !denseRewrite, paired, omission, omissionKind,
+      editCount: edits?.length, changedFraction: Number.isFinite(changedFraction) ? changedFraction : undefined, reasons: [] };
   }) };
 }
 

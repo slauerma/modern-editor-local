@@ -91,6 +91,41 @@ test('a missing item fails just its batch; resumption keeps prior IDs and import
   assert.equal(done.error,''); assert.equal(done.feedback,saved.feedback);
 });
 
+for (const committed of [false, true]) test('batch storage failure never overwrites the last on-disk record, committed: ' + committed, async t => {
+  const f = await fixture(t), saved = await f.service.prepareFeedback({ projectId: f.paper.id, text: source, label: 'Trial', feedback: review(1) });
+  f.service.client.run = async prompt => response(prompt);
+  const save = f.service.feedback.save.bind(f.service.feedback); let writes = 0;
+  f.service.feedback.save = async (...args) => {
+    writes++; if (committed) await save(...args);
+    throw Error('Injected storage sync failure');
+  };
+  await assert.rejects(f.service.resumeFeedback({ projectId: f.paper.id, id: saved.id, all: true }, () => {}), /storage sync failure/);
+  assert.equal(writes, 1, 'Do not write an older snapshot after a failed save');
+  const durable = await f.service.feedback.get(f.paper.id, saved.id);
+  assert.equal(durable.comments.length, committed ? 1 : 0);
+  assert.equal(durable.plan!.items[0].complete, committed);
+  f.service.feedback.save = save;
+  if (committed) f.service.client.run = async () => { throw Error('The committed batch must not run again'); };
+  const resumed = await f.service.resumeFeedback({ projectId: f.paper.id, id: saved.id, all: true }, () => {});
+  assert.equal(resumed.comments.length, 1); assert.equal(resumed.status, 'complete');
+  assert.equal(await fs.readFile(f.file, 'utf8'), source);
+});
+
+test('legacy feedback preserves a completed result when final storage reports a post-commit error', async t => {
+  const f = await fixture(t), save = f.service.feedback.save.bind(f.service.feedback); let writes = 0, id = '';
+  f.service.client.run = async () => ({ comments: [{ title: 'Inspect the quotation', explanation: 'Please clarify it.', original: 'A unique quotation.', replacement: null }] });
+  f.service.feedback.save = async (...args) => {
+    writes++; id = args[1].id; const result = await save(...args);
+    if (writes === 2) throw Error('Injected storage sync failure');
+    return result;
+  };
+  await assert.rejects(f.service.convertFeedback({ projectId: f.paper.id, text: source, label: 'Trial', feedback: 'Inspect the quotation.' }, () => {}), /storage sync failure/);
+  assert.equal(writes, 2);
+  const durable = await f.service.feedback.get(f.paper.id, id);
+  assert.equal(durable.status, 'complete'); assert.equal(durable.comments.length, 1);
+  assert.equal(await fs.readFile(f.file, 'utf8'), source);
+});
+
 test('cancellation rejects late output, preserves completed batches and permits resume after settling', async t => {
   const f=await fixture(t), saved=await f.service.prepareFeedback({projectId:f.paper.id,text:source,label:'Trial',feedback:review(24)});
   let entered!:()=>void, release!:()=>void;

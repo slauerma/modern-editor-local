@@ -1,3 +1,5 @@
+import { traceInteraction } from './debug-interactions.ts';
+import type { ReplyAction } from '../shared/contracts.ts';
 import { FilesPanel } from './FilesPanel.tsx';
 import { useDialogFocus } from './use-dialog-focus.ts';
 import './classic-view.css';
@@ -40,6 +42,8 @@ import { preambleContext, preambleChanges } from '../shared/fragment-preamble.ts
 import { captureContext, changedText, commentVisible, discussionMessage, historyCommentId, mergeComments, nextCommentId, proposalChanges, reattachComment, replyFields, visibleCommentId } from '../shared/review.ts';
 import { ProposalPreview } from './ProposalPreview.tsx';
 import { ReadableArea } from './ReadableArea.tsx';
+import { WordingChoices } from './WordingChoices.tsx';
+import { selectWording, useDiscussionWording } from '../shared/alternatives.ts';
 import { DiscussionMessage } from './DiscussionMessage.tsx';
 import { applyProposal, commentsField, initialState, loadComments, alterComments, patchComments, validateReviewTransaction } from './editor-state.ts';
 import { PdfPane, type PdfPaneHandle } from './PdfPane.tsx';
@@ -55,7 +59,7 @@ import { ComparePane, type ComparisonPosition } from './ComparePane.tsx';
 import type { Baseline, Effort, WaitingResult } from '../shared/contracts.ts';
 import { ResultInbox } from './result-inbox.ts';
 import { WaitingResults } from './WaitingResults.tsx';
-import { deeperQuestion, replyContext, reviewContext } from '../shared/codex-context.ts';
+import { alternativesQuestion, quickAlternativeQuestion, deeperQuestion, quickQuestion, replyContext, reviewContext } from '../shared/codex-context.ts';
 import { SectionReview, reviewSections, type SectionProgress } from '../shared/section-review.ts';
 import { CommentOverview } from './CommentOverview.tsx';
 import { ActionMenu } from './ActionMenu.tsx';
@@ -78,6 +82,7 @@ export function App() {
   const [changesExport, setChangesExport] = useState<{ id: string; label: string } | null>(null);
   const [helpChatOpen, setHelpChatOpen] = useState(false);
   const [autoAddComments, setAutoAddComments] = useState(true);
+  const autoAddRef = useRef(true); autoAddRef.current = autoAddComments;
   const [feedbackContextId, setFeedbackContextId] = useState<string | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false), [helpOpen, setHelpOpen] = useState(false), [feedbackOpen, setFeedbackOpen] = useState(false);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false), [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreview | null>(null);
@@ -110,6 +115,7 @@ export function App() {
   const [guidanceOpen, setGuidanceOpen] = useState(false), [savedPreferences, setSavedPreferences] = useState(defaultEditPreferences());
   const guidanceDialog = useRef<HTMLElement>(null);
   useDialogFocus(guidanceDialog, () => setGuidanceOpen(false), { open: guidanceOpen });
+  useEffect(() => { traceInteraction('viewer-mode', { mode: representation }); }, [representation]);
   const [discussionBusy, setDiscussionBusy] = useState(false), discussionLock = useRef(false);
   const [preambleBusy, setPreambleBusy] = useState(false), preambleRun = useRef<{ cancelled: boolean } | null>(null);
   const buildRun = useRef<{ cancelled: boolean } | null>(null);
@@ -181,17 +187,17 @@ export function App() {
     if (!commentsHidden && reviewScroll.current) reviewScroll.current.scrollTop = lastReviewTop.current;
   }, [showSource, commentsHidden, project?.id]);
   const workspaceValues = useRef(defaultWorkspace()), restoredSource = useRef<WorkspaceState['source'] | null>(null);
-  workspaceValues.current = { ...workspaceValues.current, pdf: { page: pdfPosition.page, zoom: pdfPosition.zoom as WorkspaceState['pdf']['zoom'], scrollX: pdfPosition.scrollX ?? 0, scrollY: pdfPosition.scrollY ?? 0, flow: pdfPosition.flow }, pdfBuildId: build?.id ?? project?.workspace?.pdfBuildId ?? null, pdfOpen, commentsHidden, paneSizes: paneSizes as WorkspaceState['paneSizes'], toolbarCollapsed, changesOpen, layout, classic, classicSurface, compactTab, displayName, followComments, reviewView: showHistory ? 'history' : laterOnly ? 'later' : 'pending' };
+  workspaceValues.current = { ...workspaceValues.current, autoAddComments, pdf: { page: pdfPosition.page, zoom: pdfPosition.zoom as WorkspaceState['pdf']['zoom'], scrollX: pdfPosition.scrollX ?? 0, scrollY: pdfPosition.scrollY ?? 0, flow: pdfPosition.flow }, pdfBuildId: build?.id ?? project?.workspace?.pdfBuildId ?? null, pdfOpen, commentsHidden, paneSizes: paneSizes as WorkspaceState['paneSizes'], toolbarCollapsed, changesOpen, layout, classic, classicSurface, compactTab, displayName, followComments, reviewView: showHistory ? 'history' : laterOnly ? 'later' : 'pending' };
   const workspaceWriter = useRef(new RecoveryWriter<{ projectId: string; workspace: WorkspaceState }>(value => window.editor.setWorkspace(value.projectId, value.workspace), e => setNotice('Reading position could not be saved. Source recovery is separate. ' + errorText(e))));
   const workspaceCallback = useRef<() => void>(() => {}); workspaceCallback.current = scheduleWorkspace;
 
   const [waiting, setWaiting] = useState<WaitingResult[]>([]), [waitingNotices, setWaitingNotices] = useState<string[]>([]), [inboxBusy, setInboxBusy] = useState(false), [inboxOpen, setInboxOpen] = useState(false);
   const inbox = useRef<ResultInbox>();
-  inbox.current ??= new ResultInbox({ api: window.editor, input, locked: () => gate.current.locked, begin: () => gate.current.begin('results'),
+  inbox.current ??= new ResultInbox({ api: window.editor, input, locked: () => gate.current.locked, autoAddComments: () => autoAddRef.current, begin: () => gate.current.begin('results'),
     install: items => { view.current?.dispatch({ effects: loadComments.of(items), annotations: Transaction.addToHistory.of(false) }); if (!activeRef.current) choose(visibleCommentId(items, null, historyRef.current, laterRef.current), false); },
     flush, changed: (items, notices, working) => { setWaiting(items); setWaitingNotices(notices); setInboxBusy(working); },
     error: e => setError('A Codex result remains available in waiting results. ' + errorText(e)) });
-  useEffect(() => { if (project && !locked) void inbox.current!.refresh(); }, [project?.id, locked]);
+  useEffect(() => { if (project && !locked) void inbox.current!.refresh(); }, [project?.id, locked, autoAddComments]);
   useEffect(() => { setCandidatePosition({ page: 1, zoom: pdfPosition.zoom }); }, [candidateBuild?.id]);
   const bulkPlan = useMemo(() => bulkAcceptancePlan(text, comments), [text, comments]);
   const pending = comments.filter(c => c.decision === 'open'), laterCount = pending.filter(c => c.later).length, visible = comments.filter(c => commentVisible(c, showHistory, laterOnly));
@@ -259,7 +265,7 @@ export function App() {
     setText(p.text); setSavedText(p.recovered ? '\u0000recovered-unsaved' : p.text);
     setBuild(p.restoredPdf?.build ?? null); displayedBuild.current = p.restoredPdf?.build ?? null;
     setLastAttempt(null); setBuildRetry(null); approvedBuildInputs.current = undefined; buildHelpEpoch.current++; setDependencyStale(!!p.restoredPdf); setPdfText(p.restoredPdf?.text ?? '');
-    setClassic(saved.classic ?? false); setClassicSurface(saved.classicSurface ?? 'source'); setClassicDetails(false); setPdfPosition(saved.pdf); setPdfOpen(mode === 'text' || saved.pdfOpen); setCommentsHidden(saved.commentsHidden ?? false); setPaneSizes(saved.paneSizes); setToolbarCollapsed(saved.toolbarCollapsed); setFollowComments(saved.followComments); setChangesOpen(saved.changesOpen ?? true); setLayout(mode === 'text' && !saved.pdfOpen ? 'auto' : saved.layout ?? 'auto'); setCompactTab(saved.compactTab ?? 'source'); setDisplayName(saved.displayName ?? '');
+    autoAddRef.current = saved.autoAddComments ?? true; setAutoAddComments(autoAddRef.current); setClassic(saved.classic ?? false); setClassicSurface(saved.classicSurface ?? 'source'); setClassicDetails(false); setPdfPosition(saved.pdf); setPdfOpen(mode === 'text' || saved.pdfOpen); setCommentsHidden(saved.commentsHidden ?? false); setPaneSizes(saved.paneSizes); setToolbarCollapsed(saved.toolbarCollapsed); setFollowComments(saved.followComments); setChangesOpen(saved.changesOpen ?? true); setLayout(mode === 'text' && !saved.pdfOpen ? 'auto' : saved.layout ?? 'auto'); setCompactTab(saved.compactTab ?? 'source'); setDisplayName(saved.displayName ?? '');
     setWarningAcceptance(null); setCandidateBuild(null); setViewCandidate(false); setError(''); setNotice([...p.notices, documentModeNotice(p.text)].filter(Boolean).join(' '));
     historyRef.current = saved.reviewView === 'history'; setShowHistory(historyRef.current); laterRef.current = saved.reviewView === 'later'; setLaterOnly(laterRef.current);
     setFindOpen(false); setFindNotice(''); setStatus(p.recovered ? 'Unsaved work recovered' : 'Paper opened');
@@ -332,7 +338,7 @@ export function App() {
     try {
       const selection = editor.state.selection.main;
       const linked = linkQuestionToSelection(editor.state.doc.toString(), c, selection.from, selection.to);
-      if (patch(c.id, { original: linked.original, questionOriginal: linked.questionOriginal, messages: linked.messages, from: linked.from, to: linked.to, before: linked.before, after: linked.after, validity: linked.validity }, true)) { setError(''); setStatus('Question linked to the selected passage · Undo restores its earlier link'); }
+      if (patch(c.id, { original: linked.original, questionOriginal: linked.questionOriginal, messages: linked.messages, alternatives: linked.alternatives, from: linked.from, to: linked.to, before: linked.before, after: linked.after, validity: linked.validity }, true)) { setError(''); setStatus('Question linked to the selected passage · Undo restores its earlier link'); }
     } catch (e) { setError(errorText(e)); }
   }
   function dismissPending() {
@@ -347,6 +353,7 @@ export function App() {
   }
   function choose(id: string | null, reveal = true, follow = false) {
     if (gate.current.locked) return;
+    if (id && id !== activeRef.current) traceInteraction('comment-select', { projectId: projectRef.current?.id, commentId: id });
     if (inspection) setStatus('Ready');
     setInspection(null);
     if (id !== activeRef.current) leavePreview();
@@ -360,6 +367,7 @@ export function App() {
     if (follow && id && projectRef.current) { followPending.current = { projectId: projectRef.current.id, id }; setFollowRevision(value => value + 1); }
   }
   function move(delta: number) {
+    traceInteraction('comment-navigation', { projectId: projectRef.current?.id, commentId: activeRef.current ?? undefined, mode: delta > 0 ? 'next' : 'previous' });
     const editor = view.current; if (!editor) return;
     if (inspection && delta > 0) { const next = inspection.next; setInspection(null); choose(next, true, true); return; }
     choose(nextCommentId(editor.state.field(commentsField), activeRef.current, delta, historyRef.current, laterRef.current), true, true);
@@ -374,6 +382,7 @@ export function App() {
     choose(visibleCommentId(view.current?.state.field(commentsField) ?? [], activeRef.current, false, value), true, true);
   }
   function markLater() {
+    traceInteraction('later', { projectId: projectRef.current?.id, commentId: activeRef.current ?? undefined });
     const c = view.current?.state.field(commentsField).find(c => c.id === activeRef.current);
     if (c?.decision === 'open' && patch(c.id, { later: !c.later }, true)) { move(1); setStatus(c.later ? 'Returned comment to pending' : 'Comment kept for later'); }
   }
@@ -407,7 +416,7 @@ export function App() {
   }
   function finishComment(decision: 'dismissed' | 'resolved') {
     const c = view.current?.state.field(commentsField).find(c => c.id === activeRef.current);
-    if (c?.decision === 'open' && patch(c.id, { decision }, true)) move(1);
+    if (c?.decision === 'open' && patch(c.id, { decision }, true)) { traceInteraction(decision === 'dismissed' ? 'reject' : 'resolve', { projectId: projectRef.current?.id, commentId: c.id }); move(1); }
   }
   useEffect(() => {
     if (!project || !host.current) return;
@@ -447,7 +456,7 @@ export function App() {
   useEffect(() => {
     const current = input(); if (current && !gate.current.locked) writer.current.schedule(current);
   }, [project?.id, text, comments, activeId]);
-  useEffect(() => { scheduleWorkspace(); }, [project?.id, pdfPosition, pdfOpen, commentsHidden, paneSizes, toolbarCollapsed, changesOpen, layout, classic, classicSurface, compactTab, displayName, followComments, laterOnly, showHistory, build?.id]);
+  useEffect(() => { scheduleWorkspace(); }, [project?.id, pdfPosition, pdfOpen, commentsHidden, paneSizes, toolbarCollapsed, changesOpen, layout, classic, classicSurface, compactTab, displayName, followComments, laterOnly, showHistory, autoAddComments, build?.id]);
   useEffect(() => () => { writer.current.clearTimers(); workspaceWriter.current.clearTimers(); }, []);
   async function close(toHome = false) {
     if (toHome && !projectRef.current) return;
@@ -568,6 +577,7 @@ export function App() {
     setDocMode('latex'); setRepresentation('pdf'); setPdfOpen(true); setCompareOpen(false);
   }
   async function previewSuggestion() {
+    traceInteraction('proposal-preview', { projectId: projectRef.current?.id, commentId: activeRef.current ?? undefined });
     const captured = input(), editor = view.current;
     const c = captured?.review.comments.find(item => item.id === activeRef.current);
     if (!captured || !editor || !c || busy || gate.current.locked) return;
@@ -661,6 +671,7 @@ export function App() {
           // recording it. A failed write leaves the actual edit visible, never a
           // hidden candidate ahead of the editor. Close waits for this operation.
           editor.dispatch(transaction); applied = true;
+          for (const id of ids) traceInteraction('accept', { projectId: captured.projectId, commentId: id, mode: 'with-compile', outcome: 'complete' });
           await flush();
         });
         if (!applied) return;
@@ -712,7 +723,9 @@ export function App() {
       if (tr.newDoc.toString() !== receipt.candidate) throw new Error('The combined suggestion changed. Compile again; nothing was applied.');
       await gate.current.commit(async () => {
         if (job.cancelled) return;
-        editor.dispatch(tr); applied = true; setWarningAcceptance(null); await flush();
+        editor.dispatch(tr); applied = true; setWarningAcceptance(null);
+        for (const id of receipt.ids) traceInteraction('accept', { projectId: receipt.projectId, commentId: id, mode: 'despite-warnings', outcome: 'complete' });
+        await flush();
       });
       if (!applied) return;
       setBuild(receipt.build); setPdfText(receipt.candidate); setDependencyStale(false); setViewCandidate(false); setCandidateBuild(null); setPdfOpen(true); displayedBuild.current = receipt.build;
@@ -815,7 +828,7 @@ export function App() {
     // Share the acceptance/build slot so a checked candidate cannot race this edit.
     const done = gate.current.begin('build'); if (!done) return;
     if (keyboardRail) keyboardReviewFocus.current = { element: keyboardRail, projectId: captured.projectId };
-    let applied = false;
+    let applied = false; const began = performance.now();
     setBusy(true); setError(''); setStatus('Applying the suggestion without compiling…');
     try {
       const candidate = changedText(captured.text, proposalChanges(captured.text, c));
@@ -840,7 +853,7 @@ export function App() {
     } catch (e) {
       setError(applied ? 'The suggestion is applied without compiling and is undoable, but recovery could not be saved. Retry Save or export your source. ' + errorText(e) : errorText(e));
       setStatus(applied ? 'Suggestion applied without compiling · recovery needs attention' : 'Suggestion was not applied');
-    } finally { setBusy(false); done(); }
+    } finally { traceInteraction('accept', { projectId: captured.projectId, commentId: id, outcome: applied ? 'complete' : 'error', elapsedMs: performance.now() - began }); setBusy(false); done(); }
   }
   async function cancelPreamble() {
     if (!preambleRun.current) return;
@@ -911,6 +924,7 @@ export function App() {
     const editor = view.current; if (!editor || gate.current.locked) return false;
     const beforeState = editor.state, before = beforeState.field(commentsField);
     if (!(forward ? redo : undo)(editor) || editor.state === beforeState) return false;
+    traceInteraction(forward ? 'redo' : 'undo', { projectId: projectRef.current?.id });
     const beforeMode = documentMode(beforeState.doc.toString()), afterMode = documentMode(editor.state.doc.toString());
     if (beforeMode !== afterMode) { setDocMode(afterMode); setRepresentation(afterMode === 'text' ? 'text' : 'pdf'); setPdfOpen(true); }
     const after = editor.state.field(commentsField), id = historyCommentId(before, after, activeRef.current);
@@ -939,7 +953,7 @@ export function App() {
   }
   async function clearBuilds() {
     const done = gate.current.begin('cleanup'); if (!done) return;
-    try { const result = await window.editor.clearOldBuilds([build?.id, candidateBuild?.id, preview?.build?.id].filter((id): id is string => !!id)); setStatus(`Removed ${result.removed} older builds; kept current and recent PDFs`); }
+    try { const result = await window.editor.clearOldBuilds([build?.id, candidateBuild?.id, preview?.build?.id, changesExport?.id].filter((id): id is string => !!id)); setStatus(`Removed ${result.removed} older builds; kept current and recent PDFs`); }
     catch (e) { setError(errorText(e)); } finally { done(); }
   }
   function showAttachments(returnToReview = false) {
@@ -947,6 +961,7 @@ export function App() {
   }
   function closeAttachments() { setAttachmentsOpen(false); if (attachmentReturnReview.current) setReviewOpen(true); attachmentReturnReview.current = false; }
   function focusDiscussion() {
+    traceInteraction('discussion-open', { projectId: projectRef.current?.id, commentId: activeRef.current ?? undefined });
     if (!active) return;
     setNotesOpen(true); requestAnimationFrame(() => document.getElementById('reply')?.focus());
   }
@@ -957,7 +972,7 @@ export function App() {
     try { await flush(); return await window.editor.prepareFeedback({ ...values, projectId: captured.projectId, text: captured.text }); }
     finally { done(); }
   }
-  async function convertFeedback(record: FeedbackRecord, all: boolean, autoAdd: boolean) {
+  async function convertFeedback(record: FeedbackRecord, all: boolean) {
     const epoch = codexCancelEpoch.current;
     const captured = input(); if (!captured) throw new Error('Open a paper first.');
     const done = gate.current.begin('codex'); if (!done || aiBusy) { done?.(); throw new Error('Wait for the current Codex request.'); }
@@ -967,7 +982,7 @@ export function App() {
       do {
         setContextText(JSON.stringify(feedbackBatchContext(result), null, 2));
         result = await window.editor.resumeFeedback({ projectId: captured.projectId, id: record.id, all: false });
-        if (autoAdd && !gate.current.closing) {
+        if (autoAddRef.current && !gate.current.closing) {
           const current = input();
           if (current?.projectId === captured.projectId) {
             const incoming = feedbackComments(result, current.text, current.review.comments);
@@ -976,7 +991,7 @@ export function App() {
         }
         if (gate.current.closing || epoch !== codexCancelEpoch.current) break;
       } while (all && result.status !== 'complete');
-      setStatus(autoAdd ? 'New feedback comments added · your place is preserved' : 'Feedback batch saved · choose which comments to add'); return result;
+      setStatus(autoAddRef.current ? 'New feedback comments added · your place is preserved' : 'Feedback batch saved · choose which comments to add'); return result;
     } finally { setAiBusy(false); done(); }
   }
   async function adoptFeedback(incoming: Comment[], expectedText: string) {
@@ -993,7 +1008,7 @@ export function App() {
   function previewContext(reply = false) {
     try {
       const captured = input(); if (!captured) return;
-      const payload = reply && active ? replyContext({ projectId: captured.projectId, text: captured.text, comment: active, message: active.replyDraft.trim() || deeperQuestion }, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences) : reviewContext(reviewRequest(), projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences);
+      const payload = reply && active ? replyContext({ projectId: captured.projectId, text: captured.text, comment: active, message: active.replyDraft.trim() || deeperQuestion }, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences) : reviewContext(reviewRequest(), projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences, captured.review.comments);
       setContextText(JSON.stringify(payload, null, 2)); setContextOpen(true);
     } catch (e) { setError(errorText(e)); }
   }
@@ -1003,8 +1018,10 @@ export function App() {
     const done = gate.current.begin('codex'); if (!done) return;
     setAiBusy(true); setReviewBusy(true); setCommentsHidden(false); setError(''); setReviewOpen(false); setSectionProgress(null);
     const references = attachmentPreview;
-    const runner = new SectionReview({ request: request => {
-      setContextText(JSON.stringify(reviewContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences), null, 2));
+    const runner = new SectionReview({ request: async request => {
+      await flush();
+      if (gate.current.closing || projectRef.current?.id !== captured.projectId) throw new Error('Review cancelled before sending.');
+      setContextText(JSON.stringify(reviewContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences, input()?.review.comments), null, 2));
       return window.editor.requestReview({ ...request, attachmentPreviewId: references?.id });
     }, delivered: () => inbox.current!.refresh(), cancel: () => window.editor.cancelCodex(), changed: setSectionProgress });
     sectionRun.current = runner;
@@ -1017,29 +1034,35 @@ export function App() {
     const done = gate.current.begin('codex'); if (!done) return;
     setAiBusy(true); setReviewBusy(true); setCommentsHidden(false); setError(''); setReviewOpen(false); setSectionProgress(null);
     try {
-      const request = reviewRequest();
-      setContextText(JSON.stringify(reviewContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences), null, 2));
+      const request = reviewRequest(), epoch = codexCancelEpoch.current;
+      await flush();
+      if (gate.current.closing || epoch !== codexCancelEpoch.current || projectRef.current?.id !== captured.projectId) return;
+      setContextText(JSON.stringify(reviewContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences, input()?.review.comments), null, 2));
       const added = await window.editor.requestReview(request);
       if (!gate.current.closing) { setStatus(`Codex returned ${added.length} comments`); await inbox.current!.refresh(); }
     } catch (e) { setError(errorText(e) + ' Completed review results are kept in .modern-editor/documents/<document-id>/reviews.'); setStatus('Codex review stopped'); } finally { setAiBusy(false); setReviewBusy(false); done(); }
   }
-  async function discuss(deeper = false) {
+  async function discuss(action: ReplyAction = 'standard') {
+    const preserveDraft = action === 'alternatives' || action === 'quick-alternative' || action === 'reconsider';
     const epoch = codexCancelEpoch.current;
     const captured = input(), c = captured?.review.comments.find(c => c.id === activeRef.current), runner = sectionRun.current;
-    if (!captured || !c || (!deeper && !c.replyDraft.trim()) || effortBusy || attachmentBusy || attachmentPending || discussionLock.current || gate.current.locked || (aiBusy && !runner?.canDiscuss)) return;
+    if (!captured || !c || (action === 'standard' && !c.replyDraft.trim()) || effortBusy || attachmentBusy || attachmentPending || discussionLock.current || gate.current.locked || (aiBusy && !runner?.canDiscuss)) return;
     let message: string;
-    try { message = discussionMessage(deeper ? { ...c, replyDraft: deeperQuestion } : c); } catch (e) { setError(errorText(e)); return; }
+    try { message = discussionMessage({ ...c, replyDraft: action === 'quick-alternative' ? quickAlternativeQuestion : action === 'alternatives' ? alternativesQuestion : action === 'reconsider' ? deeperQuestion : c.replyDraft.trim() || quickQuestion }); } catch (e) { setError(errorText(e)); return; }
     const done = runner ? null : gate.current.begin('codex'); if (!runner && !done) return;
     setError('');
     const userMessage = { role: 'user' as const, text: message, createdAt: new Date().toISOString() };
-    if (!patch(c.id, { messages: [...c.messages, userMessage], ...(deeper ? {} : { replyDraft: '' }) })) { done?.(); return; }
+    if (!patch(c.id, { messages: [...c.messages, userMessage], ...(preserveDraft ? {} : { replyDraft: '' }) })) { done?.(); return; }
     discussionLock.current = true; setDiscussionBusy(true); if (!runner) setAiBusy(true);
-    const request = { projectId: captured.projectId, text: captured.text, comment: c, message, requestId: crypto.randomUUID(), deeper, attachmentPreviewId: attachmentPreview?.id };
+    const request = { projectId: captured.projectId, text: captured.text, comment: c, message, requestId: crypto.randomUUID(), action, attachmentPreviewId: attachmentPreview?.id };
+    const began = performance.now(); let answered = false;
+    traceInteraction('discussion', { projectId: captured.projectId, commentId: c.id, mode: action, outcome: 'started' });
     const perform = async () => {
       await flush(); if (gate.current.closing || epoch !== codexCancelEpoch.current || projectRef.current?.id !== captured.projectId) return;
       setContextText(JSON.stringify(replyContext(request, projectRef.current?.paperInstructions, attachmentPromptContext(attachmentPreview), projectRef.current?.editPreferences), null, 2));
-      await window.editor.replyToComment(request);
-      if (!gate.current.closing) { await inbox.current!.refresh(); setStatus('Codex replied · inspect suggested wording in the discussion'); }
+      const answer = await window.editor.replyToComment(request); answered = true;
+      if (action === 'quick-alternative' && !answer.alternatives?.length && activeRef.current === c.id) setNotesOpen(true);
+      if (!gate.current.closing) { await inbox.current!.refresh(); setStatus(action === 'quick-alternative' || action === 'alternatives' ? 'Codex replied · choose a saved Wording; your current draft is kept' : 'Codex replied · inspect suggested wording in the discussion'); }
     };
     try {
       if (runner) {
@@ -1047,7 +1070,7 @@ export function App() {
         if (!await runner.interrupt(perform) && !gate.current.closing) setStatus('Queued question kept in its discussion; it was not sent.');
       } else await perform();
     } catch (e) { setError(errorText(e) + ' Returned answers are kept in .modern-editor/documents/<document-id>/reviews (JSON or rejected text).'); setStatus('Discussion stopped · your message is saved'); }
-    finally { discussionLock.current = false; setDiscussionBusy(false); if (!runner) setAiBusy(false); done?.(); }
+    finally { traceInteraction('discussion', { projectId: captured.projectId, commentId: c.id, mode: action, outcome: answered ? 'complete' : epoch !== codexCancelEpoch.current ? 'cancelled' : 'error', elapsedMs: performance.now() - began }); discussionLock.current = false; setDiscussionBusy(false); if (!runner) setAiBusy(false); done?.(); }
   }
   function captureChat(paper: boolean): Omit<ChatInput, 'message' | 'images' | 'paper' | 'includeComment' | 'includeDiagnostics' | 'includeReferences'> {
     const current = input(), editor = view.current;
@@ -1140,7 +1163,7 @@ export function App() {
         <p className="review-policy-note">{localEditsOnly ? 'One small, independent edit per suggestion. Broader concerns become discussion comments.' : 'Suggestions may include larger rewrites when your instructions call for them.'}</p>
         <label>Instructions for this review<textarea maxLength={10000} value={instructions} onChange={e => setInstructions(e.target.value)} /></label>
         <details><summary>Saved paper instructions{guidanceDirty ? ' · unsaved' : ''}</summary><p>Notation, assumptions and style preferences included in reviews and discussions for this document.</p><textarea aria-label="Paper instructions" maxLength={10000} value={paperInstructions} onChange={e => setPaperInstructions(e.target.value)} /><button disabled={aiBusy || !guidanceDirty} onClick={() => void saveInstructions()}>Save paper instructions</button></details>
-        <label className="local-edits"><input type="checkbox" disabled={aiBusy} checked={autoAddComments} onChange={e => setAutoAddComments(e.target.checked)} /> Add comments when ready</label>
+        <label className="local-edits"><input type="checkbox" checked={autoAddComments} onChange={e => setAutoAddComments(e.target.checked)} /> Add comments when ready</label>
         <p className="review-policy-note">New comments join the queue without changing your current selection. Uncertain source matches stay flagged. Uncheck to inspect results in Waiting Codex results first.</p>
         <div className="request-actions"><button className="primary" disabled={aiBusy || attachmentBusy || attachmentPending || guidanceDirty} onClick={() => void requestReview()}>Start review</button><button disabled={aiBusy || attachmentBusy || attachmentPending || guidanceDirty} onClick={() => void startSections()}>Review section by section</button><button onClick={() => previewContext()}>Preview context sent to Codex</button><button onClick={() => showAttachments(true)}>Attach context{referenceState.roots.some(r => r.enabled) ? ` (${referenceState.roots.filter(r => r.enabled).length})` : attachmentPreview ? ` (${attachmentPreview.selections.length})` : '…'}</button></div>
         <p>Section review uses a fixed copy of this source, one section at a time. You may keep editing; source matches are checked again on arrival. Pause finishes the current section; Stop cancels the remaining work.</p>
@@ -1194,6 +1217,7 @@ export function App() {
           else { event.preventDefault(); move(action === 'previous' ? -1 : 1); }
         }}>
           <div className="review-heading"><strong>Comments</strong><button className="text-button" aria-expanded={overviewOpen} onClick={() => setOverviewOpen(v => !v)}>Overview</button><button className="text-button" aria-pressed={laterOnly} onClick={showLater}>Later ({laterCount})</button><button className="text-button" onClick={() => showReviewHistory(!historyRef.current)}>{showHistory ? 'Pending' : 'History'}</button><ActionMenu label="More ▾" menuLabel="Comment actions"><div><button disabled={busy || locked || !bulkPlan.ids.length} onClick={acceptAll}>Accept all applicable suggestions ({bulkPlan.ids.length})</button><small>{docMode === 'text' ? 'Apply together without compiling. ' : 'Compile once, then apply together. '}{bulkPlan.leftPending} other pending comments stay for individual review; Later is kept. One Undo restores all changes.</small><button disabled={busy || locked || !pending.some(c => !c.later)} onClick={dismissPending}>Dismiss pending comments ({pending.filter(c => !c.later).length})</button><small>Keep Later comments. Retain History and discussions. Undo restores the whole action.</small></div></ActionMenu><button className="icon hide-comments" aria-label="Hide comments" title="Hide comments while writing · Command+2 brings them back" onClick={toggleComments}>×</button></div>
+          <label className="arrival-option" title="New comments are added without moving your current comment. Rejected suggestions stay in History and inform later reviews."><input type="checkbox" checked={autoAddComments} onChange={e => setAutoAddComments(e.target.checked)} /> Add new comments as they arrive</label>
           {reviewBusy && <ReviewProgress section={sectionProgress} compact={!!active || visible.length > 0} pause={() => sectionRun.current?.pause()} resume={() => sectionRun.current?.resume()} stop={stopReview} />}
           {(!reviewBusy || visible.length > 0) && <nav className="review-nav"><button aria-label="Previous comment" title="Previous comment · Shift+P" aria-keyshortcuts="Shift+P" onClick={() => move(-1)} disabled={!visible.length}>← Previous</button><span>{inspecting ? 'Applied · inspecting' : visible.length && visible.some(c => c.id === activeId) ? `${visible.findIndex(c => c.id === activeId) + 1} of ${visible.length}` : 'Complete'}</span><button aria-label="Next comment" title="Next comment · Shift+N" aria-keyshortcuts="Shift+N" onClick={() => move(1)} disabled={!visible.length && !inspecting}>Next →</button></nav>}
           <div className="review-content" ref={reviewScroll} onScroll={e => { if (!commentsHidden) lastReviewTop.current = e.currentTarget.scrollTop; }}>
@@ -1201,9 +1225,16 @@ export function App() {
           {active ? <article className="comment-card"><div className="comment-location"><span className="passage-links"><button className="text-button" title="Go to this comment’s passage in the source" onClick={() => { if (['current', 'stale'].includes(active.validity) && active.to > active.from) goToSource(active.from, active.to); else revealSource(true); }}>Source</button>{docMode === 'latex' && <><span aria-hidden="true">·</span><button className="text-button" aria-label="Show comment in PDF" disabled={busy || pdfLocating || active.validity !== 'current'} title="Show this comment’s current passage in the displayed PDF" onClick={() => showInPdf(active)}>PDF</button></>}</span></div><h1>{active.title}</h1><p className="explanation">{active.explanation}</p>
             {active.replacement !== null && active.original && active.validity !== 'current' && active.decision === 'open' && <div className="stale-notice"><p>{active.validity === 'unconfirmed' ? 'Check placement: this comment needs confirmation because its source context changed.' : `The passage is ${active.validity}.`} This suggestion cannot be applied yet.</p><p>Select the exact original words in the source, then confirm their placement.</p><button onClick={confirmPassage} disabled={busy}>Attach to selected text</button></div>}
             {active.replacement === null && (active.validity !== 'current' || active.questionOriginal !== undefined) ? <QuestionPassage text={text} comment={active} disabled={busy} onLink={linkQuestion} /> : active.original ? <div className="original-passage"><div id="original-label">Original</div><ReadableArea label="original" resetKey={active.id}><pre aria-labelledby="original-label" tabIndex={0}>{active.original}</pre></ReadableArea></div> : <p className="muted">General advice without a source quotation. Discuss it, keep it for later, or resolve it after reviewing the paper.</p>}
+            <WordingChoices comment={active} busy={busy || locked} quickBusy={discussionBusy || effortBusy || attachmentBusy || attachmentPending || (aiBusy && !sectionRun.current?.canDiscuss)} onQuick={() => void discuss('quick-alternative')} onChoose={id => { try { if (patch(active.id, selectWording(active, id), true)) { traceInteraction('use-wording', { projectId: projectRef.current?.id, commentId: active.id, outcome: 'complete' }); setStatus('Wording selected · your other drafts are kept · Accept changes the paper'); } } catch (e) { setError(errorText(e)); } }} />
             {active.replacement !== null ? <><div className="proposal-heading"><label htmlFor="replacement">Proposed replacement</label>{active.decision === 'open' && <button className="text-button" onClick={() => { if (patch(active.id, { draft: active.original }, true)) { setStatus('Original copied into the proposal · Undo restores the previous proposal'); requestAnimationFrame(() => document.getElementById('replacement')?.focus()); } }}>Use original</button>}</div><ReadableArea label="replacement" resetKey={active.id}><textarea id="replacement" className="sized-replacement" rows={2} maxLength={100000} spellCheck={false} value={active.draft ?? active.replacement} onChange={e => patch(active.id, { draft: e.target.value })} disabled={active.decision !== 'open'} /></ReadableArea><ProposalPreview text={text} comment={active} open={changesOpen} onOpenChange={setChangesOpen} /></> : <div className="question-note">A question for the author · no source replacement</div>}
-            {notesOpen && <div className="discussion"><h2>Discuss this comment</h2>{active.messages.map((m, i) => <DiscussionMessage key={i} message={m} comment={active} onUse={proposal => {
-              if (patch(active.id, { replacement: proposal.replacement, draft: undefined, packages: proposal.packages }, true)) {
+            {notesOpen && <div className="discussion"><h2>Discuss this comment</h2><div className="discussion-shortcuts" role="group" aria-label="Discussion shortcuts">{([
+              ['quick', 'Quick explanation', 'Sol · Quick effort · nearby passage only, without reference tools. Explains your question or this suggestion without returning an edit.'],
+              ['alternatives', 'Three alternatives', 'Sol · Standard effort. Propose up to three distinct wordings; choose Use this wording to update only the proposal.'],
+              ['reconsider', 'Think again', 'Reconsider with the paper’s model at Deep or Max effort, including enabled references. This may take longer.']
+            ] as const).map(([action, label, title]) => <button key={action} title={title} disabled={discussionBusy || effortBusy || attachmentBusy || attachmentPending || (aiBusy && !sectionRun.current?.canDiscuss)} onClick={() => void discuss(action)}>{label}</button>)}</div><p className="action-help">Quick explanation uses Sol and the nearby passage. Ask Codex uses your paper settings and enabled references.</p>{active.messages.map((m, i) => <DiscussionMessage key={i} message={m} comment={active} onUse={proposal => {
+              if (proposal.replacement === null) return;
+              try { if (patch(active.id, useDiscussionWording(active, proposal.replacement, proposal.packages), true)) {
+                traceInteraction('use-wording', { projectId: projectRef.current?.id, commentId: active.id, outcome: 'complete' });
                 setStatus('Proposal updated · Accept changes the paper; Undo restores your previous proposal');
                 requestAnimationFrame(() => {
                   if (activeRef.current !== active.id) return;
@@ -1212,6 +1243,7 @@ export function App() {
                   document.getElementById('replacement')?.scrollIntoView({ block: 'center' });
                 });
               }
+            } catch (e) { setError(errorText(e)); }
             }} />)}<label htmlFor="reply">Your reply or note</label><textarea id="reply" maxLength={100000} value={active.replyDraft} onChange={e => patch(active.id, { replyDraft: e.target.value })} placeholder="Ask for an explanation or a different suggestion…" /><button className="primary" disabled={!active.replyDraft.trim() || discussionBusy || effortBusy || attachmentBusy || attachmentPending || (aiBusy && !sectionRun.current?.canDiscuss)} onClick={() => void discuss()}>{discussionBusy ? 'Question in progress…' : sectionRun.current && sectionProgress?.phase !== 'paused' ? 'Ask after this section' : 'Ask Codex'}</button> <button disabled={!active.replyDraft.trim()} onClick={() => patch(active.id, { messages: [...active.messages, { role: 'user', text: active.replyDraft.trim(), createdAt: new Date().toISOString() }], replyDraft: '' })}>Save note</button><p className="action-help">Use this wording updates the proposal and can be undone. Accept changes the paper; Save writes the source.</p></div>}
           </article> : reviewBusy ? null : <div className="empty-comments"><h2>{laterOnly ? 'No comments for later' : visible.length ? 'Choose a comment' : 'No pending comments'}</h2><p>Request a Codex review or import saved comments to work through suggestions beside the source.</p><button onClick={() => setReviewOpen(true)} disabled={aiBusy || busy || effortBusy || compareOpen}>Review with Codex</button></div>}
           </div>
@@ -1224,7 +1256,7 @@ export function App() {
               <button className="review-action" aria-label="Skip" title="Skip · Shift+S while focused on comments" aria-keyshortcuts="Shift+S Alt+ArrowRight" onClick={() => move(1)} disabled={busy}><span>Skip</span><kbd aria-hidden="true">Shift+S</kbd></button>
             </div>
             <div className="decision-secondary" hidden={!!inspecting}><button className="discuss-action" aria-expanded={notesOpen} title="Discuss this comment · Shift+D" onClick={() => notesOpen ? setNotesOpen(false) : focusDiscussion()}>{notesOpen ? 'Hide discussion' : 'Discuss'}<kbd aria-hidden="true">Shift+D</kbd></button>{active.replacement !== null && <button className="preview-suggestion" disabled={busy || active.decision !== 'open'} onClick={() => void previewSuggestion()} title="Inspect the proposed draft without applying or saving it">Preview</button>}{docMode === 'latex' && active.replacement !== null && <button className="accept-compile" disabled={busy || active.decision !== 'open' || active.validity !== 'current'} onClick={() => void compile(active.id)} title="Check compilation of the suggestion and listed packages before applying, then inspect its PDF. Choose Next when ready. Undo is available.">Accept &amp; compile</button>}</div>
-            <div className="decision-meta"><ActionMenu label="Comment options ▾" menuLabel="Selected comment actions"><div>{active.decision === 'open' && <button className="text-button" aria-pressed={active.later} onClick={markLater}>{active.later ? 'Return to pending' : 'Later'}</button>}{active.decision === 'open' && active.replacement !== null && <button className="text-button" onClick={() => finishComment('resolved')}>Mark addressed manually</button>}{['dismissed', 'resolved'].includes(active.decision) && <button className="text-button" onClick={() => { if (patch(active.id, { decision: 'open' }, true)) { historyRef.current = false; setShowHistory(false); choose(active.id); } }}>Reopen</button>}<button className="text-button" disabled={discussionBusy || effortBusy || attachmentBusy || attachmentPending || (aiBusy && !sectionRun.current?.canDiscuss)} title="Ask Codex to reconsider this comment with high effort. Your draft stays unchanged." onClick={() => { setNotesOpen(true); void discuss(true); }}>Think more</button><button className="text-button" onClick={() => previewContext(true)}>Preview request</button><button className="text-button" onClick={() => showAttachments()}>Attach context{referenceState.roots.some(r => r.enabled) ? ` (${referenceState.roots.filter(r => r.enabled).length})` : attachmentPreview ? ` (${attachmentPreview.selections.length})` : '…'}</button></div></ActionMenu><span>Accept edits the draft · Save writes the file</span></div>
+            <div className="decision-meta"><ActionMenu label="Comment options ▾" menuLabel="Selected comment actions"><div>{active.decision === 'open' && <button className="text-button" aria-pressed={active.later} onClick={markLater}>{active.later ? 'Return to pending' : 'Later'}</button>}{active.decision === 'open' && active.replacement !== null && <button className="text-button" onClick={() => finishComment('resolved')}>Mark addressed manually</button>}{['dismissed', 'resolved'].includes(active.decision) && <button className="text-button" onClick={() => { if (patch(active.id, { decision: 'open' }, true)) { historyRef.current = false; setShowHistory(false); choose(active.id); } }}>Reopen</button>}<button className="text-button" disabled={discussionBusy || effortBusy || attachmentBusy || attachmentPending || (aiBusy && !sectionRun.current?.canDiscuss)} title="Ask Codex to reconsider this comment with high effort. Your draft stays unchanged." onClick={() => { setNotesOpen(true); void discuss('reconsider'); }}>Think again</button><button className="text-button" onClick={() => previewContext(true)}>Preview request</button><button className="text-button" onClick={() => showAttachments()}>Attach context{referenceState.roots.some(r => r.enabled) ? ` (${referenceState.roots.filter(r => r.enabled).length})` : attachmentPreview ? ` (${attachmentPreview.selections.length})` : '…'}</button></div></ActionMenu><span>Accept edits the draft · Save writes the file</span></div>
           </div>}
         </aside>
         {['three', 'writing'].includes(arrangement) && pdfOpen && <PaneDivider label={commentsHidden ? "Resize source and viewer" : "Resize comments and viewer"} extraClass="pdf-divider" onMove={delta => commentsHidden ? resizePane(0, delta, 2) : resizePane(1, delta)} />}
@@ -1252,7 +1284,7 @@ export function App() {
       <footer><span role="status">{status}</span><span>{pending.length} open · {comments.filter(c => c.decision === 'applied').length} applied</span><span className="footer-pdf">{representation === 'changes' ? 'Changes PDF · separate comparison view' : preview ? 'Preview · not applied to the source' : viewCandidate ? 'Candidate PDF · not applied to the source' : docMode === 'text' ? 'Text mode · comparison includes unsaved edits' : build ? freshness : 'Comments saved separately in JSON'}</span>{preambleBusy ? <button onClick={() => void cancelPreamble()}>Cancel preamble</button> : <>{busy && <button onClick={() => void cancelCompilation()}>Cancel compilation</button>}{aiBusy && !sectionRun.current && <button onClick={() => void cancelCodex().catch(e => setError(errorText(e)))}>Cancel Codex</button>}</>}</footer>
     </>}
     {project && filesOpen && <FilesPanel projectId={project.id} close={() => setFilesOpen(false)} history={() => { setFilesOpen(false); toggleComparison(); }} context={() => { setFilesOpen(false); showAttachments(); }} pdfLabel={representation === 'changes' ? changesExport?.label ?? 'No Changes PDF available yet' : preview ? previewPdfLabel : viewCandidate ? 'Candidate PDF · not applied' : freshness} savePdf={representation === 'changes' ? changesExport ? () => { setFilesOpen(false); void savePdfSnapshot(changesExport.id); } : undefined : displayedBuild.current?.success ? () => { setFilesOpen(false); void savePdfSnapshot(); } : undefined} compilePdf={docMode === 'latex' && !busy ? () => void compileAndExportPdf() : undefined} />}
-    {project && <FeedbackPanel key={project.id} projectId={project.id} open={feedbackOpen} contextId={feedbackContextId} text={text} comments={comments} disabled={busy || aiBusy || locked || effortBusy || guidanceDirty} onClose={() => setFeedbackOpen(false)} onPrepare={prepareFeedback} onConvert={convertFeedback} onPause={cancelCodex} onAdopt={adoptFeedback} onPreview={record => { setContextText(JSON.stringify(feedbackBatchContext(record), null, 2)); setFeedbackOpen(false); setContextOpen(true); }} />}
+    {project && <FeedbackPanel key={project.id} projectId={project.id} autoAdd={autoAddComments} onAutoAdd={setAutoAddComments} open={feedbackOpen} contextId={feedbackContextId} text={text} comments={comments} disabled={busy || aiBusy || locked || effortBusy || guidanceDirty} onClose={() => setFeedbackOpen(false)} onPrepare={prepareFeedback} onConvert={convertFeedback} onPause={cancelCodex} onAdopt={adoptFeedback} onPreview={record => { setContextText(JSON.stringify(feedbackBatchContext(record), null, 2)); setFeedbackOpen(false); setContextOpen(true); }} />}
     <PendingChats projectId={project?.id ?? null} status={error} /><HelpChatDrawer guidanceKey={JSON.stringify([savedInstructions, savedPreferences])} open={helpChatOpen} projectId={project?.id ?? null} paperName={project?.name ?? ""} paperPath={project?.path ?? ""} blocked={busy || aiBusy || locked || effortBusy} status={status} close={() => setHelpChatOpen(false)} capture={captureChat} send={sendChat} add={addChatComment} go={(turn, pdf) => { void goChatPassage(turn, pdf).catch(e => setError(errorText(e))); }} context={() => { setHelpChatOpen(false); showAttachments(); }} guidance={() => { setHelpChatOpen(false); setGuidanceOpen(true); }} sources={() => setSourcesOpen(true)} />
     {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} disabled={busy || aiBusy || locked} />}
     {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}

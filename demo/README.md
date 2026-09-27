@@ -1,17 +1,28 @@
 # Modern Editor demonstrations
 
-The **1.3.0 LaTeXdiff demonstration** shows quick acceptance, compilation, Revision markup, Why, Clean paper, exact Text diff, Save and Close project. It has spoken ElevenLabs narration, background music and English captions.
+These three narrated **1.3.0** demonstrations show the current writing and review workflow. Each has a smaller download, English captions, a transcript and background music.
 
-| Latest video | Length | Size |
-| --- | --- | --- |
-| [LaTeXdiff — large, 1600×1000](modern-editor-latexdiff-50s.mp4) | 0:50 | 6.26 MB |
-| [LaTeXdiff — small, 1280×800](modern-editor-latexdiff-50s-small.mp4) | 0:50 | 2.57 MB |
+| Video | Length | Large · 1600×1000 | Small · 1280×800 |
+| --- | --- | --- | --- |
+| Quick overview | 0:55 | [6.0 MB](2026-09-27/modern-editor-overview-55s.mp4) | [2.8 MB](2026-09-27/modern-editor-overview-55s-small.mp4) |
+| Full walkthrough | 3:00 | [17.5 MB](2026-09-27/modern-editor-walkthrough-3min.mp4) | [8.3 MB](2026-09-27/modern-editor-walkthrough-3min-small.mp4) |
+| Changes PDF / LaTeXdiff | 0:50 | [4.7 MB](2026-09-27/modern-editor-latexdiff-50s.mp4) | [2.2 MB](2026-09-27/modern-editor-latexdiff-50s-small.mp4) |
 
-[Transcript](latexdiff-transcript.md) · [SRT captions](latexdiff-captions.srt) · [VTT captions](latexdiff-captions.vtt)
+[![Changes PDF with revision markup](2026-09-27/latexdiff-poster.png)](2026-09-27/modern-editor-latexdiff-50s.mp4)
 
-[![Changes PDF with revision markup](latexdiff-poster.png)](modern-editor-latexdiff-50s.mp4)
+The overview introduces reviewing and choosing wording. The walkthrough also covers Classic view, Side Chat and saving. The focused Changes PDF clip shows struck deletions, underlined additions, explanations, Clean paper and exact Text diff.
 
-The latest clip uses a synthetic paper and scripted Codex responses. Generation waits are sped up, as noted on screen. The editor operations and generated comparison PDF are real.
+| Captions and text | Transcript | SRT | VTT |
+| --- | --- | --- | --- |
+| Overview | [Read](2026-09-27/modern-editor-overview-55s-transcript.md) | [Download](2026-09-27/modern-editor-overview-55s.srt) | [Download](2026-09-27/modern-editor-overview-55s.vtt) |
+| Walkthrough | [Read](2026-09-27/modern-editor-walkthrough-3min-transcript.md) | [Download](2026-09-27/modern-editor-walkthrough-3min.srt) | [Download](2026-09-27/modern-editor-walkthrough-3min.vtt) |
+| Changes PDF | [Read](2026-09-27/modern-editor-latexdiff-50s-transcript.md) | [Download](2026-09-27/modern-editor-latexdiff-50s.srt) | [Download](2026-09-27/modern-editor-latexdiff-50s.vtt) |
+
+Recorded with the local 1.3.0 preview using a synthetic paper and scripted Codex responses. Editing, saving, compilation and comparison PDFs are real. Waiting time is sped up or omitted, as noted on screen; these clips do not demonstrate live model latency or answer quality. All six downloads use H.264 video and AAC audio. Download and play locally if browser playback is unavailable.
+
+## Earlier Changes PDF demonstration
+
+The [26 September version](modern-editor-latexdiff-50s.mp4) and [smaller copy](modern-editor-latexdiff-50s-small.mp4) remain available. [Transcript](latexdiff-transcript.md) · [SRT captions](latexdiff-captions.srt) · [VTT captions](latexdiff-captions.vtt).
 
 ## Earlier Side Chat walkthrough
 

@@ -11,6 +11,7 @@ import { commentSchema } from '../src/shared/contracts.ts';
 import { digest } from '../src/main/files.ts';
 import { proposalPreview } from '../src/shared/proposal-preview.ts';
 import { documentBody } from '../src/shared/document-mode.ts';
+import { initialState, applyProposal, applyProposals, commentsField } from '../src/renderer/editor-state.ts';
 
 const document = (body: string) => '\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n\n' + body + '\n\n\\end{document}\n';
 function coverage(a: string, b: string) {
@@ -68,7 +69,7 @@ test('source comments and whitespace changes receive explicit omission notices',
   for (const [a, b] of [['Text. % old comment', 'Text. % new comment'], ['One paragraph.', 'One  paragraph.'], ['First line.\nSecond line.', 'First line. Second line.'], [String.raw`\[x+1=2\]`, String.raw`\[x + 1 = 2\]`]]) {
     const before = document(a), after = document(b), plan = coverage(before, after);
     assert(plan.changes.every(c => c.layout === 'omitted'));
-    assert(renderComparison(before, after, plan, 'Test').text.includes('Change 1 not shown.'));
+    assert(renderComparison(before, after, plan, 'Test').text.includes(a.includes('%') ? 'Change 1: source note.' : 'Change 1 not shown.'));
   }
   assert.equal(comparisonPlan(document('Rate \\% is small.'), document('Rate \\% is large.')).changes[0].layout, 'inline', 'Unchanged escaped percent stays in place');
 });
@@ -83,7 +84,8 @@ test('changed source notes are isolated without hiding prose corrections on eith
   assert(marked.text.includes('\\MECompareDel{have}\\MECompareSep{}\\MECompareAdd{has}'));
   assert(marked.text.includes('\\MECompareDel{remain}\\MECompareSep{}\\MECompareAdd{remains}'));
   assert.equal(marked.text.split('% new note with \\unknown{syntax}\n').length - 1, 1);
-  assert(marked.text.includes('Change 2 not shown.'));
+  assert.equal(plan.changes[1].omissionKind, 'source-only');
+  assert(marked.text.includes('Change 2: source note.'));
   assert.equal(Object.keys(marked.ranges).length, 3, 'Every shown and unshown change remains navigable');
 });
 test('eight prose revisions separated by percent comments all receive revision markup', () => {
@@ -94,7 +96,7 @@ test('eight prose revisions separated by percent comments all receive revision m
   assert.equal(marked.changes.filter(c => c.layout === 'inline').length, 8);
   assert(marked.changes.filter(c => c.layout === 'omitted').every(c => c.oldText.startsWith('%')));
   assert.equal(marked.text.split('\\MECompareDel{are}\\MECompareSep{}\\MECompareAdd{is}').length - 1, 8);
-  assert(marked.text.includes('Changes not shown'), 'Changed source notes remain accounted for separately');
+  assert(marked.text.includes('Source notes and changes not shown'), 'Changed source notes remain accounted for separately');
 });
 test('comment boundaries preserve word joining, newlines and paragraph structure', () => {
   for (const newline of ['\n', '\r\n']) {
@@ -297,11 +299,72 @@ async function scratch(t: { after: (fn: () => Promise<void>) => void }) {
   const dir = path.resolve('.test-runs', 'changes-' + randomUUID()); await fs.mkdir(dir, { recursive: true });
   t.after(() => fs.rm(dir, { recursive: true, force: true })); return dir;
 }
+test('atomic acceptance reasons use the actual anchors even when short words repeat elsewhere', async t => {
+  const dir = await scratch(t), a = document('The argument are correct. Another result is unchanged.\n\nThe argument are useful.');
+  const from = a.indexOf('are'), second = a.lastIndexOf('are');
+  const comments = [from, second].map((at, i) => commentSchema.parse({ id: 'c' + i, title: 'Grammar', explanation: 'Use a singular verb ' + i, original: 'are', replacement: 'is', from: at, to: at + 3, validity: 'current' }));
+  const state = initialState(a, comments), applied = state.update(applyProposals(state, comments.map(c => c.id))).state;
+  const b = applied.doc.toString(), journal = new ChangeJournal(); await journal.open(dir, a, comments);
+  await journal.record(b, applied.field(commentsField));
+  const plan = journal.explain(a, b, comparisonPlan(a, b));
+  assert.deepEqual(plan.changes.map(c => c.reasons.map(r => r.text)), [['Use a singular verb 0'], ['Use a singular verb 1']]);
+});
+
+test('deletion reasons at the start of a paragraph belong to one changed block', async t => {
+  const dir = await scratch(t), a = document('Clearly, the result is correct.\n\nA separate result.');
+  const from = a.indexOf('Clearly, '), c = commentSchema.parse({ id: 'delete', title: 'Delete filler', explanation: 'Remove the unsupported qualifier.', original: 'Clearly, ', replacement: '', from, to: from + 9, validity: 'current' });
+  const state = initialState(a, [c]), applied = state.update(applyProposal(state, c.id)).state;
+  const b = applied.doc.toString(), journal = new ChangeJournal(); await journal.open(dir, a, [c]); await journal.record(b, applied.field(commentsField));
+  const plan = journal.explain(a, b, comparisonPlan(a, b));
+  assert.equal(plan.changes[0].reasons[0]?.text, c.explanation);
+  assert.equal(plan.changes.flatMap(c => c.reasons).length, 1);
+});
+
+test('coalesced adjacent atomic acceptances retain both reasons despite alternative character alignment', async t => {
+  const dir = await scratch(t), a = document('The argument are slow.');
+  const comments = [['are', 'is'], ['slow', 'quick']].map(([original, replacement], i) => {
+    const from = a.indexOf(original); return commentSchema.parse({ id: 'c' + i, title: 'Local edit', explanation: 'Reason ' + i, original, replacement, from, to: from + original.length, validity: 'current' });
+  });
+  const state = initialState(a, comments), applied = state.update(applyProposals(state, comments.map(c => c.id))).state;
+  const b = applied.doc.toString(), journal = new ChangeJournal(); await journal.open(dir, a, comments); await journal.record(b, applied.field(commentsField));
+  assert.deepEqual(journal.explain(a, b, comparisonPlan(a, b)).changes[0].reasons.map(r => r.text), ['Reason 0', 'Reason 1']);
+});
+
+test('incorrect or stale acceptance anchors cannot borrow a matching phrase elsewhere', async t => {
+  const dir = await scratch(t), a = document('The argument are correct. Another result is unchanged.');
+  const from = a.indexOf('are'), c = commentSchema.parse({ id: 'c', title: 'Grammar', explanation: 'Use singular.', original: 'are', replacement: 'is', from, to: from + 3, validity: 'current' });
+  const b = a.replace('are', 'is'), wrong = b.lastIndexOf('is');
+  const journal = new ChangeJournal(); await journal.open(dir, a, [c]);
+  await journal.record(b, [{ ...c, decision: 'applied', appliedText: 'is', from: wrong, to: wrong + 2 }]);
+  assert.deepEqual(journal.explain(a, b, comparisonPlan(a, b)).changes[0].reasons, []);
+});
+
+test('accent arguments and optional line-break dimensions cannot receive prose revision macros', () => {
+  for (const [old, replacement] of [
+    [String.raw`M\"uller`, String.raw`M\"oller`], [String.raw`Caf\'e`, String.raw`Caf\'a`],
+    [String.raw`c\^ote`, String.raw`c\^ate`], [String.raw`First.\\[1ex] Second.`, String.raw`First.\\[2ex] Second.`],
+    [String.raw`First.\\*[1ex] Second.`, String.raw`First.\\*[2ex] Second.`],
+    [String.raw`First.\\% keep space` + '\n[1ex] Second.', String.raw`First.\\% keep space` + '\n[2ex] Second.'],
+    [String.raw`First.\\*% keep space` + '\n[1ex] Second.', String.raw`First.\\*% keep space` + '\n[2ex] Second.'],
+    [String.raw`First.\\% keep space` + '\n*[1ex] Second.', String.raw`First.\\% keep space` + '\n*[2ex] Second.']
+  ]) {
+    const a = document(old + '\n\nThis argument are clear.'), b = a.replace(old, replacement).replace('are clear', 'is clear');
+    const plan = comparisonPlan(a, b);
+    assert.equal(plan.changes[0].layout, 'omitted', old);
+    assert.notEqual(plan.changes[1].layout, 'omitted', 'Unrelated ordinary prose still renders');
+  }
+});
+test('unchanged line-break arguments do not hide the following prose edit', () => {
+  for (const breakText of [String.raw`\\[1ex]`, String.raw`\\*% note` + '\n[1ex]', String.raw`\\% note` + '\n*[1ex]']) {
+    const a = document('First.' + breakText + ' Second line.'), b = a.replace('Second', 'Another');
+    assert.equal(comparisonPlan(a, b).changes[0].layout, 'inline', breakText);
+  }
+});
 test('journal records actual edited acceptance, rebases later typing, survives reopen and Undo', async t => {
   const dir = await scratch(t), a = document('The allocation are monotone.'), b = a.replace('are', 'is'), c = b.replace('monotone', 'weakly monotone');
   const from = a.indexOf('The allocation'), original = 'The allocation are monotone.';
   const open = commentSchema.parse({ id: 'c', title: 'Grammar', explanation: 'Use the singular verb.', original, replacement: 'The allocation is strictly monotone.', draft: 'The allocation is monotone.', from, to: from + original.length, validity: 'current' });
-  const applied = { ...open, decision: 'applied' as const, appliedText: 'The allocation is monotone.' };
+  const applied = { ...open, decision: 'applied' as const, appliedText: 'The allocation is monotone.', to: from + 'The allocation is monotone.'.length };
   const journal = new ChangeJournal(); await journal.open(dir, a, [open]); await journal.record(b, [applied]); await journal.record(c, [applied]);
   const reasons = journal.explain(a, c, comparisonPlan(a, c)).changes[0].reasons;
   assert.equal(reasons.length, 1); assert.equal(reasons[0].text, open.explanation); assert(reasons[0].edited);
@@ -331,7 +394,7 @@ test('invalid or oversized journals never block recovery or overwrite their byte
 test('Undo removes an acceptance reason even after earlier and later manual edits', async t => {
   const dir = await scratch(t), a = document('The cat are fast.'), b = document('The cat are swift.'), c = document('The cat is swift.'), d = document('The cat are very swift.');
   const original = 'The cat are swift.', from = b.indexOf(original), open = commentSchema.parse({ id: 'grammar', title: 'Grammar', explanation: 'Use singular is, not are.', original, replacement: 'The cat is swift.', from, to: from + original.length, validity: 'current' });
-  const applied = { ...open, decision: 'applied' as const, appliedText: open.replacement! };
+  const applied = { ...open, decision: 'applied' as const, appliedText: open.replacement!, to: from + open.replacement!.length };
   const journal = new ChangeJournal(); await journal.open(dir, a, []);
   await journal.record(b, [open]); await journal.record(c, [applied]); await journal.record(b, [open]); await journal.record(d, [open]);
   assert.deepEqual(journal.explain(a, d, comparisonPlan(a, d)).changes[0].reasons, []);

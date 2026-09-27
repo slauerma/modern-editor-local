@@ -309,6 +309,9 @@ export class ProjectService {
     // The higher session revision supersedes it even if this process stops before writing review.json.
     await atomicWrite(sessionFile, sessionJSON);
     await atomicWrite(path.join(dirs.home, 'review.json'), reviewJSON);
+    // Reviews may be requested before Save. Expose the latest durable decisions
+    // to Codex without treating the unsaved manuscript as a saved disk version.
+    p.review = review;
     await this.changeJournal.record(text, review.comments);
   }); }
   async save(input: BufferInput) { return this.serial(async () => {
@@ -360,12 +363,12 @@ export class ProjectService {
     if (!Array.isArray(value)) {
       if (!value || typeof value !== 'object') throw new Error('Expected a JSON review with a comments array.');
       if (value.rootFile !== undefined && value.rootFile !== p.name) throw new Error('The imported review belongs to a different root document.');
-      if (value.schemaVersion !== undefined && value.schemaVersion !== 1) throw new Error('Unsupported imported review version.');
+      if (value.schemaVersion !== undefined && value.schemaVersion !== 1 && value.schemaVersion !== 2) throw new Error('Unsupported imported review version.');
       if (value.sourceHash !== undefined && !/^[a-f0-9]{64}$/.test(value.sourceHash)) throw new Error('The imported review has invalid source-revision metadata.');
     }
     const list = Array.isArray(value) ? value : value.comments;
     if (!Array.isArray(list)) throw new Error('Expected a JSON review with a comments array.');
-    const comments = list.map((c, i) => commentSchema.parse({ ...c, id: c.id ?? `import-${i + 1}`, title: c.title ?? 'Review suggestion', explanation: c.explanation ?? c.comment ?? '', original: c.original, replacement: c.replacement ?? null }));
+    const comments = list.map((c, i) => commentSchema.parse({ ...c, id: c.id ?? `import-${i + 1}`, title: c.title ?? 'Review suggestion', explanation: c.explanation ?? c.comment ?? '', original: c.original, replacement: c.replacement ?? null, ...(c.alternatives === undefined ? {} : { alternatives: Array.isArray(c.alternatives) ? c.alternatives.map((a: Record<string, unknown>, n: number) => ({ ...a, id: a.id ?? `option-${n + 1}`, label: a.label ?? `Option ${n + 1}`, reason: a.reason ?? '', packages: a.packages ?? [] })) : c.alternatives }) }));
     const review = reviewSchema.parse({ schemaVersion: 1, rootFile: p.name, sourceHash: digest(text), activeId: comments[0]?.id ?? null, comments, updatedAt: new Date().toISOString() });
     return !Array.isArray(value) && value.sourceHash !== undefined
       ? anchorReview(text, review, value.sourceHash === digest(text))

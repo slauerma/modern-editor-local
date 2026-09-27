@@ -46,6 +46,7 @@ function presentationPlan(plan: ComparisonPlan, presentation: ChangesPresentatio
   if (presentation === 'markup') for (const c of result.changes) {
     if (c.layout !== 'omitted' && !inlineEdits(c.oldText, c.newText) && !formulaChange(c)) {
       c.layout = 'omitted';
+      c.omissionKind = 'unsupported';
       c.omission = 'This change cannot safely use strike-through or underline markup. Clean paper shows the revised passage with a marker; Text diff shows the exact change.';
     }
   }
@@ -90,8 +91,8 @@ export function renderComparison(before: string, after: string, sourcePlan: Comp
     } else if (edits && c.layout === 'paired' && !/[\\{}$%&#_^~]/.test(c.oldText + c.newText)) {
       // Substantial prose rewrites read better as two marked paragraphs than
       // as a dense interleaving of unrelated words. Keep their exact wording.
-      text += '\n\\par\\noindent\\MECompareMark{' + number + '}\n'; start = text.length;
-      text += mark(c.oldText, 'Del') + '\n\\par\\smallskip\\noindent\n' + mark(c.newText, 'Add') + '\n\\par\n';
+      text += '\n\\par\\smallskip\\noindent{\\footnotesize\\sffamily Before}\\par\\noindent\\MECompareMark{' + number + '}\n'; start = text.length;
+      text += mark(c.oldText, 'Del') + '\n\\par\\smallskip\\noindent{\\footnotesize\\sffamily After}\\par\\noindent\n' + mark(c.newText, 'Add') + '\n\\par\\smallskip\n';
     } else if (edits) {
       let cursor = 0;
       for (const [index, e] of edits.entries()) {
@@ -114,12 +115,13 @@ export function renderComparison(before: string, after: string, sourcePlan: Comp
   text += after.slice(at, body.to);
   const omitted = plan.changes.filter(c => c.layout === 'omitted');
   if (omitted.length) {
-    text += '\n\\par\\bigskip\\noindent\\textbf{Changes not shown}\\par\n';
-    text += '{\\small The following differences are not marked in the paper above. See Text diff for the exact source changes.}\\par\n';
+    const notes = omitted.some(c => c.omissionKind === 'source-only');
+    text += '\n\\par\\bigskip\\noindent\\textbf{' + (notes ? 'Source notes and changes not shown' : 'Changes not shown') + '}\\par\n';
+    text += '{\\small Source notes do not appear in the paper. Other differences listed here could not be marked. See Text diff for every exact source change.}\\par\n';
     for (const c of omitted) {
       const start = text.length, number = c.id.replace('change-', '');
       const lineA = before.slice(0, c.fromA).split('\n').length, lineB = after.slice(0, c.fromB).split('\n').length;
-      text += '\\noindent\\MECompareMark{' + number + '}\\textbf{Change ' + number + ' not shown.} Old source line ' + lineA + ', new source line ' + lineB + '. ' + texText(c.omission ?? 'Unsupported block.') + '\\par\n';
+      text += '\\noindent\\MECompareMark{' + number + '}\\textbf{Change ' + number + (c.omissionKind === 'source-only' ? ': source note.' : ' not shown.') + '} Old source line ' + lineA + ', new source line ' + lineB + '. ' + texText(c.omission ?? 'Unsupported block.') + '\\par\n';
       ranges[c.id] = { from: start, to: text.length };
     }
   }
@@ -128,7 +130,7 @@ export function renderComparison(before: string, after: string, sourcePlan: Comp
   return { text, ranges, changes: plan.changes };
 }
 
-type ComparisonRecord = { projectId: string; text: string; ranges: Record<string, { from: number; to: number }>; artifact: ChangesArtifact; input: ChangesInput; plan: ComparisonPlan;
+type ComparisonRecord = { projectId: string; text: string; ranges: Record<string, { from: number; to: number }>; artifact: ChangesArtifact; input: ChangesInput; plan: ComparisonPlan; compilerPath?: string;
   inspectionIds?: string[]; markers?: Promise<Record<string, ComparisonMarker>> };
 export class ChangesPdfService {
   private records = new Map<string, ComparisonRecord>();
@@ -136,12 +138,13 @@ export class ChangesPdfService {
   private pending = new Set<Promise<unknown>>();
   private prepared: { key: string; plan: ComparisonPlan; value: ArrangementPreview } | null = null;
   private arranged: { key: string; plan: ComparisonPlan; id: string; inspect?: string[] } | null = null;
+  private basePlan: { projectId: string; before: string; after: string; plan: ComparisonPlan } | null = null;
   private building = false;
   private markerReaders = new Set<AbortController>();
   private readMarkers: ComparisonMarkerReader;
   private projects: ProjectService; private compiler: CompileService; private codex?: CodexService;
   constructor(projects: ProjectService, compiler: CompileService, codex?: CodexService, readMarkers: ComparisonMarkerReader = readComparisonMarkers) { this.projects = projects; this.compiler = compiler; this.codex = codex; this.readMarkers = readMarkers; }
-  cancel() { this.generation++; this.prepared = null; this.arranged = null; for (const reader of this.markerReaders) reader.abort(); }
+  cancel() { this.generation++; this.prepared = null; this.arranged = null; this.basePlan = null; for (const reader of this.markerReaders) reader.abort(); }
   async settle() { await Promise.allSettled([...this.pending]); }
   private track<T>(task: Promise<T>) { this.pending.add(task); void task.then(() => this.pending.delete(task), () => this.pending.delete(task)); return task; }
   private key(input: ChangesInput) { return digest(JSON.stringify([input.projectId, input.before, input.after, input.name, input.engine, input.proposalId, input.selectedPaths])); }
@@ -151,15 +154,20 @@ export class ChangesPdfService {
   }
   private plan(input: ChangesInput) {
     this.projects.get(input.projectId);
-    let plan = this.projects.changeJournal.explain(input.before, input.after, comparisonPlan(input.before, input.after));
-    if (input.proposalId) {
-      const reason = this.projects.changeJournal.proposal(input.before, input.after, input.proposalId);
-      if (!reason) throw new Error('The proposal changed. Refresh its preview before making a Changes PDF.');
-      for (const c of plan.changes) c.reasons = [reason];
-    }
+    const reason = input.proposalId ? this.projects.changeJournal.proposal(input.before, input.after, input.proposalId) : null;
+    if (input.proposalId && !reason) throw new Error('The proposal changed. Refresh its preview before making a Changes PDF.');
+    let plan: ComparisonPlan;
     if (input.arrangementId) {
       if (this.arranged?.id !== input.arrangementId || this.arranged.key !== this.key(input)) throw new Error('The comparison changed. Prepare a new arrangement.');
       plan = structuredClone(this.arranged.plan);
+    } else {
+      // Local rendering and Sol use the same exact source plan. Cache only one
+      // pair, without explanations: reason history must still be read afresh.
+      if (!this.basePlan || this.basePlan.projectId !== input.projectId || this.basePlan.before !== input.before || this.basePlan.after !== input.after) {
+        this.basePlan = { projectId: input.projectId, before: input.before, after: input.after, plan: comparisonPlan(input.before, input.after) };
+      }
+      plan = this.projects.changeJournal.explain(input.before, input.after, structuredClone(this.basePlan.plan));
+      if (reason) for (const c of plan.changes) c.reasons = [reason];
     }
     for (const [id, layout] of Object.entries(input.layouts ?? {})) {
       const c = plan.changes.find(c => c.id === id);
@@ -200,14 +208,34 @@ export class ChangesPdfService {
       const generated = renderComparison(input.before, input.after, plan, input.name, !!input.proposalId, presentation);
       const inspectionIds = input.arrangementId && this.arranged?.id === input.arrangementId ? this.arranged.inspect?.slice() : undefined;
       this.check(input.projectId, generation);
-      const build = await this.compiler.compile(input.projectId, generated.text, input.engine, input.selectedPaths, undefined, 'comparison');
+      // Reuse only an identical generated document in the same presentation,
+      // engine, project and input selection. inspect re-plans the dependencies
+      // and checks local/external resource hashes; an unavailable PDF is a miss.
+      let build: ChangesArtifact['build'] = null;
+      for (const record of [...this.records.values()].reverse()) {
+        if (record.projectId !== input.projectId || record.text !== generated.text || record.artifact.presentation !== presentation ||
+          record.input.engine !== input.engine || record.compilerPath !== this.compiler.latexmk ||
+          JSON.stringify(record.input.selectedPaths) !== JSON.stringify(input.selectedPaths) || !record.artifact.build) continue;
+        const validation = await this.compiler.inspect(input.projectId, record.artifact.build.id, generated.text);
+        this.check(input.projectId, generation);
+        if (validation.status !== 'valid') continue;
+        try {
+          const bytes = await this.compiler.pdf(record.artifact.build.id);
+          this.check(input.projectId, generation);
+          if (Buffer.from(bytes).subarray(0, 5).toString() !== '%PDF-') continue;
+          build = record.artifact.build;
+        } catch { this.check(input.projectId, generation); continue; }
+        break;
+      }
+      const reused = !!build;
+      build ??= await this.compiler.compile(input.projectId, generated.text, input.engine, input.selectedPaths, undefined, 'comparison');
       this.check(input.projectId, generation);
       if (!build.success || build.dependenciesVerified !== true) throw new Error('Preview not possible. ' + (build.inputPreparation?.reason ?? (build.diagnostics.slice(0, 3).map(d => d.message).join(' ') || 'The marked document did not produce a PDF with verified inputs.')) + ' Use Text diff; the ordinary PDF is preserved.');
       if ((await this.compiler.inspect(input.projectId, build.id, generated.text)).status !== 'valid') throw new Error('Preview not possible: comparison inputs changed during compilation. Refresh when they are stable.');
       this.check(input.projectId, generation);
-      const artifact: ChangesArtifact = { id: randomUUID(), presentation, build, changes: generated.changes, notice: plan.notice };
+      const artifact: ChangesArtifact = { id: randomUUID(), presentation, build, changes: generated.changes, notice: plan.notice, reused };
       // Keep a bounded set of immutable comparisons; PDFs retain normal cache policy.
-      this.remember({ projectId: input.projectId, text: generated.text, ranges: generated.ranges, artifact, input: structuredClone(input), plan, inspectionIds });
+      this.remember({ projectId: input.projectId, text: generated.text, ranges: generated.ranges, artifact, input: structuredClone(input), plan, inspectionIds, compilerPath: this.compiler.latexmk });
       if (inspectionIds) {
         const pages: number[] = [], missing: string[] = [];
         for (const id of inspectionIds) {

@@ -34,8 +34,10 @@
 !/scripts/check-codex-isolation.mjs
 !/scripts/check-writing-conveniences.mjs
 !/scripts/check-feedback-batches.mjs
+!/scripts/check-saved-alternatives.mjs
 !/scripts/check-viewer.mjs
 !/scripts/check-changes-pdf.mjs
+!/scripts/check-changes-local-first.mjs
 !/scripts/check-help-chat.mjs
 !/scripts/check-chat-images-protocol.mjs
 !/scripts/check-reference-protocol.mjs
@@ -139,3 +141,25 @@
 !/demo/latexdiff-captions.srt
 !/demo/latexdiff-captions.vtt
 !/demo/latexdiff-transcript.md
+
+# Narrated 1.3.0 demonstrations, 27 September 2026.
+!/demo/2026-09-27/
+/demo/2026-09-27/*
+!/demo/2026-09-27/modern-editor-overview-55s.mp4
+!/demo/2026-09-27/modern-editor-overview-55s-small.mp4
+!/demo/2026-09-27/modern-editor-overview-55s.srt
+!/demo/2026-09-27/modern-editor-overview-55s.vtt
+!/demo/2026-09-27/modern-editor-overview-55s-transcript.md
+!/demo/2026-09-27/modern-editor-walkthrough-3min.mp4
+!/demo/2026-09-27/modern-editor-walkthrough-3min-small.mp4
+!/demo/2026-09-27/modern-editor-walkthrough-3min.srt
+!/demo/2026-09-27/modern-editor-walkthrough-3min.vtt
+!/demo/2026-09-27/modern-editor-walkthrough-3min-transcript.md
+!/demo/2026-09-27/modern-editor-latexdiff-50s.mp4
+!/demo/2026-09-27/modern-editor-latexdiff-50s-small.mp4
+!/demo/2026-09-27/modern-editor-latexdiff-50s.srt
+!/demo/2026-09-27/modern-editor-latexdiff-50s.vtt
+!/demo/2026-09-27/modern-editor-latexdiff-50s-transcript.md
+!/demo/2026-09-27/overview-poster.png
+!/demo/2026-09-27/walkthrough-poster.png
+!/demo/2026-09-27/latexdiff-poster.png

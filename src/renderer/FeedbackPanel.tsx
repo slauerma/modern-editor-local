@@ -7,12 +7,11 @@ import type { ReferenceState } from '../shared/references.ts';
 import { ReadableArea } from './ReadableArea.tsx';
 import './feedback.css';
 
-type Props = { projectId: string; open: boolean; text: string; comments: Comment[]; disabled: boolean; contextId?: string; onClose(): void;
+type Props = { autoAdd: boolean; onAutoAdd(value: boolean): void; projectId: string; open: boolean; text: string; comments: Comment[]; disabled: boolean; contextId?: string; onClose(): void;
   onPrepare(input: Omit<PrepareFeedback, 'projectId' | 'text'>): Promise<FeedbackRecord>;
-  onConvert(record: FeedbackRecord, all: boolean, autoAdd: boolean): Promise<FeedbackRecord>; onPause(): Promise<void>;
+  onConvert(record: FeedbackRecord, all: boolean): Promise<FeedbackRecord>; onPause(): Promise<void>;
   onAdopt(comments: Comment[], text: string): Promise<void>; onPreview(record: FeedbackRecord): void };
-export function FeedbackPanel({ projectId, open, text, comments, disabled, contextId, onClose, onPrepare, onConvert, onPause, onAdopt, onPreview }: Props) {
-  const [autoAdd, setAutoAdd] = useState(true);
+export function FeedbackPanel({ autoAdd, onAutoAdd, projectId, open, text, comments, disabled, contextId, onClose, onPrepare, onConvert, onPause, onAdopt, onPreview }: Props) {
   const [label, setLabel] = useState('Outside feedback'), [raw, setRaw] = useState('');
   const [contexts, setContexts] = useState<ReferenceState['roots']>([]), [context, setContext] = useState(contextId ?? '');
   const [records, setRecords] = useState<FeedbackRecord[]>([]), [active, setActive] = useState<string | null>(null);
@@ -44,7 +43,7 @@ export function FeedbackPanel({ projectId, open, text, comments, disabled, conte
     if (!mounted.current) return;
     setRecords(prior => [saved, ...prior.filter(r => r.id !== saved.id)]); setActive(saved.id); setSelected([]);
   }
-  function convert(all: boolean) { if (record) void act(async () => { setConverting(true); keep(await onConvert(record, all, autoAdd)); }); }
+  function convert(all: boolean) { if (record) void act(async () => { setConverting(true); keep(await onConvert(record, all)); }); }
   return <div className="feedback-overlay" hidden={!open}><section ref={panel} tabIndex={-1} className="feedback-panel" role="dialog" aria-modal="true" aria-label="Import outside feedback">
     <div className="recovery-heading"><h2>Outside feedback</h2><button aria-label="Close outside feedback" onClick={onClose}>×</button></div>
     <p>Prepare a numbered Markdown review or JSON comments locally, then convert it with Codex in saved batches. There is no 30-comment total limit. Your manuscript stays unchanged until you accept an imported suggestion.</p>
@@ -66,7 +65,7 @@ export function FeedbackPanel({ projectId, open, text, comments, disabled, conte
     {notices.map((n,i) => <p key={i}>{n}</p>)}
     {record && <>
       {record.plan && <><p role="status">{record.plan.items.length - pending} / {record.plan.items.length} review items converted · {record.comments.length} comments saved · {pending} pending</p>
-        <label><input type="checkbox" checked={autoAdd} disabled={busy} onChange={e => setAutoAdd(e.target.checked)} /> Add comments when ready</label>
+        <label><input type="checkbox" checked={autoAdd} onChange={e => onAutoAdd(e.target.checked)} /> Add comments when ready</label>
         <div className="feedback-actions">
           <button className="primary" disabled={disabled || busy || !pending} onClick={() => convert(true)}>Convert remaining with Codex</button>
           <button disabled={disabled || busy || !pending} onClick={() => convert(false)}>Next batch ({nextFeedbackBatch(record).length})</button>

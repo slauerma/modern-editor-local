@@ -432,11 +432,31 @@ test('Changes PDF overrides the model with Sol per request and transmits visual 
   const thread = requests.find((r: any) => r.method === 'thread/start').params;
   assert.equal(thread.model, 'gpt-6-sol'); assert.match(thread.baseInstructions, /arrange exact LaTeX/); assert(!thread.developerInstructions.includes('Most comments'));
   assert.deepEqual(requests.find((r: any) => r.method === 'turn/start').params.input[1], { type: 'image', url: image });
-  assert.deepEqual(records.map(r => r.kind), ['prompt', 'screenshot', 'reply']);
+  assert.deepEqual(records.map(r => r.kind), ['prompt', 'screenshot', 'reply', 'event']);
   // Debug hooks cannot make a successful request fail or supply any context.
   client.debugRecord = () => { throw new Error('disk full'); };
   await client.run('normal', replyOutputSchema, () => {});
   requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
   assert.equal(requests.find((r: any) => r.method === 'thread/start').params.model, 'gpt-6-luna');
   await assertExited(directory);
+});
+
+test('discussion instructions do not force edits and timing events distinguish success, error and cancellation', async () => {
+  const { directory, client } = await fixture(); await fs.mkdir(directory, { recursive: true });
+  for (const flag of ['gpt6-models', 'new-version']) await fs.writeFile(path.join(directory, flag), '');
+  const records: any[] = []; client.debugRecord = r => records.push(r);
+  await client.run('normal', replyOutputSchema, () => {}, 'low', false, undefined, { purpose: 'discussion', model: 'gpt-6-sol' });
+  const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+  const start = requests.find((r: any) => r.method === 'thread/start').params;
+  assert.match(start.baseInstructions, /one existing editorial comment/); assert.match(start.developerInstructions, /ENTIRE supplied original/); assert(!start.developerInstructions.includes('Most comments'));
+  const event = records.find(r => r.kind === 'event').data;
+  assert.equal(event.outcome, 'complete'); assert.equal(event.purpose, 'discussion'); assert.equal(event.model, 'gpt-6-sol');
+  assert.equal(event.id, records.find(r => r.kind === 'prompt').data.id);
+  for (const key of ['elapsedMs', 'connectMs', 'setupMs', 'modelMs']) assert(event[key] >= 0 && event[key] <= event.elapsedMs, key);
+  await assertExited(directory); records.length = 0;
+  await assert.rejects(client.run('failure', replyOutputSchema, () => {}), /Fixture model failure/);
+  assert.equal(records.find(r => r.kind === 'event').data.outcome, 'error'); await assertExited(directory); records.length = 0;
+  const started = new Promise<void>(resolve => client.once('notification', function listen(event) { if (event.method === 'turn/started') resolve(); else client.once('notification', listen); }));
+  const run = client.run('wait', replyOutputSchema, () => {}), rejected = assert.rejects(run, /cancelled/);
+  await started; await client.cancel(); await rejected; assert.equal(records.find(r => r.kind === 'event').data.outcome, 'cancelled'); await assertExited(directory);
 });

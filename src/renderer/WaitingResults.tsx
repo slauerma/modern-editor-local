@@ -7,7 +7,7 @@ export function WaitingResults({ items, notices, busy, onHandle, onRefresh, onCl
     {notices.map((notice, i) => <p className="error" key={i}>{notice}</p>)}
     {!items.length && <p>No results waiting.</p>}
     {items.map(item => <details key={item.id}><summary>{item.kind === 'review' ? `${item.comments.length} review comments` : 'Discussion answer'} · {new Date(item.createdAt).toLocaleString()}</summary>
-      {item.kind === 'review' ? item.comments.map(c => <div key={c.id}><strong>{c.title}</strong><p>{c.explanation}</p><small>Original</small><pre>{c.original}</pre>{c.replacement !== null && <><small>Proposed replacement</small><pre>{c.replacement}</pre></>}</div>) : <><pre>{item.original}</pre><p>{item.answer.reply}</p>{item.answer.replacement !== null && <pre>{item.answer.replacement}</pre>}</>}
+      {item.kind === 'review' ? item.comments.map(c => <div key={c.id}><strong>{c.title}</strong><p>{c.explanation}</p><small>Original</small><pre>{c.original}</pre>{c.replacement !== null && <><small>Proposed replacement</small><pre>{c.replacement}</pre></>}</div>) : <><pre>{item.original}</pre><p>{item.answer.reply}</p>{item.answer.replacement !== null && <pre>{item.answer.replacement}</pre>}{item.answer.alternatives?.map((a, i) => <div key={i}><strong>{a.label}</strong><p>{a.reason}</p><pre>{a.replacement}</pre></div>)}</>}
       <button disabled={busy} onClick={() => onHandle(item.id, 'adopted')}>{item.kind === 'review' ? 'Add these comments' : 'Attach answer to comment'}</button>{' '}
       <button disabled={busy} onClick={() => onHandle(item.id, 'dismissed')}>Dismiss result</button>
     </details>)}

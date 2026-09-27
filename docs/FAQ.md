@@ -36,7 +36,7 @@ For questions about the editor, errors, or a paper, open **Codex Side Chat** (**
 
 Choose the model separately in **Settings → Load models → Save settings**. GPT‑6 Sol and GPT‑6 Luna appear when offered by the selected CLI. Its catalog also shows supported effort, Fast mode and screenshot input; access is checked again when you send. A saved model that is no longer available is reported rather than silently replaced. Select **Use Codex default** to return to the CLI’s configured model.
 
-**Actions → Codex effort** offers Quick (`low`), Standard (`medium`), Deep (`high`), and Max (`max`). These request different reasoning efforts from the configured model; they do not promise a fixed thinking time or answer length. The choice is saved per paper. **Think more** requests Deep/high effort, retaining Max if already selected.
+**Actions → Codex effort** offers Quick (`low`), Standard (`medium`), Deep (`high`), and Max (`max`). These request different reasoning efforts from the configured model; they do not promise a fixed thinking time or answer length. The choice is saved per paper. **Quick alternative** adds one saved wording using Sol at Quick effort and local context. In a comment discussion, **Quick explanation** uses Sol at Quick effort without reference tools; **Three alternatives** uses Sol at Standard effort. Both use the standard service tier and leave paper settings unchanged. **Think again** requests Deep/high effort, retaining Max if already selected.
 
 **Fast mode** separately requests faster service at increased usage, when the model/account supports it. It does not lower effort or change the selected model. Ask for “three concise comments” or “a shorter explanation” in your instructions when you want a shorter answer. Changing effort is not a verbosity control.
 
@@ -65,6 +65,41 @@ Use **Actions → Import JSON…** for a JSON object with a `comments` array, or
 
 The `original` must match the source exactly; `before` and `after` text can disambiguate repeated passages. A `null` replacement is an author question; an empty string proposes deletion. JSON requires LaTeX backslashes to be escaped as `\\`. The [synthetic review fixture](../fixtures/sample/review.json) shows a fuller record tied to its sample paper. If an imported record specifies `rootFile`, it must name the open file; a different `sourceHash` requires placement confirmation. Import does not accept suggestions or overwrite the source.
 
+## Can one imported comment contain several wordings?
+
+Yes. Put an `alternatives` array on the same comment. Every option replaces the **entire** common `original` passage; use separate comments for different passages. For example:
+
+```json
+{
+  "schemaVersion": 2,
+  "comments": [{
+    "id": "wording-1",
+    "title": "Choose a shorter wording",
+    "explanation": "Remove the unnecessary lead-in.",
+    "original": "It follows that the allocation is monotone.",
+    "replacement": "The allocation is monotone.",
+    "alternatives": [
+      {
+        "label": "Concise",
+        "reason": "State the property directly.",
+        "replacement": "Allocation is monotone.",
+        "packages": []
+      },
+      {
+        "label": "Explicit",
+        "reason": "Name the property explicitly.",
+        "replacement": "The allocation has the monotonicity property.",
+        "packages": []
+      }
+    ]
+  }]
+}
+```
+
+The main `replacement` is the initial wording. Omit it or use `null` to require a choice before acceptance. An empty option replacement means deletion. Each option may have an `id`, unique within that comment; import creates IDs when omitted. Labels and reasons are optional on import. Package lists belong to individual options. Use **Wording** to choose, edit the single replacement field, then Accept or Preview. Each option's edits are kept when switching, and choosing a wording is undoable without changing the manuscript. **Quick alternative** adds one choice with Sol at low effort and nearby context; **Three alternatives** remains available in Discuss.
+
+There is a limit of 30 saved choices per comment, including the original suggestion. Reviews containing choices are saved as version 2. Older editor versions cannot open that review format; keep using the updated editor for these papers. Existing version-1 reviews remain supported. Importing the same file again may create duplicate comments.
+
 ## How do local attachments work?
 
 Use **Attach context… → Add reference folder…** or **Add reference files…**. The locations are remembered per paper. During a review or discussion, Codex can search and read eligible references as needed. **Sources used…** shows returned excerpts and search coverage. You can disable or remove a reference without deleting its files. Attaching is local; relevant text is sent to the configured service when Codex reads it during your request.
@@ -87,7 +122,7 @@ Choose **More → Accept all applicable suggestions (N)** in the Comments pane. 
 
 ## What is the difference between Reject, Skip and Resolve?
 
-**Reject** or **Shift+R** moves the current comment into History without changing the source; Undo restores it. **Skip** or **Shift+S** advances while leaving the comment pending. **Resolve** separately records that you have addressed an author question. **Accept** or **Shift+A** applies without compiling and advances. **Accept & compile** checks compilation first. The buttons show these key hints; the shortcuts work from comment controls outside typing fields. **Option+Backspace** still rejects a suggestion or resolves an author question.
+**Reject** or **Shift+R** moves the current comment into History without changing the source; Undo restores it. Later reviews include a bounded summary of rejected suggestions, and automatic review/feedback integration suppresses exact repeated proposals. Different advice on the same passage is allowed; paraphrased repeats are not guaranteed to be caught. Reopen a rejected comment in History to reconsider it. **Skip** or **Shift+S** advances while leaving the comment pending. **Resolve** separately records that you have addressed an author question. **Accept** or **Shift+A** applies without compiling and advances. **Accept & compile** checks compilation first. The buttons show these key hints; the shortcuts work from comment controls outside typing fields. **Option+Backspace** still rejects a suggestion or resolves an author question.
 
 ## How do I dismiss pending comments together?
 

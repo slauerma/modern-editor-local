@@ -74,3 +74,23 @@ test('passive validation coalesces, yields to Compile and never reports busy as 
     assert.equal(await f.compiler.validate(f.project.id, build.id, 'Changed'), false);
   } finally { await f.compiler.stop(); await fs.rm(f.root, { recursive: true, force: true }); }
 });
+
+test('a cached PDF must still match the compiled bytes before validation, viewing or export', async () => {
+  const f = await fixture();
+  try {
+    const build = await f.compiler.compile(f.project.id, f.project.text, 'pdflatex');
+    const record = (f.compiler as any).records.get(build.id);
+    record.build.dependenciesVerified = true;
+    const original = await fs.readFile(record.pdf);
+    assert.equal((await f.compiler.inspect(f.project.id, build.id, f.project.text)).status, 'valid');
+    for (const replacement of [Buffer.from('%PDF-1.7\ntruncated'), Buffer.from('%PDF-1.4\nDifferent synthetic PDF\n%%EOF')]) {
+      await fs.writeFile(record.pdf, replacement);
+      assert.equal((await f.compiler.inspect(f.project.id, build.id, f.project.text)).status, 'unavailable');
+      await assert.rejects(f.compiler.pdf(build.id), /PDF.*changed|Compile again/i);
+      await assert.rejects(f.compiler.exportPdf(f.project.id, build.id), /PDF.*changed|Compile again/i);
+    }
+    await fs.writeFile(record.pdf, original);
+    assert.deepEqual(Buffer.from(await f.compiler.pdf(build.id)), original);
+    assert.equal((await f.compiler.inspect(f.project.id, build.id, f.project.text)).status, 'valid');
+  } finally { await f.compiler.stop(); await fs.rm(f.root, { recursive: true, force: true }); }
+});

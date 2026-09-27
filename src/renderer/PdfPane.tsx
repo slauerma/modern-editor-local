@@ -181,7 +181,9 @@ export function PdfPane({ toolbarHost, compactControls = false, onExport, findHa
     return () => { resize.disconnect(); cancelAnimationFrame(scrollFrame.current); };
   }, []);
   useEffect(() => {
-    if (!build) return;
+    // A text-only comparison destroys the previous PDF task. Clear its proxy
+    // too, so returning to a reused build ID cannot resurrect that document.
+    if (!build) { setLoaded(null); setProgress(''); setError(''); return; }
     let disposed = false, task: ReturnType<typeof getDocument> | undefined;
     setLoaded(null); setError(''); setProgress('Loading compiled PDF…');
     void window.editor.getPdf(build.id).then(async bytes => {

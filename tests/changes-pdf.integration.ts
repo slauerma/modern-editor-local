@@ -10,6 +10,91 @@ import { restorePdf } from '../src/main/pdf-workspace-cache.ts';
 import { commentSchema } from '../src/shared/contracts.ts';
 import { proposalPreview } from '../src/shared/proposal-preview.ts';
 
+test('control-symbol arguments stay intact while ordinary surrounding edits compile in both views', { timeout: 90000 }, async t => {
+  const root = path.resolve('.test-runs', 'changes-control-symbols-' + randomUUID()), paper = path.join(root, 'paper');
+  await fs.mkdir(paper, { recursive: true }); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const before = String.raw`\documentclass{article}
+\begin{document}
+The name is M\"uller.
+
+This is caf\'e and c\^ote.
+
+First line.\\[1ex] Second line.
+
+First line.\\*[1ex] Second line.
+
+First line.\\% keep space
+[1ex] Second line.
+
+First line.\\*% keep space
+[1ex] Second line.
+
+First line.\\% before star
+*[1ex] Second line.
+
+M\"uller has a simple argument. The conclusion are correct.
+
+First line.\\[1ex] The second line are correct.
+
+First line.\\% before star
+*[1ex] Short second line.
+\end{document}
+`;
+  const after = before.replace('M\\"uller.', 'M\\"oller.').replace("caf\\'e", "caf\\'a").replace('c\\^ote', 'c\\^ate')
+    .replace('\\\\[1ex] Second', '\\\\[2ex] Second').replace('\\\\*[1ex] Second', '\\\\*[2ex] Second')
+    .replaceAll('\n[1ex] Second', '\n[2ex] Second').replaceAll('\n*[1ex] Second', '\n*[2ex] Second')
+    .replace('Short second', 'Clear second').replaceAll(' are correct.', ' is correct.');
+  const file = path.join(paper, 'paper.tex'); await fs.writeFile(file, before);
+  const projects = new ProjectService(path.join(root, 'cache')), p = await projects.open(file), compiler = new CompileService(projects, path.join(root, 'builds'));
+  const comparisons = new ChangesPdfService(projects, compiler);
+  try {
+    const candidate = await compiler.compile(p.id, after, 'pdflatex'); assert(candidate.success, candidate.log);
+    const markup = await comparisons.build({ projectId: p.id, before, after, name: 'Start', engine: 'pdflatex' });
+    for (const artifact of [markup, await comparisons.present(p.id, markup.id, 'clean')]) {
+      assert(artifact.build?.success && artifact.build.dependenciesVerified, artifact.build?.log);
+      assert.equal(artifact.changes.filter(c => c.layout === 'omitted').length, 7);
+      assert.equal(artifact.changes.filter(c => c.layout !== 'omitted').length, 3);
+      const generated = await fs.readFile(path.join(root, 'builds', artifact.build.id, 'paper.tex'), 'utf8');
+      assert(generated.includes('M\\"oller.')); assert(generated.includes('\\\\*[2ex] Second line.'));
+      for (const change of artifact.changes) assert.equal((await comparisons.locate(p.id, artifact.id, change.id)).kind, 'mapped');
+    }
+    assert.equal(await fs.readFile(file, 'utf8'), before);
+  } finally { comparisons.cancel(); await comparisons.settle(); await compiler.stop(); }
+});
+
+test('identical comparison PDF is reused after real dependency verification and rebuilt when an included file changes', { timeout: 90000 }, async t => {
+  const root = path.resolve('.test-runs', 'changes-reuse-' + randomUUID()), paper = path.join(root, 'paper'), builds = path.join(root, 'builds');
+  await fs.mkdir(paper, { recursive: true }); t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const before = '\\documentclass{article}\n\\begin{document}\n\\input{support}\n\nThe distribution of types does not affect this pointwise optimum.\n\nThe argument are correct.\n\\end{document}\n';
+  const after = before.replace('The distribution of types does not affect this pointwise optimum.', 'The pointwise optimum is independent of the type distribution.').replace('argument are', 'argument is');
+  const file = path.join(paper, 'paper.tex'), support = path.join(paper, 'support.tex');
+  await fs.writeFile(file, before); await fs.writeFile(support, 'Original support text.\n');
+  const projects = new ProjectService(path.join(root, 'cache')), p = await projects.open(file), compiler = new CompileService(projects, builds), service = new ChangesPdfService(projects, compiler);
+  const input = { projectId: p.id, before, after, name: 'Start', engine: 'pdflatex' as const };
+  try {
+    const first = await service.build(input), repeated = await service.build(input);
+    assert(first.build?.success, first.build?.log); assert.equal(repeated.build?.id, first.build.id); assert.equal(repeated.reused, true);
+    const other = await compiler.compile(p.id, after.replace('correct', 'different'), 'pdflatex', undefined, undefined, 'proposal');
+    assert(other.success, other.log);
+    await fs.copyFile(path.join(builds, other.id, 'paper.pdf'), path.join(builds, first.build.id, 'paper.pdf'));
+    assert.equal((await service.inspect(p.id, first.id)).status, 'unavailable');
+    await assert.rejects(compiler.exportPdf(p.id, first.build.id), /cached PDF changed/);
+    const replacement = await service.build(input);
+    assert(replacement.build?.success, replacement.build?.log); assert.notEqual(replacement.build.id, first.build.id);
+    assert.equal(replacement.reused, false, 'A different valid PDF cannot impersonate the cached comparison');
+    const text = await fs.readFile(path.join(builds, first.build.id, 'paper.tex'), 'utf8');
+    assert(text.includes('\\sffamily Before}')); assert(text.includes('\\sffamily After}'));
+    for (const change of replacement.changes) assert.equal((await service.locate(p.id, replacement.id, change.id)).kind, 'mapped');
+    await fs.writeFile(support, 'Updated support text.\n');
+    const changed = await service.build(input);
+    assert(changed.build?.success, changed.build?.log); assert.notEqual(changed.build.id, first.build.id); assert.equal(changed.reused, false);
+    assert.equal((await service.inspect(p.id, replacement.id)).status, 'changed');
+    assert.equal((await service.inspect(p.id, changed.id)).status, 'valid');
+    assert.equal(await fs.readFile(file, 'utf8'), before);
+    assert.equal(await compiler.validate(p.id, changed.build.id, after), false);
+  } finally { service.cancel(); await service.settle(); await compiler.stop(); }
+});
+
 test('audit regressions: unbraced arguments, long footnotes and preloaded ulem preserve a usable comparison', { timeout: 90000 }, async t => {
   const root = path.resolve('.test-runs', 'changes-audit-' + randomUUID());
   await fs.mkdir(path.join(root, 'paper'), { recursive: true }); t.after(() => fs.rm(root, { recursive: true, force: true }));
@@ -120,7 +205,7 @@ The paragraph continues here.
       assert(generated.includes('% new source note with \\unknown{unused syntax}\n'));
       assert(generated.includes('% Keep the same paragraph.\nThe paragraph continues here.'));
       assert(generated.includes('10\\%'));
-      assert(generated.includes('Change 2 not shown.'));
+      assert(generated.includes('Change 2: source note.'));
       for (const c of artifact.changes) assert.equal((await service.locate(p.id, artifact.id, c.id)).kind, 'mapped');
       assert.equal(await compiler.validate(p.id, artifact.build!.id, after), false);
     }

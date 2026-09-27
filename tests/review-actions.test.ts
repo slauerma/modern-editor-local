@@ -36,7 +36,7 @@ test('explicit question linking preserves earlier wording and old alternatives, 
   const context = replyContext({ projectId: 'paper', text: current, comment: linked, message: 'Explain it here.' });
   assert.equal(context.original, current); assert.equal(context.earlierQuestionWording, original);
   const fresh = { ...linked, ...replyFields(linked, { reply: 'Updated alternative', replacement: 'The pointwise upper bounds are attained.', packages: [] }) };
-  assert.equal(fresh.messages[1].proposalOriginal, undefined);
+  assert.equal(fresh.messages[1].proposalOriginal, current);
 });
 test('question relinking cannot bypass replacement exact-match protection or accept empty/invalid selections', () => {
   const q = question(), replacement = { ...q, replacement: 'New statement.', validity: 'stale' as const };

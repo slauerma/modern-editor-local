@@ -1,0 +1,35 @@
+1
+00:00:00,150 --> 00:00:06,181
+See your revisions in the typeset paper: deleted wording struck out, new wording underlined.
+
+2
+00:00:08,017 --> 00:00:12,520
+Accept a few precise corrections. Your draft updates immediately.
+
+3
+00:00:13,317 --> 00:00:16,828
+Open Changes PDF and compare with your starting point.
+
+4
+00:00:18,317 --> 00:00:23,958
+Step through each change alongside the surrounding prose and equations. The comparison stays
+
+5
+00:00:23,958 --> 00:00:25,694
+separate from your manuscript.
+
+6
+00:00:27,283 --> 00:00:31,874
+Press Why for the reason behind a change, without losing your place in the paper.
+
+7
+00:00:34,017 --> 00:00:39,107
+Switch to Clean paper to read the revised version without the deletion markup.
+
+8
+00:00:40,150 --> 00:00:44,740
+Need the precise source? Text diff shows the exact LaTeX changes.
+
+9
+00:00:46,117 --> 00:00:48,947
+Save your work. The manuscript stays clean.

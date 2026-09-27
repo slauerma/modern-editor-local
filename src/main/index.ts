@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { ProjectService } from './project-service.ts';
 import { ProjectFilesService } from './project-files.ts';
 import { CompileService } from './compile-service.ts';
-import { reviewSchema, commentSchema, engineSchema, effortSchema, fastModeSchema, historyBudgetSchema, preambleRequestSchema, paperInstructionsSchema, pdfRequestSchema, workspaceSchema, type Project } from '../shared/contracts.ts';
+import { reviewSchema, replyActionSchema, commentSchema, engineSchema, effortSchema, fastModeSchema, historyBudgetSchema, preambleRequestSchema, paperInstructionsSchema, pdfRequestSchema, workspaceSchema, type Project } from '../shared/contracts.ts';
 import { AttachmentService } from './attachment-service.ts';
 import { ReferenceService } from './reference-service.ts';
 import { pastedContextSchema } from '../shared/references.ts';
@@ -36,7 +36,7 @@ import { chatInputSchema, chatScopeSchema } from '../shared/help-chat.ts';
 import { normalizeChatImage } from './chat-images.ts';
 import { atomicWrite, readRegularFile, readJSON, writeJSON } from './files.ts';
 import { DebugStore } from './debug-store.ts';
-import { debugSettingsSchema } from '../shared/debugging.ts';
+import { debugSettingsSchema, debugInteractionSchema } from '../shared/debugging.ts';
 import { chatImageSchema } from '../shared/help-chat.ts';
 import { managedCodexLocation, managedCodexVersion, verifyManagedCodex } from './managed-codex.ts';
 import { editorAuthor, predecessorCredit } from '../shared/editor-credits.ts';
@@ -60,7 +60,8 @@ codex.client.debugRecord = record => {
     const data = record.data as { id: string; purpose: string; url: string; index: number };
     const extension = data.url.startsWith('data:image/png;') ? 'png' : 'jpg';
     void debug.record('screenshot', `${data.purpose} input ${data.index + 1} · ${data.id}`, null, { bytes: Buffer.from(data.url.split(',')[1], 'base64'), extension });
-  } else void debug.record(record.kind, 'Codex ' + record.kind, record.data);
+  } else if (record.kind === 'event') void debug.recordEvent('Codex timing', record.data);
+  else void debug.record(record.kind, 'Codex ' + record.kind, record.data);
 };
 const buildHelp = new BuildInputHelp(projects, compiler, codex);
 const changesPdf = new ChangesPdfService(projects, compiler, codex, (bytes, ids, signal) =>
@@ -85,14 +86,16 @@ function handle(channel: string, action: (...args: any[]) => unknown) {
     const toolOperation = /^(codex:|build:)/.test(channel) && !['codex:cancel', 'build:cancel', 'codex:progress'].includes(channel);
     if (toolOperation && setupBusy) throw new Error('Wait for setup to finish before starting Codex or compilation.');
     if (toolOperation) activeToolOperations++;
+    const began = performance.now();
+    const timed = /^(codex:|build:(compile|changes|export)|project:(open|save|close|import))/.test(channel);
     try { const result = await action(...args);
-      if (['project:save', 'project:close', 'build:compile', 'build:changes'].includes(channel)) void debug.record('event', channel, { outcome: 'complete', at: new Date().toISOString() });
+      if (timed) void debug.recordEvent(channel, { outcome: 'complete', elapsedMs: performance.now() - began });
       return result;
     }
     catch (error) {
+      if (!channel.startsWith('debug:')) void debug.recordEvent(channel, { outcome: 'error', elapsedMs: performance.now() - began, message: error instanceof Error ? error.message : String(error) });
       if (error instanceof z.ZodError) throw new Error('Invalid review or request data: ' + error.issues.slice(0, 3).map(issue => `${issue.path.join('.') || 'value'}: ${issue.message}`).join(' '));
       if (error instanceof SyntaxError) throw new Error('The JSON file could not be read. Check its syntax; the original file was preserved.');
-      if (!channel.startsWith('debug:')) void debug.record('event', channel, { outcome: 'error', message: error instanceof Error ? error.message : String(error) });
       throw error;
     }
     finally { if (toolOperation) activeToolOperations--; }
@@ -100,6 +103,7 @@ function handle(channel: string, action: (...args: any[]) => unknown) {
 }
 const send = (command: string) => window?.webContents.send('menu:command', command);
 handle('debug:state', () => debug.state());
+handle('debug:interaction', input => { const event = debugInteractionSchema.parse(input); void debug.recordEvent('Interaction', event); });
 handle('debug:configure', input => debug.configure(debugSettingsSchema.parse(input)));
 handle('debug:delete', ids => debug.remove(z.union([z.literal('all'), z.array(z.string().uuid()).max(500)]).parse(ids)));
 handle('debug:open', async () => { const state = await debug.state(); if (!state.entries.length && !state.settings.enabled) throw new Error('Enable debugging before opening its folder.'); const error = await shell.openPath(state.directory); if (error) throw new Error(error); });
@@ -289,7 +293,7 @@ handle('feedback:prepare', input => codex.prepareFeedback(prepareFeedbackSchema.
 handle('codex:feedback-resume', input => codex.resumeFeedback(resumeFeedbackSchema.parse(input), message => window?.webContents.send('codex:progress', message)));
 handle('feedback:list', id => codex.feedback.list(z.string().parse(id)));
 handle('codex:review', input => { const p = textInput.extend({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), instructions: z.string().max(10000), localEditsOnly: z.boolean().optional(), autoAddComments: z.boolean().optional(), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional() }).parse(input); return codex.review(p, message => window?.webContents.send('codex:progress', message)); });
-handle('codex:reply', input => { const p = textInput.extend({ comment: commentSchema, message: z.string().min(1).max(10000), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional(), deeper: z.boolean().optional() }).parse(input); return codex.reply(p, message => window?.webContents.send('codex:progress', message)); });
+handle('codex:reply', input => { const p = textInput.extend({ comment: commentSchema, message: z.string().min(1).max(10000), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional(), deeper: z.boolean().optional(), action: replyActionSchema.optional() }).parse(input); return codex.reply(p, message => window?.webContents.send('codex:progress', message)); });
 handle('codex:waiting', id => codex.results.list(z.string().parse(id)));
 handle('chat:pending', () => helpChat.pending());
 handle('chat:pending-reply', id => helpChat.pendingReply(z.string().regex(/^[a-f0-9]{64}$/).parse(id)));

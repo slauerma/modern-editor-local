@@ -11,7 +11,7 @@ export function DebugPanel() {
     {state && <>
       <label><input type="checkbox" checked={state.settings.enabled} disabled={busy} onChange={e => configure({ enabled: e.target.checked })} /> Save detailed debugging records</label>
       <label><input type="checkbox" checked={state.settings.screenshots} disabled={busy} onChange={e => configure({ screenshots: e.target.checked })} /> Include a screenshot of the visible editor every {state.settings.screenshotSeconds} seconds while recording</label>
-      <p>Codex prompts, replies, request errors and supplied images are recorded when enabled. Periodic screenshots capture this editor only. Recording stops at {Math.round(state.limitBytes / 1_000_000)} MB or 500 records.</p>
+      <p>Meaningful editor actions, operation timings, Codex prompts, replies, request errors and supplied images are recorded when enabled. Actions are grouped in files of up to 100 events; individual keystrokes are not recorded. Periodic screenshots capture this editor only. Recording stops at {Math.round(state.limitBytes / 1_000_000)} MB or 500 records.</p>
       <code>{state.directory}</code>
       <p>{state.entries.length} records · {(state.bytes / 1_000_000).toFixed(1)} MB. The folder's register.json lists every saved record.</p>
       {state.notice && <p role="status">{state.notice}</p>}

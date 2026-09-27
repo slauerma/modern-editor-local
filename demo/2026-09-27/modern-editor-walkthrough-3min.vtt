@@ -1,0 +1,121 @@
+WEBVTT
+
+00:00:00.150 --> 00:00:06.433
+Modern Editor brings your source, PDF, and review comments into one place. Open a paper and
+
+00:00:06.433 --> 00:00:07.218
+start writing.
+
+00:00:07.850 --> 00:00:12.879
+Choose a review template, or give your own instructions. Here, we ask for grammar and
+
+00:00:12.879 --> 00:00:17.907
+clarity, with the smallest local edits. New comments can join the queue as they arrive.
+
+00:00:19.250 --> 00:00:23.926
+Every comment explains the issue and shows the original passage beside a proposed
+
+00:00:23.926 --> 00:00:27.523
+replacement. You decide whether the change belongs in your paper.
+
+00:00:28.117 --> 00:00:33.307
+Want another wording? Quick alternative adds a saved choice. Switch between versions, or
+
+00:00:33.307 --> 00:00:38.896
+edit one yourself. Asking for an alternative leaves both the source and your selected
+
+00:00:38.896 --> 00:00:39.694
+wording alone.
+
+00:00:40.683 --> 00:00:46.532
+Preview compiles a tentative draft and marks the nearby passage in the PDF. Inspect how the
+
+00:00:46.532 --> 00:00:50.553
+suggestion reads on the page, then return to your unchanged draft.
+
+00:00:51.250 --> 00:00:57.159
+Use Shift A to accept and move forward. These three corrections go straight into the draft,
+
+00:00:57.159 --> 00:00:59.745
+without waiting for compilation after each one.
+
+00:01:00.283 --> 00:01:06.191
+Compile once to refresh the PDF from the current draft. Acceptance and compilation are
+
+00:01:06.191 --> 00:01:07.035
+separate actions.
+
+00:01:07.583 --> 00:01:13.139
+For an edit you want to check immediately, choose Accept and compile. The editor checks the
+
+00:01:13.139 --> 00:01:18.001
+proposed draft, applies it, and waits while you inspect the PDF. Then choose Next.
+
+00:01:18.583 --> 00:01:24.971
+Codex Side Chat can help with the substance of the paper. Here, we ask why the optimum is
+
+00:01:24.971 --> 00:01:29.939
+unique and whether the distribution matters. The answer refers to the current draft, while
+
+00:01:29.939 --> 00:01:31.359
+the manuscript stays unchanged.
+
+00:01:32.083 --> 00:01:36.992
+Switch to editor help for questions about the application. The conversation makes its scope
+
+00:01:36.992 --> 00:01:41.902
+visible, and the response explains the controls. You can return to the paper conversation
+
+00:01:41.902 --> 00:01:43.304
+whenever you need it.
+
+00:01:43.817 --> 00:01:49.639
+A useful answer can become a review comment. Here, a proposed clarification returns to the
+
+00:01:49.639 --> 00:01:55.461
+usual queue, where you can edit, preview, accept, or reject it. Chatting alone never applies
+
+00:01:55.461 --> 00:01:56.238
+the change.
+
+00:01:56.750 --> 00:02:03.100
+Classic view offers a cream writing surface and a compact suggestion panel. It uses the same
+
+00:02:03.100 --> 00:02:07.069
+draft, saving, and review workflow. Switch back whenever you prefer.
+
+00:02:07.583 --> 00:02:13.106
+Now open Changes PDF to compare the draft with the start of the session. Generation takes
+
+00:02:13.106 --> 00:02:14.832
+time; this wait is shortened.
+
+00:02:15.350 --> 00:02:21.182
+This is the LaTeX diff view. Deleted wording is struck through, and new wording is
+
+00:02:21.182 --> 00:02:26.237
+underlined. Step through the changes in the typeset paper, keeping equations and surrounding
+
+00:02:26.237 --> 00:02:30.903
+prose in view. It is a separate comparison; your manuscript stays clean.
+
+00:02:31.417 --> 00:02:36.653
+Press Why to see the recorded reason for a change. The explanation opens below the paper,
+
+00:02:36.653 --> 00:02:40.254
+with the exact source comparison tucked away until you need it.
+
+00:02:40.950 --> 00:02:46.280
+Switch to Clean paper to read the revised wording without deletion markup, using the same
+
+00:02:46.280 --> 00:02:46.991
+captured comparison.
+
+00:02:47.583 --> 00:02:53.690
+Text diff shows the exact LaTeX changes. It is also the place to inspect differences that
+
+00:02:53.690 --> 00:02:55.980
+the PDF comparison cannot safely display.
+
+00:02:56.483 --> 00:02:59.530
+Save your draft, close the project, and return home.

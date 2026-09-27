@@ -13,7 +13,7 @@ import { rememberPdf, restorePdf } from './pdf-workspace-cache.ts';
 import { planBuildInputs, readBuildInput, type BuildInputLimits, type BuildInputPlan } from './build-input-plan.ts';
 
 type Input = { relative: string; hash: string };
-type Record = { build: Build; projectId: string; text: string; inputs: Input[]; directory: string; pdf: string; external: RecordedInput[]; tciSupport?: { path: string; hash: string }; restored?: boolean; selectedPaths?: string[]; limits?: BuildInputLimits };
+type Record = { build: Build; projectId: string; text: string; inputs: Input[]; directory: string; pdf: string; pdfHash?: string; external: RecordedInput[]; tciSupport?: { path: string; hash: string }; restored?: boolean; selectedPaths?: string[]; limits?: BuildInputLimits };
 const execute = promisify(execFile);
 export class CompileService {
   private running: { child: ChildProcess; cancelled: boolean } | null = null;
@@ -147,8 +147,8 @@ export class CompileService {
       finally { clearTimeout(watchdog); this.running = null; this.terminateDescendants(child); }
       await fs.writeFile(path.join(directory, 'editor-build.log'), output, { mode: 0o600 });
       const stem = project.name.replace(/\.(?:tex|txt)$/i, ''), pdf = path.join(directory, stem + '.pdf');
-      let validPdf = false;
-      try { const data = await readRegularFile(pdf, 100000000); validPdf = data.subarray(0, 5).toString() === '%PDF-'; } catch {}
+      let pdfHash: string | undefined;
+      try { const data = await readRegularFile(pdf, 100000000); if (data.subarray(0, 5).toString() === '%PDF-') pdfHash = digest(data); } catch {}
       let log = output, logReadable = true;
       try { log = (await readRegularFile(path.join(directory, stem + '.log'), 8000000)).toString('utf8'); }
       catch { logReadable = false; }
@@ -166,14 +166,14 @@ export class CompileService {
         if (plan.unresolvedIssues.length) diagnostics.unshift({ severity: 'warning', message: 'This explicitly selected preview has unresolved dependency commands. Its inputs cannot support checked acceptance. ' + plan.unresolvedIssues.slice(0, 3).join(' ') });
       } catch (error) { diagnostics.unshift({ severity: 'warning', message: `PDF dependencies are not verified. ${String(error)}` }); }
       if (running.cancelled || this.cancelled) diagnostics.unshift({ severity: 'error', message: running.timedOut ? 'Compilation exceeded its time limit and was stopped. Check the engine and build log.' : 'Compilation cancelled.' });
-      const success = code === 0 && validPdf && !running.cancelled && !this.cancelled;
+      const success = code === 0 && !!pdfHash && !running.cancelled && !this.cancelled;
       if (!success && !diagnostics.some(d => d.severity === 'error')) diagnostics.push({ severity: 'error', message: 'LaTeX did not produce a successful PDF. See the build log.' });
       const build: Build = { purpose, id, engine, success, clean: success && !blockingWarnings && dependenciesVerified && logReadable, dependenciesVerified, sourceHash: digest(text), diagnostics: diagnostics.slice(0, 50), log: output.slice(-30000), elapsedMs: Date.now() - started,
         inputSelection: { mode: plan.mode, fileCount: plan.files.length, totalBytes: plan.totalBytes, ...(plan.unresolvedIssues.length ? { unresolvedIssues: plan.unresolvedIssues } : {}) } };
-      this.records.set(id, { build, projectId, text, inputs, directory, pdf, tciSupport, external, selectedPaths: selectedPaths ? plan.files.map(file => file.relative) : undefined, limits });
+      this.records.set(id, { build, projectId, text, inputs, directory, pdf, pdfHash, tciSupport, external, selectedPaths: selectedPaths ? plan.files.map(file => file.relative) : undefined, limits });
       // This optional snapshot is only for reopening the reader. Failure does
       // not turn a valid compilation into a failed source edit.
-      if (success && purpose === 'paper') try { await rememberPdf(directory, project.path, build); }
+      if (success && purpose === 'paper') try { await rememberPdf(directory, project.path, build, pdfHash); }
       catch { build.diagnostics.push({ severity: 'warning', message: 'This PDF could not be retained for workspace restoration. It remains available in this session.' }); }
       return build;
     } finally { this.preparation = null; this.busy = false; this.stopped.splice(0).forEach(resolve => resolve()); }
@@ -211,6 +211,7 @@ export class CompileService {
     if (record.text !== text) return { status: 'changed' };
     const stopped = () => { if (signal.aborted) throw new Error('Validation deferred.'); };
     try {
+      await this.pdf(buildId); stopped();
       const project = this.projects.get(projectId);
       await this.projects.assertUnchanged(projectId); stopped();
       const expectedIdentity = await this.projects.assertDirectory(projectId); stopped();
@@ -230,8 +231,10 @@ export class CompileService {
   }
   async pdf(buildId: string) {
     const record = this.records.get(buildId);
-    if (!record?.build.success) throw new Error('That successful PDF is no longer available. Compile again.');
-    return new Uint8Array(await readRegularFile(record.pdf, 100000000));
+    if (!record?.build.success || !record.pdfHash) throw new Error('That successful PDF is no longer available. Compile again.');
+    const bytes = await readRegularFile(record.pdf, 100000000);
+    if (digest(bytes) !== record.pdfHash) throw new Error('The cached PDF changed. Compile again or refresh the comparison.');
+    return new Uint8Array(bytes);
   }
   availablePdfs(projectId: string) {
     this.projects.get(projectId);
@@ -263,6 +266,7 @@ export class CompileService {
     const position = compiledPosition(input.text, record.text, input.from, input.to);
     if ('kind' in position) return position;
     try {
+      await this.pdf(input.buildId);
       const source = path.join(record.directory, project.name), stem = project.name.replace(/\.(?:tex|txt)$/i, '');
       if (digest(await readRegularFile(source, 8000000)) !== record.build.sourceHash) throw new Error('The compiled source snapshot changed.');
       await readRegularFile(path.join(record.directory, stem + '.synctex.gz'), 32000000);

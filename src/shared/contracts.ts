@@ -12,6 +12,14 @@ function boundedJSON(value: unknown, ctx: z.RefinementCtx) {
 }
 
 const packageListSchema = z.array(z.string().regex(/^[a-zA-Z][a-zA-Z0-9-]*$/, 'Use a plain LaTeX package name.')).max(10);
+export const replyActionSchema = z.enum(['standard', 'quick', 'quick-alternative', 'alternatives', 'reconsider']);
+export type ReplyAction = z.infer<typeof replyActionSchema>;
+export const replyAlternativeSchema = z.object({ label: z.string().min(1).max(100), reason: z.string().max(2000), replacement: z.string().max(100000), packages: packageListSchema }).strict();
+export const savedAlternativeSchema = replyAlternativeSchema.extend({
+  id: z.string().min(1).max(200), original: z.string().max(100000).optional(),
+  draft: z.string().max(100000).optional()
+});
+export const codexReplySchema = z.object({ reply: z.string().max(100000), replacement: z.string().max(100000).nullable(), packages: packageListSchema, alternatives: z.array(replyAlternativeSchema).max(3).optional() });
 export const messageSchema = z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(100000), createdAt: z.string(), resultId: z.string().uuid().optional(), proposalOriginal: z.string().max(100000).optional(), proposal: z.object({ replacement: z.string().max(100000).nullable(), packages: packageListSchema }).optional() });
 export const commentSchema = z.object({
   id: z.string().min(1).max(200), category: z.string().max(100).default('Clarity'),
@@ -25,17 +33,23 @@ export const commentSchema = z.object({
   validity: z.enum(['current', 'stale', 'ambiguous', 'missing', 'unconfirmed']).default('missing'),
   draft: z.string().max(100000).nullable().optional().transform(value => value ?? undefined), appliedText: z.string().max(100000).optional(),
   packages: packageListSchema.default([]),
+  alternatives: z.array(savedAlternativeSchema).max(30).optional(),
+  selectedAlternativeId: z.string().min(1).max(200).optional(),
   messages: z.array(messageSchema).max(500).default([]), replyDraft: z.string().max(100000).default(''),
   reviewedSourceHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), reviewedAt: z.string().datetime().optional()
+}).superRefine((c, ctx) => {
+  const options = c.alternatives ?? [];
+  if (new Set(options.map(a => a.id)).size !== options.length) ctx.addIssue({ code: 'custom', message: 'Wording IDs must be unique within each comment.' });
+  if (c.selectedAlternativeId && !options.some(a => a.id === c.selectedAlternativeId && a.replacement === c.replacement && (a.original === undefined || a.original === c.original) && JSON.stringify([...a.packages].sort()) === JSON.stringify([...c.packages].sort()))) ctx.addIssue({ code: 'custom', message: 'The selected wording must match the comment proposal and passage.' });
 });
 export const commentsSchema = z.array(commentSchema).max(2000).superRefine((comments, ctx) => {
   if (new Set(comments.map(c => c.id)).size !== comments.length) ctx.addIssue({ code: 'custom', message: 'Comment IDs must be unique' });
   boundedJSON(comments, ctx);
 });
 export const reviewSchema = z.object({
-  schemaVersion: z.literal(1), rootFile: z.string().max(500), sourceHash: z.string(),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]), rootFile: z.string().max(500), sourceHash: z.string(),
   activeId: z.string().nullable(), comments: commentsSchema, updatedAt: z.string()
-}).superRefine(boundedJSON);
+}).transform(value => ({ ...value, schemaVersion: value.comments.some(c => c.alternatives?.length) ? 2 as const : value.schemaVersion })).superRefine(boundedJSON);
 export const bufferSchema = z.object({ projectId: z.string(), text: z.string().max(2000000), review: reviewSchema }).superRefine((value, ctx) => {
   try { assertRecoveryFits(value.text, value.review); }
   catch (error) { ctx.addIssue({ code: 'custom', message: error instanceof Error ? error.message : String(error) }); }
@@ -54,11 +68,12 @@ export const workspaceSchema = z.object({
   paneSizes: z.tuple([fractionSchema, fractionSchema, fractionSchema]).refine(v => v.every(n => n >= .05) && Math.abs(v.reduce((a, b) => a + b, 0) - 1) < .001, 'Invalid pane proportions'),
   layout: z.enum(['auto', 'three', 'source-comments', 'pdf-comments', 'writing', 'stacked']).default('auto'), compactTab: z.enum(['source', 'pdf']).default('source'), displayName: z.string().trim().max(80).default(''),
   classic: z.boolean().default(false), classicSurface: z.enum(['source', 'pdf']).default('source'),
+  autoAddComments: z.boolean().default(true),
   changesOpen: z.boolean().default(true), toolbarCollapsed: z.boolean(), followComments: z.boolean(), reviewView: z.enum(['pending', 'later', 'history'])
 });
 export type WorkspaceState = z.infer<typeof workspaceSchema>;
 export function defaultWorkspace(): WorkspaceState {
-  return { schemaVersion: 1, classic: false, classicSurface: 'source', source: { anchor: 0, head: 0, topLine: 1, offset: 0 }, pdf: { page: 1, zoom: 1, scrollX: 0, scrollY: 0 }, pdfBuildId: null, pdfOpen: false, commentsHidden: false, paneSizes: [.28, .33, .39], layout: 'auto', compactTab: 'source', displayName: '', changesOpen: true, toolbarCollapsed: false, followComments: true, reviewView: 'pending' };
+  return { schemaVersion: 1, autoAddComments: true, classic: false, classicSurface: 'source', source: { anchor: 0, head: 0, topLine: 1, offset: 0 }, pdf: { page: 1, zoom: 1, scrollX: 0, scrollY: 0 }, pdfBuildId: null, pdfOpen: false, commentsHidden: false, paneSizes: [.28, .33, .39], layout: 'auto', compactTab: 'source', displayName: '', changesOpen: true, toolbarCollapsed: false, followComments: true, reviewView: 'pending' };
 }
 export const effortSchema = z.enum(['low', 'medium', 'high', 'max']);
 export type Effort = z.infer<typeof effortSchema>;
@@ -84,13 +99,14 @@ export type PdfRequest = z.infer<typeof pdfRequestSchema>;
 export type BuildValidation = { status: 'valid' | 'changed' | 'deferred' | 'unavailable' };
 export type PdfLocation = { kind: 'mapped'; buildId: string; page: number; x: number; y: number; width: number; height: number } | { kind: 'compile' | 'unavailable'; reason: string };
 export type ReviewRequest = { projectId: string; text: string; from: number; to: number; instructions: string; localEditsOnly?: boolean; autoAddComments?: boolean; attachmentPreviewId?: string; requestId?: string };
-export type ReplyRequest = { projectId: string; text: string; comment: Comment; message: string; requestId?: string; attachmentPreviewId?: string; deeper?: boolean };
-export type CodexReply = { reply: string; replacement: string | null; packages: string[] };
-const resultBase = { schemaVersion: z.literal(1), id: z.string().uuid(), rootFile: z.string().max(500), sourceHash: z.string().regex(/^[a-f0-9]{64}$/), createdAt: z.string().datetime() };
+export type ReplyRequest = { projectId: string; text: string; comment: Comment; message: string; requestId?: string; attachmentPreviewId?: string; deeper?: boolean; action?: ReplyAction };
+export type CodexReply = z.infer<typeof codexReplySchema>;
+const resultBase = { schemaVersion: z.union([z.literal(1), z.literal(2)]), id: z.string().uuid(), rootFile: z.string().max(500), sourceHash: z.string().regex(/^[a-f0-9]{64}$/), createdAt: z.string().datetime() };
 export const resultSchema = z.discriminatedUnion('kind', [
   z.object({ ...resultBase, kind: z.literal('review'), comments: commentsSchema, autoAddComments: z.boolean().optional() }),
-  z.object({ ...resultBase, kind: z.literal('reply'), commentId: z.string().min(1).max(200), original: z.string().max(100000), answer: z.object({ reply: z.string().max(100000), replacement: z.string().max(100000).nullable(), packages: packageListSchema }) })
-]).superRefine(boundedJSON);
+  z.object({ ...resultBase, kind: z.literal('reply'), commentId: z.string().min(1).max(200), original: z.string().max(100000), answer: codexReplySchema })
+]).transform(value => (value.kind === 'review' ? value.comments.some(c => c.alternatives?.length) : value.answer.alternatives?.length)
+  ? { ...value, schemaVersion: 2 as const } : value).superRefine(boundedJSON);
 export type WaitingResult = z.infer<typeof resultSchema>;
 export type SourceRecovery = { name: string; choices: { label: string; text: string }[]; notices: string[] };
 export type EditorAPI = {
@@ -98,6 +114,7 @@ export type EditorAPI = {
   fileAction(projectId: string, id: string, action: 'reveal' | 'copy'): Promise<void>;
   exportPdf(projectId: string, buildId: string): Promise<import('./project-files.ts').PdfExport | null>;
   debugState(): Promise<import('./debugging.ts').DebugState>;
+  debugInteraction(event: import('./debugging.ts').DebugInteraction): Promise<void>;
   configureDebug(settings: import('./debugging.ts').DebugSettings): Promise<import('./debugging.ts').DebugState>;
   deleteDebug(ids: string[] | 'all'): Promise<import('./debugging.ts').DebugState>;
   openDebugFolder(): Promise<void>;

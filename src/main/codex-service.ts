@@ -3,12 +3,12 @@ import { arrangementOutputSchema } from '../shared/changes-pdf.ts';
 import { changesAgentModel, changesAgentOutputSchema, visualCheckOutputSchema } from '../shared/changes-agent.ts';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { commentSchema, preambleProposalSchema, type PreambleRequest, type PreambleProposal, type Comment, type ReviewRequest, type ReplyRequest, type CodexReply } from '../shared/contracts.ts';
+import { commentSchema, codexReplySchema, preambleProposalSchema, type PreambleRequest, type PreambleProposal, type Comment, type ReviewRequest, type ReplyRequest, type CodexReply } from '../shared/contracts.ts';
 import { preambleContext } from '../shared/fragment-preamble.ts';
 import { adoptComment, captureContext } from '../shared/review.ts';
 import { atomicWrite, digest, privateDirectory, writeJSON } from './files.ts';
 import type { ProjectService } from './project-service.ts';
-import { CodexClient, InvalidCodexResponse } from './codex-client.ts';
+import { CodexClient, InvalidCodexResponse, type CodexRunOptions } from './codex-client.ts';
 import { ReviewResults } from './review-results.ts';
 import { reviewContext, replyContext } from '../shared/codex-context.ts';
 import type { Effort } from '../shared/contracts.ts';
@@ -25,7 +25,12 @@ const fields = { category: { type: 'string' }, title: { type: 'string' }, explan
 export const reviewOutputSchema = { type: 'object', properties: { comments: { type: 'array', items: { type: 'object', properties: fields, required: Object.keys(fields), additionalProperties: false } } }, required: ['comments'], additionalProperties: false };
 export const feedbackBatchOutputSchema = { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'string' }, comments: reviewOutputSchema.properties.comments }, required: ['itemId', 'comments'], additionalProperties: false } } }, required: ['items'], additionalProperties: false };
 export const replyOutputSchema = { type: 'object', properties: { reply: { type: 'string' }, replacement: fields.replacement, packages: fields.packages }, required: ['reply', 'replacement', 'packages'], additionalProperties: false };
-export const replySchema = z.object({ reply: z.string().max(100000), replacement: z.string().max(100000).nullable(), packages: commentSchema.shape.packages });
+export const replySchema = codexReplySchema;
+export const quickReplyOutputSchema = { ...replyOutputSchema, properties: { ...replyOutputSchema.properties, replacement: { type: 'null' }, packages: { type: 'array', items: { type: 'string' }, maxItems: 0 } } };
+export const alternativesOutputSchema = { ...quickReplyOutputSchema, required: ['reply', 'replacement', 'packages', 'alternatives'], properties: {
+  ...quickReplyOutputSchema.properties, alternatives: { type: 'array', maxItems: 3, items: { type: 'object', additionalProperties: false, required: ['label', 'reason', 'replacement', 'packages'], properties: { label: { type: 'string' }, reason: { type: 'string' }, replacement: { type: 'string' }, packages: fields.packages } } }
+} };
+export const quickAlternativeOutputSchema = { ...alternativesOutputSchema, properties: { ...alternativesOutputSchema.properties, alternatives: { ...alternativesOutputSchema.properties.alternatives, maxItems: 1 } } };
 export const preambleOutputSchema = { type: 'object', properties: { explanation: { type: 'string' }, preamble: { type: 'string' }, ending: { type: 'string' }, needsInput: { type: ['string', 'null'] } }, required: ['explanation', 'preamble', 'ending', 'needsInput'], additionalProperties: false };
 
 export class CodexService {
@@ -80,6 +85,7 @@ export class CodexService {
     this.feedbackRunning = true;
     const generation = this.generation;
     let record: FeedbackRecord | undefined;
+    let saving = false;
     try {
       record = await this.feedback.get(request.projectId, request.id);
       if (!record.plan) throw new Error('This older feedback record has no batch plan. Prepare it again to use batches.');
@@ -102,12 +108,16 @@ export class CodexService {
         const updated = record.plan!.items.map(item => items.some(next => next.id === item.id)
           ? { ...item, complete: true, commentIds: added.filter(comment => comment.id.startsWith(record!.id + ':' + item.id + ':')).map(comment => comment.id) } : item);
         // Commit the entire batch together; update memory only after durable save.
+        saving = true;
         record = await this.feedback.save(request.projectId, { ...record, error: '', status: updated.every(item => item.complete) ? 'complete' : 'paused',
           plan: { ...record.plan!, items: updated }, comments: [...record.comments, ...added] });
+        saving = false;
       } while (request.all && record.status !== 'complete');
       return record;
     } catch (error) {
-      if (record?.plan) await this.feedback.save(request.projectId, { ...record, status: generation !== this.generation ? 'paused' : 'failed', error: (error instanceof Error ? error.message : String(error)).slice(0, 4000) });
+      // A save can fail after rename. Never overwrite possibly committed output
+      // with the earlier snapshot; reopening/resuming reads the actual record.
+      if (!saving && record?.plan) await this.feedback.save(request.projectId, { ...record, status: generation !== this.generation ? 'paused' : 'failed', error: (error instanceof Error ? error.message : String(error)).slice(0, 4000) });
       throw error;
     } finally { this.feedbackRunning = false; }
   }
@@ -116,6 +126,7 @@ export class CodexService {
     const p = this.projects.get(request.projectId), createdAt = new Date().toISOString();
     const record: FeedbackRecord = { schemaVersion: 1, id: randomUUID(), rootFile: p.name, createdAt, label: request.label, feedback: request.feedback, source: request.text, status: 'saved', error: '', comments: [] };
     await this.feedback.save(p.id, record);
+    let saving = false;
     try {
       const response = await this.run(p.id, JSON.stringify(feedbackContext(request, p.paperInstructions, p.editPreferences)), reviewOutputSchema, progress, undefined, generation) as { comments?: unknown[] };
       if (!response || !Array.isArray(response.comments) || response.comments.length > 30) throw new Error('Codex returned an invalid feedback list.');
@@ -123,20 +134,21 @@ export class CodexService {
         const c = commentSchema.parse({ ...raw, id: randomUUID(), decision: 'open', validity: 'missing', reviewedSourceHash: digest(request.text), reviewedAt: createdAt });
         return adoptComment(request.text, c);
       });
+      saving = true;
       return await this.feedback.save(p.id, { ...record, status: 'complete', comments });
     } catch (error) {
-      await this.feedback.save(p.id, { ...record, status: 'failed', error: (error instanceof Error ? error.message : String(error)).slice(0, 4000) });
+      if (!saving) await this.feedback.save(p.id, { ...record, status: 'failed', error: (error instanceof Error ? error.message : String(error)).slice(0, 4000) });
       throw error;
     }
   }
-  private async run(projectId: string, prompt: string, schema: unknown, progress: (message: string) => void, effort?: Effort, generation = this.generation, reading?: { text: string; kind: 'review' | 'reply' }) {
+  private async run(projectId: string, prompt: string, schema: unknown, progress: (message: string) => void, effort?: Effort, generation = this.generation, reading?: { text: string; kind: 'review' | 'reply' }, options: CodexRunOptions & { fastMode?: boolean } = {}) {
     let session: ReferenceSession | undefined, complete = false;
     try {
       if (generation !== this.generation) throw new Error('Codex request cancelled before sending.');
       if (reading) session = await this.referenceFolders?.begin(projectId, reading.text, reading.kind, progress);
       if (generation !== this.generation) throw new Error('Codex request cancelled before sending.');
       if (session) prompt = JSON.stringify({ ...JSON.parse(prompt), availableReferences: session.context() });
-      const result = await this.client.run(prompt, schema, progress, effort ?? this.projects.get(projectId).effort, this.projects.get(projectId).fastMode, session);
+      const result = await this.client.run(prompt, schema, progress, effort ?? this.projects.get(projectId).effort, options.fastMode ?? this.projects.get(projectId).fastMode, session, options);
       complete = true; return result;
     }
     catch (error) {
@@ -156,7 +168,7 @@ export class CodexService {
     const passage = text.slice(from, to);
     if (!passage.trim() || passage.length > 120000) throw new Error('Select a passage of at most 120,000 characters for this review.');
     const { paperInstructions, editPreferences } = p;
-    const prompt = JSON.stringify(reviewContext(request, paperInstructions, await this.references(p.id, request.attachmentPreviewId), editPreferences));
+    const prompt = JSON.stringify(reviewContext(request, paperInstructions, await this.references(p.id, request.attachmentPreviewId), editPreferences, p.review.comments));
     const response = await this.run(p.id, prompt, reviewOutputSchema, progress, undefined, generation, { text, kind: 'review' }) as { comments?: unknown[] };
     const home = await this.projects.stateDirectory(p.id), reviews = await privateDirectory(home, 'reviews');
     let comments: Comment[];
@@ -183,12 +195,18 @@ export class CodexService {
     const p = this.projects.get(request.projectId);
     const c = request.comment;
     const { paperInstructions, editPreferences } = p;
-    const prompt = JSON.stringify(replyContext(request, paperInstructions, await this.references(p.id, request.attachmentPreviewId), editPreferences));
-    const response = await this.run(p.id, prompt, replyOutputSchema, progress, request.deeper ? (p.effort === 'max' ? 'max' : 'high') : undefined, generation, { text: request.text, kind: 'reply' });
+    const action = request.action ?? (request.deeper ? 'reconsider' : 'standard'), quickAlternative = action === 'quick-alternative', quick = action === 'quick' || quickAlternative, alternatives = action === 'alternatives' || quickAlternative;
+    const prompt = JSON.stringify(replyContext({ ...request, action }, paperInstructions, quick ? undefined : await this.references(p.id, request.attachmentPreviewId), editPreferences));
+    const effort = quick ? 'low' : alternatives ? 'medium' : action === 'reconsider' ? (p.effort === 'max' ? 'max' : 'high') : undefined;
+    const response = await this.run(p.id, prompt, quickAlternative ? quickAlternativeOutputSchema : quick ? quickReplyOutputSchema : alternatives ? alternativesOutputSchema : replyOutputSchema, progress, effort, generation,
+      quick ? undefined : { text: request.text, kind: 'reply' }, { purpose: 'discussion', ...(quick || alternatives ? { model: 'gpt-6-sol', fastMode: false } : {}) });
     // Retain the answer even if its schema or the current discussion limit rejects it.
     const home = await this.projects.stateDirectory(p.id), reviews = await privateDirectory(home, 'reviews');
     await writeJSON(path.join(reviews, `reply-${randomUUID()}.json`), { rootFile: p.name, sourceHash: digest(request.text), commentId: c.id, response, createdAt: new Date().toISOString() });
     const answer = replySchema.parse(response);
+    if ((quick || alternatives) && (answer.replacement !== null || answer.packages.length) || quick && !quickAlternative && answer.alternatives?.length) throw new Error('This answer did not respect the explanation-only contract. It was retained for inspection but not added.');
+    if (quickAlternative && (answer.alternatives?.length ?? 0) > 1) throw new Error('Quick alternative returned more than one option. The answer was retained for inspection.');
+    if (alternatives && !answer.alternatives) throw new Error('The alternatives response was incomplete. It was retained for inspection.');
     await this.results.retain(p.id, { schemaVersion: 1, id: request.requestId ?? randomUUID(), kind: 'reply', rootFile: p.name, sourceHash: digest(request.text), commentId: c.id, original: c.original, answer, createdAt: new Date().toISOString() });
     return answer;
   }

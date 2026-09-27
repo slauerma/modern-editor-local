@@ -25,8 +25,8 @@ projects.persist = async(...args)=>{ if(comparisonProbe.holdPersist) { compariso
 const originalInspect = compiler.inspect.bind(compiler);
 compiler.inspect = async(...args)=>comparisonProbe.resourceInvalid ? {status:'changed'} : originalInspect(...args);
 const originalCompile = compiler.compile.bind(compiler);
-compiler.compile = async(...args)=>{ comparisonProbe.builds++; if(comparisonProbe.hold) { comparisonProbe.hold=false; await new Promise(resolve=>{comparisonProbe.release=resolve;}); } const result=await originalCompile(...args);comparisonProbe.ids.push({id:result.id,purpose:args[5]??'paper'});return result; };
-codex.planChanges = async(projectId, prompt)=>{ comparisonProbe.arrangements++; const changes=JSON.parse(prompt).changes; comparisonProbe.plans.push(changes.length); return { inspect: comparisonProbe.skipVisual ? [] : changes.filter(c=>c.shownIn[JSON.parse(prompt).presentation]).slice(0,1).map(c=>c.id), groups: (comparisonProbe.invalid ? changes.slice(1) : changes).map(c=>({ids:[c.id],layout:'keep',summary:'Controlled summary of this difference.'})) }; };
+compiler.compile = async(...args)=>{ comparisonProbe.builds++; const result=await originalCompile(...args);comparisonProbe.ids.push({id:result.id,purpose:args[5]??'paper'});return result; };
+codex.planChanges = async(projectId, prompt)=>{ comparisonProbe.arrangements++; if(comparisonProbe.hold) { comparisonProbe.hold=false; await new Promise(resolve=>{comparisonProbe.release=resolve;}); } const changes=JSON.parse(prompt).changes; comparisonProbe.plans.push(changes.length); return { inspect: comparisonProbe.skipVisual ? [] : changes.filter(c=>c.shownIn[JSON.parse(prompt).presentation]).slice(0,1).map(c=>c.id), groups: (comparisonProbe.invalid ? changes.slice(1) : changes).map(c=>({ids:[c.id],layout:'keep',summary:'Controlled summary of this difference.'})) }; };
 codex.checkChanges = async(projectId,prompt,images)=>{ comparisonProbe.visuals++; if(!images.length || !images.every(s=>s.startsWith('data:image/png;base64,'))) throw Error('Missing real screenshot'); return {readable:true,issues:[]}; };
 const originalComparisonBuild = changesPdf.build.bind(changesPdf);
 changesPdf.build = async(input)=>{const artifact=await originalComparisonBuild(input);comparisonProbe.artifacts.push({after:input.after,id:artifact.id,presentation:artifact.presentation});return artifact;};
@@ -439,14 +439,14 @@ try {
   // A pending result cannot become current after the author edits.
   await application.evaluate(() => { globalThis.__comparisonProbe.hold = true; });
   await pane().getByRole('button',{name:'Refresh Changes PDF',exact:true}).click();
-  await poll(() => application.evaluate(() => !!globalThis.__comparisonProbe.release), 'held build');
+  await poll(() => application.evaluate(() => !!globalThis.__comparisonProbe.release), 'held Sol after local build');
   await write(after.replace('otherwise reads well','otherwise reads clearly'));
   await application.evaluate(() => { globalThis.__comparisonProbe.release(); globalThis.__comparisonProbe.release = null; });
-  await poll(async () => await pane().getByRole('button',{name:'Refresh Changes PDF',exact:true}).isEnabled(),'late build settled');
+  await poll(async () => await pane().getByRole('button',{name:'Refresh Changes PDF',exact:true}).isEnabled(),'late Sol result settled');
   assert((await pane().innerText()).includes('Older comparison'));
   await write(before); await refresh(); assert((await pane().innerText()).includes('No source changes.'));
   assert.equal(await pane().getByLabel('Comparison change').count(),0);
-  receipt.checks.push('Late result rejected after typing / returning to baseline leaves no changes');
+  receipt.checks.push('Late Sol result rejected after typing / returning to baseline leaves no changes');
   const noBuildCount = await application.evaluate(()=>globalThis.__comparisonProbe.builds);
   await write(before.replace('article', 'report')); await refresh();
   assert.equal(await application.evaluate(()=>globalThis.__comparisonProbe.builds),noBuildCount);
@@ -494,7 +494,7 @@ try {
   await poll(()=>application.evaluate((_,n)=>globalThis.__comparisonProbe.arrangements===n+1,beforeRequest),'fifth acceptance starts one Sol update');
   await poll(async()=>await pane().getAttribute('aria-busy')==='false','batch update and visual check finished');
   assert.equal(await pane().getByLabel('Comparison change').locator('option').count(),10,'Five prose edits and five source-note edits are accounted for separately');
-  assert(await pane().getByRole('button',{name:'5 not shown',exact:true}).isVisible(),'Only the source-note edits are unshown');
+  assert(await pane().getByRole('button',{name:'5 source notes',exact:true}).isVisible(),'Source-note edits have their own count');
   await pane().getByLabel('PDF page 1, rendered',{exact:true}).waitFor();
   await snapshot('08-comment-prose-markup');
   await page.locator('#pdf-surface').screenshot({path:path.join(evidence,'viewer-comment-prose-markup.png')});

@@ -2,6 +2,7 @@ import { EditorState, StateEffect, StateField, Transaction } from '@codemirror/s
 import { history, invertedEffects, isolateHistory } from '@codemirror/commands';
 import { bufferSchema, commentsSchema, type BufferInput, type Comment } from '../shared/contracts.ts';
 import { proposalChanges, changedText } from '../shared/review.ts';
+import { wordingChoices } from '../shared/alternatives.ts';
 
 type Patch = { id: string; fields: Partial<Comment> };
 export const loadComments = StateEffect.define<Comment[]>();
@@ -33,7 +34,23 @@ export const commentsField = StateField.define<Comment[]>({
       }
       if (effect.is(patchComments)) {
         const patches = new Map(effect.value.map(p => [p.id, p.fields]));
-        next = next.map(c => ({ ...c, ...(patches.get(c.id) ?? {}) }));
+        next = next.map(c => {
+          const fields = patches.get(c.id);
+          if (!fields) return c;
+          if (!Object.hasOwn(fields, 'alternatives')) return { ...c, ...fields };
+          // Choices and their latest drafts are retained records. Undo changes
+          // the selection, not edits typed into another option since selection.
+          const navigatingHistory = tr.isUserEvent('undo') || tr.isUserEvent('redo');
+          const retained = navigatingHistory ? wordingChoices(c).alternatives : c.alternatives ?? [];
+          const drafts = new Map(retained.map(a => [a.id, a.draft]));
+          const updates = fields.alternatives ?? [], ids = new Set(updates.map(a => a.id));
+          const alternatives = [...updates.map(a => navigatingHistory && drafts.has(a.id) ? { ...a, draft: drafts.get(a.id) } : a), ...retained.filter(a => !ids.has(a.id))];
+          const updated = { ...c, ...fields, alternatives: alternatives.length ? alternatives : undefined };
+          if (!navigatingHistory) return updated;
+          const selected = wordingChoices(updated).selectedAlternativeId;
+          const choice = alternatives.find(a => a.id === selected);
+          return choice ? { ...updated, draft: choice.draft } : updated;
+        });
       }
     }
     // A renderer transaction must satisfy the same comment limits as persistence.

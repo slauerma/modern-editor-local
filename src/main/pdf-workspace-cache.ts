@@ -15,10 +15,11 @@ const cachedBuildSchema = z.object({
 });
 const snapshotSchema = z.object({ schemaVersion: z.literal(1), owner: z.string().max(10000), build: cachedBuildSchema, pdfHash: hash, syncTexHash: hash.nullable() });
 
-export async function rememberPdf(directory: string, owner: string, build: Build) {
+export async function rememberPdf(directory: string, owner: string, build: Build, expectedHash?: string) {
   if (build.purpose && build.purpose !== 'paper') throw new Error('A comparison or proposal preview cannot become a restored paper PDF.');
   const stem = path.basename(owner).replace(/\.(?:tex|txt)$/i, '');
   const pdf = await readRegularFile(path.join(directory, stem + '.pdf'), 100000000);
+  if (expectedHash && digest(pdf) !== expectedHash) throw new Error('The compiled PDF changed before it could be retained.');
   let syncTexHash: string | null = null;
   try { syncTexHash = digest(await readRegularFile(path.join(directory, stem + '.synctex.gz'), 32000000)); } catch {}
   const snapshot = snapshotSchema.parse({ schemaVersion: 1, owner, build, pdfHash: digest(pdf), syncTexHash });
@@ -37,5 +38,5 @@ export async function restorePdf(cache: string, owner: string, id: string) {
   const source = await readRegularFile(path.join(directory, path.basename(owner)), 2000000), bytes = await readRegularFile(pdf, 100000000);
   if (digest(source) !== snapshot.build.sourceHash || digest(bytes) !== snapshot.pdfHash || bytes.subarray(0, 5).toString() !== '%PDF-') throw new Error('The PDF snapshot changed.');
   if (snapshot.syncTexHash && digest(await readRegularFile(path.join(directory, stem + '.synctex.gz'), 32000000)) !== snapshot.syncTexHash) throw new Error('The PDF position map changed.');
-  return { build: snapshot.build, text: new TextDecoder('utf-8', { fatal: true }).decode(source), directory, pdf };
+  return { build: snapshot.build, text: new TextDecoder('utf-8', { fatal: true }).decode(source), directory, pdf, pdfHash: snapshot.pdfHash };
 }

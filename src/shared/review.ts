@@ -1,3 +1,4 @@
+import { addWordings } from './alternatives.ts';
 import { controls, literalPackages } from './tex-structure.ts';
 import { commentSchema, commentsSchema, type Comment, type Review, type CodexReply } from './contracts.ts';
 
@@ -58,7 +59,7 @@ export function linkQuestionToSelection(text: string, c: Comment, from: number, 
   // Earlier alternatives remain readable in the discussion, but cannot become
   // replacements for a newly linked passage without a fresh Codex proposal.
   const messages = c.messages.map(message => message.proposal && message.proposalOriginal === undefined ? { ...message, proposalOriginal: c.original } : message);
-  return captureContext(text, commentSchema.parse({ ...c, original: text.slice(from, to), questionOriginal: c.questionOriginal ?? c.original, messages, from, to, validity: 'current' }));
+  return captureContext(text, commentSchema.parse({ ...c, original: text.slice(from, to), questionOriginal: c.questionOriginal ?? c.original, messages, alternatives: c.alternatives?.map(a => ({ ...a, original: a.original ?? c.original })), from, to, validity: 'current' }));
 }
 export function anchorReview(text: string, review: Review, trustOffsets = false): Review {
   return { ...review, comments: review.comments.map(c => locate(text, c, trustOffsets)) };
@@ -92,9 +93,13 @@ export function mergeComments(existing: readonly Comment[], incoming: readonly C
   });
   return commentsSchema.parse([...existing, ...added]);
 }
-export function replyFields(c: Comment, answer: CodexReply): Pick<Comment, 'messages'> {
+export function replyFields(c: Comment, answer: CodexReply): Pick<Comment, 'messages' | 'alternatives' | 'selectedAlternativeId'> {
   // A delayed model answer is an alternative, never a replacement for the author's draft.
-  return { messages: commentSchema.parse({ ...c, messages: [...c.messages, { role: 'assistant', text: answer.reply, createdAt: new Date().toISOString(), ...(answer.replacement === null ? {} : { proposal: { replacement: answer.replacement, packages: answer.packages } }) }] }).messages };
+  const createdAt = new Date().toISOString();
+  return { ...(answer.alternatives?.length ? addWordings(c, answer.alternatives) : {}), messages: commentSchema.parse({ ...c, messages: [...c.messages,
+    { role: 'assistant', text: answer.reply, createdAt, proposalOriginal: c.original, ...(answer.replacement === null ? {} : { proposal: { replacement: answer.replacement, packages: answer.packages } }) },
+    ...(answer.alternatives ?? []).map(a => ({ role: 'assistant', text: a.label + (a.reason ? ' — ' + a.reason : ''), createdAt, proposalOriginal: c.original, proposal: { replacement: a.replacement, packages: a.packages } }))
+  ] }).messages };
 }
 export function visibleCommentId(comments: readonly Comment[], id: string | null, includeHistory: boolean, laterOnly = false): string | null {
   const visible = comments.filter(c => commentVisible(c, includeHistory, laterOnly));

@@ -2,7 +2,7 @@
 
 A local desktop editor for LaTeX source, compiled PDF reading, and Codex-assisted review. It uses Electron, React, CodeMirror, and PDF.js.
 
-[Watch the 50-second Changes PDF demonstration](demo/README.md).
+[Watch the quick overview or the 50-second Changes PDF demonstration](demo/README.md).
 
 **Version 1.3.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
 
@@ -21,7 +21,7 @@ These Markdown guides can be read locally without an account or internet connect
 
 Open a `.tex` or `.txt` file, review a selection or document, discuss comments, and inspect proposed replacements before applying them. Text and LaTeX fragments open with a live text diff; complete LaTeX papers can show a compiled PDF. **Preview** displays a tentative change without accepting it. **Changes PDF** uses GPT-6 Sol when requested to arrange revisions as struck-through/underlined markup or a clean paper with change markers and expandable explanations. The editor can also compile before acceptance, keep the result open for inspection, preserve the last successful PDF after a failed build, compare saved versions, and export source recovery. Discussion replies show their proposed source changes beside the explanation. The **Codex Side Chat** drawer answers editor and paper questions with optional screenshots and inspectable context. Scroll continuously through the PDF or search its text. You can also convert outside feedback into comments and attach reference files, folders or large pasted text. Paper instructions and minimal-edit preferences are shared across reviews and discussions. **Classic view** offers a cream writing surface with bottom suggestions; **Files** gathers saved state, context and PDF export.
 
-[Watch the one-minute demonstration](demo/modern-editor-twitter-short.mp4) · [Full demonstration, download options and credits](demo/README.md).
+[Watch the 55-second overview](demo/2026-09-27/modern-editor-overview-55s.mp4) · [Three-minute walkthrough, downloads and credits](demo/README.md).
 
 ## Install and run on Mac
 
@@ -53,7 +53,7 @@ The editor stores document recovery, reviews, paper settings, and saved source v
 
 [Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md) · [Changelog](CHANGELOG.md).
 
-Apart from the demonstration MP4s, the repository contains text source. `scripts/build.mjs` bundles the application; `src/main` handles local files, compilation, and Codex; `src/renderer` implements the interface; `src/shared` defines contracts and pure review logic. The bundled Scientific Word support file retains its original redistribution notice; see [its provenance](resources/tex-support/README.md).
+Apart from the demonstration videos and posters, the repository contains text source. `scripts/build.mjs` bundles the application; `src/main` handles local files, compilation, and Codex; `src/renderer` implements the interface; `src/shared` defines contracts and pure review logic. The bundled Scientific Word support file retains its original redistribution notice; see [its provenance](resources/tex-support/README.md).
 
 The project source and original documentation use the [MIT license](LICENSE). We acknowledge [Kevin Bryan's original ModernEditor (July 2025)](https://github.com/kevincure/ModernEditor) and the subsequent [Modern-Editor-w-Import](https://github.com/slauerma/Modern-Editor-w-Import) browser port as earlier work in this editor's history. See [third-party notices and the preserved predecessor credit](THIRD_PARTY_NOTICES.md).
 

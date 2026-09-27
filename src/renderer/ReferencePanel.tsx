@@ -10,6 +10,7 @@ export function ReferencePanel({ projectId, disabled, onState, showSources, conv
   const [inspected, setInspected] = useState<(PastedContext & { id: string }) | null>(null), [copied, setCopied] = useState(false);
   const bytes = new TextEncoder().encode(text).length;
   const mounted = useRef(true), working = useRef(false), changed = useRef(onState); changed.current = onState;
+  const pasteRevision = useRef(0);
   function apply(next: ReferenceState) { if (mounted.current) { setState(next); changed.current(next); } }
   useEffect(() => {
     mounted.current = true;
@@ -27,9 +28,12 @@ export function ReferencePanel({ projectId, disabled, onState, showSources, conv
     await act(async () => { const value = await window.editor.inspectContext(projectId, id); if (mounted.current) { setInspected({ ...value, id }); setCopied(false); } return null; });
   }
   async function savePaste() {
+    const revision = pasteRevision.current;
     await act(async () => {
       const next = await window.editor.pasteContext(projectId, { name, text });
-      if (mounted.current) { setName(''); setText(''); setPasting(false); }
+      // The saved snapshot may finish after the author has started another
+      // paste. Only clear the draft that this request actually saved.
+      if (mounted.current && pasteRevision.current === revision) { setName(''); setText(''); setPasting(false); }
       return next;
     });
   }
@@ -37,8 +41,8 @@ export function ReferencePanel({ projectId, disabled, onState, showSources, conv
     <p>Attach once for this paper. When you ask, Codex can find and read relevant material here. Read-only excerpts are sent to your configured Codex service; the draft in the editor remains authoritative.</p>
     <div className="attachment-actions"><button disabled={disabled || busy} onClick={() => setPasting(true)}>Paste context…</button><button disabled={disabled || busy} onClick={() => void act(() => window.editor.addReferences(projectId, true))}>Add reference folder…</button><button disabled={disabled || busy} onClick={() => void act(() => window.editor.addReferences(projectId, false))}>Add reference files…</button><button onClick={showSources}>Sources used…</button></div>
     {pasting && <section className="pasted-context" aria-label="Paste context">
-      <label>Name<input aria-label="Context name" maxLength={200} value={name} onChange={e => setName(e.target.value)} placeholder="Background notes, referee report…" /></label>
-      <label>Text<textarea aria-label="Pasted context text" value={text} onChange={e => setText(e.target.value)} onPaste={e => {
+      <label>Name<input aria-label="Context name" maxLength={200} value={name} onChange={e => { pasteRevision.current++; setName(e.target.value); }} placeholder="Background notes, referee report…" /></label>
+      <label>Text<textarea aria-label="Pasted context text" value={text} onChange={e => { pasteRevision.current++; setText(e.target.value); }} onPaste={e => {
         // Insert a large clipboard document in one update. Native editable-text
         // insertion can block Chromium for many thousands of lines. Keep a
         // fresh paste verbatim, including its original line endings.
@@ -47,7 +51,7 @@ export function ReferencePanel({ projectId, disabled, onState, showSources, conv
         e.preventDefault();
         const next = field.value.slice(0, field.selectionStart) + pasted + field.value.slice(field.selectionEnd);
         const caret = field.selectionStart + pasted.replace(/\r\n?/g, '\n').length;
-        setText(next);
+        pasteRevision.current++; setText(next);
         requestAnimationFrame(() => { if (field.isConnected) field.setSelectionRange(caret, caret); });
       }} spellCheck={false} placeholder="Paste plain text or Markdown here" /></label>
       <p>{bytes.toLocaleString()} / {PASTED_CONTEXT_BYTES.toLocaleString()} bytes · Saved verbatim on this computer. Saving sends nothing to Codex. Enabled context is available when you ask; it is reference material, not standing instructions.</p>

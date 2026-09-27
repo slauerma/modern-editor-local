@@ -2,6 +2,9 @@
 
 ## 1.3.0 — Writing workflow and outside feedback
 
+- Add one-click Quick alternative with Sol Low, and import/save multiple wordings on one comment with per-option drafts, reasons, packages and Undo. Reviews with choices use version 2; older review files remain supported.
+- Expose a paper-specific automatic-arrival switch while reviewing; keep rejected suggestions in History, include rejection context in later reviews and suppress exact repeated incoming proposals.
+
 - Save large named pasted context locally, enable it per paper, and inspect, copy, rename, disable or remove it later.
 - Reuse original wording in a proposal; Accept & compile stays for PDF inspection until Next.
 - Add Classic view with a cream writing surface, left controls and bottom suggestions, preserving the live editor and Undo.
@@ -9,6 +12,15 @@
 - Combine PDF controls in one toolbar; expose exact PDF export and Files & history.
 - Convert saved context or pasted numbered reviews into resumable comment batches, preserving original item numbers and completed results after interruption.
 - Add completed review comments automatically without moving the current selection or interrupting Undo; keep manual inspection available.
+- Offer Quick explanation, Three alternatives and Think again in comment discussions, with optional private interaction and operation timing.
+- Display the local Changes PDF before Sol adds explanations; reuse identical verified PDFs without reloading and show compact stage/timing feedback.
+- Use labelled Before/After paragraphs for dense ordinary prose, count source notes separately, and keep the PDF reader stable when returning from a text-only comparison.
+- Preserve the displayed Changes PDF when clearing older builds, and keep partially completed debug-log writes inspectable and removable.
+- Preserve newer pasted drafts during a pending save and reconcile partial context writes without leaving an undisclosed saved copy.
+- Retain recorded reasons for small repeated-word corrections and deletions at paragraph boundaries; protect accent and line-break arguments from unsafe revision markup.
+- Verify cached PDF contents before viewing, reuse and export; reuse source plans and cancel obsolete comparison work without cancelling a newer operation.
+
+- Preserve newly edited alternative drafts through selection Undo/Redo, protect saved feedback batches after storage errors, and discard delayed PDF navigation when the viewer closes.
 
 ## 1.2.1 — PDF viewing and comparison reliability
 

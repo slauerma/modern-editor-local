@@ -58,18 +58,23 @@ export class ReferenceService {
       return { roots, notices: roots.some(r => !r.available) ? ['A saved reference is unavailable or its location changed. Reattach it when needed; paper Save is unaffected.'] : [] };
     } catch (error) { return { roots: [], notices: [(error as Error).message] }; }
   }
-  private async update(id: string, change: (roots: Root[]) => Promise<Root[]> | Root[]) {
+  private async update(id: string, change: (roots: Root[]) => Promise<Root[]> | Root[], recover?: (error: unknown) => Promise<string>) {
     const paper = this.paper(id), previous = this.locks.get(paper) ?? Promise.resolve();
     // Revoke pending reads immediately, including operations waiting behind a write.
     this.revisions.set(paper, (this.revisions.get(paper) ?? 0) + 1);
-    await Promise.all([...this.sessions].filter(s => s.paper === paper).map(s => s.cancel()));
+    let notice = '';
+    // Reserve the queue before yielding, so simultaneous writes cannot both
+    // load and overwrite the same registry revision.
     const task = previous.catch(() => {}).then(async () => {
-      const saved = await this.load(paper), next = storeSchema.parse({ ...saved, roots: await change(saved.roots) });
-      await writeJSON(await this.filename(paper), next, 200000);
+      await Promise.all([...this.sessions].filter(s => s.paper === paper).map(s => s.cancel()));
+      try {
+        const saved = await this.load(paper), next = storeSchema.parse({ ...saved, roots: await change(saved.roots) });
+        await writeJSON(await this.filename(paper), next, 200000);
+      } catch (error) { if (!recover) throw error; notice = await recover(error); }
     });
     this.locks.set(paper, task);
     try { await task; } finally { if (this.locks.get(paper) === task) this.locks.delete(paper); }
-    return this.state(id);
+    const state = await this.state(id); if (notice) state.notices.push(notice); return state;
   }
   // Paths MUST come from the native picker, never from renderer/model arguments.
   async add(id: string, paths: string[]) {
@@ -102,6 +107,26 @@ export class ReferenceService {
       await atomicWrite(file, bytes);
       const stat = await fs.lstat(file);
       return [...roots, { id: rootId, name: input.name, path: file, kind: 'paste', enabled: true, dev: stat.dev, ino: stat.ino, bytes: bytes.length, createdAt: new Date().toISOString(), hash: digest(bytes) }];
+    }, async error => {
+      // atomicWrite can fail after rename (for example during directory sync).
+      // Reconcile while this write still owns the queue; never remove a payload
+      // that the registry already committed, or an unrelated/changed file.
+      let roots: Root[];
+      try { roots = (await this.load(paper)).roots; }
+      catch { throw new Error(`Context storage could not be checked. A local copy may remain at ${file}. Your draft is kept.`, { cause: error }); }
+      const registered = roots.find(root => root.id === rootId);
+      try {
+        const stored = await readRegularFile(file, PASTED_CONTEXT_BYTES);
+        if (digest(stored) !== digest(bytes)) throw new Error('The local copy changed.');
+        if (registered) {
+          if (registered.path !== file || registered.hash !== digest(bytes)) throw new Error('The registry changed.');
+          return 'Context is saved and attached, but storage reported an error after writing. Inspect the saved copy before closing the editor.';
+        }
+        await fs.unlink(file);
+      } catch (cleanup) {
+        if ((cleanup as NodeJS.ErrnoException).code !== 'ENOENT' || registered) throw new Error(`Context could not be saved or cleaned up completely. Inspect the local copy at ${file}. Your draft is kept.`, { cause: error });
+      }
+      throw error;
     });
   }
   async inspectPaste(id: string, rootId: string) {

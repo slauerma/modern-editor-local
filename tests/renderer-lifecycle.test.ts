@@ -24,7 +24,7 @@ import * as preambleTools from '../src/shared/fragment-preamble.ts';
 // real CodeMirror/Zod, replacing only DOM painting and the narrow IPC boundary.
 const source = await fs.readFile('src/renderer/App.tsx', 'utf8');
 const syntax = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['previewSuggestion', 'leavePreview', 'input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf'];
+const names = ['previewSuggestion', 'leavePreview', 'input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf', 'clearBuilds'];
 const extracted: string[] = []; let filter = '', bindings = '';
 function visit(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? '')) extracted.push(node.getText(syntax));
@@ -59,9 +59,10 @@ function fixture(text = quote) {
     finishClose: async () => { states.events.push('closed'); },
   };
   const scope: any = {
+    traceInteraction: (action: string, fields: unknown) => { (states.interactions ??= []).push({ action, fields }); },
     defaultEditPreferences, EditorState, Transaction, isolateHistory, undo, redo, documentMode, documentModeNotice, attachmentPromptContext, defaultKeymap, historyKeymap, commentSchema, crypto, defaultWorkspace, workspaceSchema, ...reviewTools, ...stateTools, ...preambleTools, ...contextTools, ...acceptanceTools, ...previewTools,
     document: { body: {}, activeElement: {} }, requestAnimationFrame: (callback: () => void) => { states.frame = callback; }, setCompareOpen: () => {},
-    lastSource: { current: null }, lastReviewTop: { current: 0 }, revealPdf: () => {}, revealSource: () => {}, workspaceValues: { current: defaultWorkspace() }, restoredSource: { current: null }, laterRef: { current: false }, discussionLock: { current: false }, followPending: { current: null }, followTasks: { current: new LatestTask() },
+    lastSource: { current: null }, lastReviewTop: { current: 0 }, revealPdf: () => {}, revealSource: () => {}, workspaceValues: { current: defaultWorkspace() }, restoredSource: { current: null }, laterRef: { current: false }, discussionLock: { current: false }, autoAddRef: { current: true }, followPending: { current: null }, followTasks: { current: new LatestTask() },
     sourcePosition: () => defaultWorkspace().source,
     previewJob: { current: null }, previewCache: { current: null }, representation: 'pdf', pdfPosition: {page:1,zoom:1.25}, docMode: 'latex', build: null, candidateBuild: null, preambleRun: { current: null }, buildRun: { current: null }, sectionRun: { current: null }, comparisonPosition: { current: {} },
     warningAcceptance: null, laterOnly: false,
@@ -73,7 +74,7 @@ function fixture(text = quote) {
     choose: (v: string) => { scope.activeRef.current = v; }, move: () => {},
   };
   for (const setter of ['Preview', 'PreviewPosition', 'DocMode', 'Representation', 'SessionText', 'ComparisonBase', 'Layout', 'CompactTab', 'DisplayName', 'ChangesOpen', 'CommentsHidden', 'ReviewBusy', 'ReviewOpen', 'CandidatePosition', 'DiscussionBusy', 'LaterOnly', 'PaneSizes', 'ToolbarCollapsed', 'FollowComments', 'Busy', 'AiBusy', 'PreambleBusy', 'LastAttempt', 'Build', 'PdfText', 'DependencyStale', 'PdfOpen', 'PdfJump', 'PdfNavigation', 'PdfLocating', 'ViewCandidate', 'CandidateBuild', 'ShowHistory', 'NotesOpen', 'Project', 'CompareOpen', 'Baseline', 'Effort', 'FastMode', 'Engine', 'Text', 'SavedText', 'PdfPosition', 'FindOpen', 'FindNotice', 'ActiveId', 'PaperInstructions', 'SavedInstructions', 'SectionProgress', 'ContextOpen', 'OverviewOpen', 'InboxOpen', 'ContextText']) scope['set' + setter] = (value: any) => { states[setter] = value; };
-  for (const setter of ['BuildRetry', 'ReferenceState', 'SourcesOpen', 'FilesOpen', 'ChangesExport', 'Inspection', 'GuidanceOpen', 'SavedPreferences', 'LocalEditsOnly', 'PreserveVoice', 'Classic', 'ClassicSurface', 'ClassicDetails']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  for (const setter of ['AutoAddComments', 'BuildRetry', 'ReferenceState', 'SourcesOpen', 'FilesOpen', 'ChangesExport', 'Inspection', 'GuidanceOpen', 'SavedPreferences', 'LocalEditsOnly', 'PreserveVoice', 'Classic', 'ClassicSurface', 'ClassicDetails']) scope['set' + setter] = (value: any) => { states[setter] = value; };
   states.changeEvents = { accepted: 0, saved: 0 };
   scope.setChangeEvents = (value: any) => { states.changeEvents = typeof value === 'function' ? value(states.changeEvents) : value; };
   scope.setWarningAcceptance = (value: any) => { states.WarningAcceptance = value; scope.warningAcceptance = value; };
@@ -157,6 +158,20 @@ test('ordinary Compile validates its completed snapshot and exposes a stale PDF 
   await f.scope.compile();
   assert.equal(f.states.validations.length, 1); assert.equal(f.states.Build.id, 'build-1'); assert.equal(f.states.DependencyStale, true);
   assert.match(f.states.status, /inputs changed/); assert.equal(f.editor.state.doc.toString(), quote);
+});
+
+test('clearing old builds protects the displayed Changes PDF as well as draft and proposal PDFs', async () => {
+  const f = fixture(), before = f.editor.state;
+  f.scope.build = { id: 'draft' }; f.scope.candidateBuild = { id: 'candidate' };
+  f.scope.preview = { build: { id: 'proposal' } };
+  f.scope.changesExport = { id: 'older-cached-comparison', label: 'Revision markup' };
+  const requests: string[][] = [];
+  f.api.clearOldBuilds = async (ids: string[]) => { requests.push(ids); return { removed: 2 }; };
+  await f.scope.clearBuilds();
+  assert.deepEqual(new Set(requests[0]), new Set(['draft', 'candidate', 'proposal', 'older-cached-comparison']));
+  assert.equal(f.editor.state, before); assert.equal(f.gate.locked, false);
+  f.scope.build = f.scope.candidateBuild = f.scope.preview = f.scope.changesExport = null;
+  await f.scope.clearBuilds(); assert.deepEqual(requests[1], []);
 });
 
 test('dependency preparation never applies a checked suggestion; stale help and cancelled previews cannot continue', async () => {

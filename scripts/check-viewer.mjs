@@ -189,6 +189,22 @@ try {
   await page.waitForTimeout(400);
   receipt.checks.push('Bottom preview bar / expanded details preserve PDF bounds, scroll and zoom at wide and narrow widths');
   await snapshot('03-pdf-proposal');
+  // A proposal-only search must not expose stale hits after Return to draft.
+  await page.locator('#pdf-surface > .pdf-reader .pdf-scroll').click({position:{x:15,y:15}}); await nativeFind();
+  const proposalSearch=page.locator('#pdf-surface > .pdf-reader .pdf-search input');
+  await proposalSearch.fill('weakly increasing');
+  await poll(async()=>await page.locator('#pdf-surface > .pdf-reader .pdf-find-hit.active').count()>0,'proposal-only search hit');
+  await proposalSearch.fill('weakly increasing '); // leave a debounced search pending across the switch
+  await button('Return to draft').click();
+  await page.getByLabel('PDF matches the current source',{exact:true}).waitFor();
+  await poll(async()=>(await page.locator('#pdf-surface > .pdf-reader .pdf-search').innerText()).includes('No matches'),'draft has no proposal-only match');
+  await page.waitForTimeout(350);
+  assert.equal(await page.locator('#pdf-surface > .pdf-reader .pdf-find-hit').count(),0,'Old search hits cannot leak into the draft PDF');
+  assert.equal(await page.locator('#pdf-surface > .viewer-controls .pdf-controls').count(),1,'Find transition retains the hosted toolbar');
+  assert.equal((await read()).text,before.text);assert.equal((await read()).undo,before.undo);
+  await proposalSearch.press('Escape');
+  await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor();
+  receipt.checks.push('Active proposal Find and pending query survive Return to draft without stale matches, source/Undo changes or lost hosted controls');
   await button('Return to draft').click(); const cachedAttempts=(await probe()).builds; await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor(); assert.equal((await probe()).builds,cachedAttempts); await button('Return to draft').click(); assert.equal(await page.locator('#pdf-surface').getByLabel('PDF zoom',{exact:true}).inputValue(),'1.25');
   await page.getByLabel('PDF matches the current source', {exact:true}).waitFor();
   receipt.checks.push('Real candidate PDF / edited wording / own highlight / unchanged source, decisions and Undo / ordinary PDF and zoom restored');
