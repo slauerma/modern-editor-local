@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { ProjectFiles } from '../shared/project-files.ts';
 import { useDialogFocus } from './use-dialog-focus.ts';
 
-export function FilesPanel({ projectId, close, history, context, savePdf, compilePdf, pdfLabel }: {
-  projectId: string; close(): void; history(): void; context(): void; savePdf?: () => void; compilePdf?: () => void; pdfLabel: string;
+export function FilesPanel({ projectId, close, history, context, savePdf, compilePdf, pdfLabel, pdfExports }: {
+  projectId: string; close(): void; history(): void; context(): void; savePdf(id: string): void; compilePdf?: () => void; pdfLabel: string;
+  pdfExports: { label: string; id?: string }[];
 }) {
   const [files, setFiles] = useState<ProjectFiles>({ items: [], notices: [] }), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const live = useRef(true), dialog = useRef<HTMLDivElement>(null); useDialogFocus(dialog, close);
@@ -21,7 +22,7 @@ export function FilesPanel({ projectId, close, history, context, savePdf, compil
   return <div className="workspace-panel-backdrop"><div ref={dialog} tabIndex={-1} className="workspace-panel files-panel" role="dialog" aria-modal="true" aria-label="Files & history">
     <div className="recovery-heading"><h2>Files &amp; history</h2><button aria-label="Close files" onClick={close}>×</button></div>
     <div className="files-actions"><button onClick={history}>Saved versions…</button><button onClick={context}>Context…</button><button disabled={loading} onClick={() => void refresh()}>Refresh</button></div>
-    <div className="files-pdf"><strong>PDF export</strong><p>{pdfLabel}. Save PDF exports those exact PDF bytes; it does not save or change your source.</p><button disabled={!savePdf} onClick={savePdf}>Save displayed PDF…</button>{compilePdf && <button onClick={compilePdf}>Compile current draft &amp; save PDF…</button>}</div>
+    <div className="files-pdf"><strong>PDF export</strong><p>{pdfLabel}. Export saves the exact PDF snapshot; it does not save or change your source.</p>{pdfExports.map(option => <button key={option.label} disabled={!option.id} onClick={() => option.id && savePdf(option.id)}>{option.label}</button>)}{compilePdf && <button onClick={compilePdf}>Compile current draft &amp; save PDF…</button>}</div>
     {loading && <p role="status">Reading file locations…</p>}{error && <p className="error" role="alert">{error}</p>}
     {files.notices.map((n,i) => <p key={i}>{n}</p>)}
     {(['Paper','Saved state','Context & chat','PDFs'] as const).map(group => <section key={group}><h3>{group}</h3>{files.items.filter(f => f.group === group).map(f => <div className="file-inventory-item" key={f.id}>

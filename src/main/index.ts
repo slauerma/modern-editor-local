@@ -232,7 +232,7 @@ handle('review:import', async input => {
   const result = await dialog.showOpenDialog(window!, { title: 'Import comments from JSON', properties: ['openFile'], filters: [{ name: 'JSON review', extensions: ['json'] }] });
   return result.canceled ? null : projects.import(result.filePaths[0], parsed.projectId, parsed.text);
 });
-const changesInput = z.object({ projectId: z.string(), before: z.string().max(2000000), after: z.string().max(2000000), name: z.string().max(200), engine: engineSchema, presentation: z.enum(['markup', 'clean']).optional(), proposalId: z.string().max(200).optional(), layouts: z.record(z.enum(['inline', 'paired'])).refine(v => Object.keys(v).length <= 100).optional(), arrangementId: z.string().uuid().optional(), selectedPaths: buildInputPathsSchema.optional() }).strict();
+const changesInput = z.object({ projectId: z.string(), before: z.string().max(2000000), after: z.string().max(2000000), name: z.string().max(200), engine: engineSchema, presentation: z.enum(['markup', 'clean']).optional(), proposalId: z.string().max(200).optional(), interactive: z.boolean().optional(), layouts: z.record(z.enum(['inline', 'paired'])).refine(v => Object.keys(v).length <= 100).optional(), arrangementId: z.string().uuid().optional(), selectedPaths: buildInputPathsSchema.optional() }).strict();
 handle('build:changes', input => changesPdf.build(changesInput.parse(input)));
 handle('build:changes-presentation', input => { const p = z.object({ projectId: z.string(), artifactId: z.string().uuid(), presentation: z.enum(['markup', 'clean']) }).strict().parse(input); return changesPdf.present(p.projectId, p.artifactId, p.presentation); });
 handle('codex:changes-plan', input => changesPdf.smartPlan(changesInput.parse(input), message => window?.webContents.send('codex:progress', message)));
@@ -271,6 +271,19 @@ handle('build:export-pdf', async raw => {
   return { path: result.filePath, purpose: snapshot.purpose, sourceHash: snapshot.sourceHash };
 });
 handle('build:locate', input => compiler.locatePdf(pdfRequestSchema.parse(input)));
+handle('build:export-changes-source', async raw => {
+  const p = z.object({ projectId: z.string(), artifactId: z.string().uuid() }).strict().parse(raw);
+  const snapshot = changesPdf.exportSource(p.projectId, p.artifactId);
+  const name = path.basename(snapshot.name, path.extname(snapshot.name)) + '-changes.tex';
+  const result = await dialog.showSaveDialog(window!, { title: 'Save comparison LaTeX to a new file', defaultPath: name, filters: [{ name: 'LaTeX source', extensions: ['tex'] }] });
+  if (result.canceled || !result.filePath) return null;
+  projects.get(p.projectId);
+  if (path.extname(result.filePath).toLowerCase() !== '.tex') throw new Error('Choose a filename ending in .tex.');
+  try { await writeSourceCopy(result.filePath, snapshot.text); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error('That file already exists. Choose a new filename; export never overwrites an existing file.'); throw error; }
+  shell.showItemInFolder(result.filePath);
+  return result.filePath;
+});
 handle('build:cancel', () => { buildHelp.cancel(); changesPdf.cancel(); compiler.cancel(); });
 handle('build:clear-old', ids => compiler.clearOldBuilds(z.array(z.string().uuid()).max(20).parse(ids)));
 handle('attachments:list', id => { const projectId = z.string().parse(id); projects.get(projectId); return attachments.inventory(projectId); });

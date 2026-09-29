@@ -34,6 +34,7 @@
 !/scripts/check-codex-isolation.mjs
 !/scripts/check-writing-conveniences.mjs
 !/scripts/check-contextual-comments.mjs
+!/scripts/check-pdf-review.mjs
 !/scripts/check-feedback-batches.mjs
 !/scripts/check-saved-alternatives.mjs
 !/scripts/check-viewer.mjs

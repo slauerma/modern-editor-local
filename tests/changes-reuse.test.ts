@@ -8,7 +8,7 @@ const before = doc('The argument are correct.');
 const input: ChangesInput = { projectId: 'one', before, after: before.replace('are', 'is'), name: 'Start', engine: 'pdflatex' };
 function fixture() {
   let calls = 0, valid = true, pdfAvailable = true, inspect = async () => ({ status: valid ? 'valid' as const : 'changed' as const });
-  const projects = { get() {}, changeJournal: { explain(_: string, __: string, p: unknown) { return p; } } };
+  const projects = { get() { return { name: 'main.tex' }; }, changeJournal: { explain(_: string, __: string, p: unknown) { return p; } } };
   const compiler = {
     latexmk: '/test/latexmk',
     async compile() { return { id: 'build-' + ++calls, purpose: 'comparison', success: true, dependenciesVerified: true }; },
@@ -20,6 +20,24 @@ function fixture() {
   return { service, compiler, projects, count: () => calls, invalidate: () => { valid = false; }, losePdf: () => { pdfAvailable = false; },
     holdValidation() { let release!: () => void; inspect = () => new Promise(resolve => { release = () => resolve({ status: 'valid' }); }); return () => release(); } };
 }
+
+test('comparison export returns the exact displayed source in either style without compiling or using a new plan', async () => {
+  const f = fixture(), markup = await f.service.build(input);
+  const expected = renderComparison(input.before, input.after, comparisonPlan(input.before, input.after), input.name);
+  assert.deepEqual(f.service.exportSource('one', markup.id), { name: 'main.tex', text: expected.text });
+  const clean = await f.service.present('one', markup.id, 'clean');
+  assert.equal(f.service.exportSource('one', clean.id).text, renderComparison(input.before, input.after, comparisonPlan(input.before, input.after), input.name, false, 'clean').text);
+  const calls = f.count();
+  f.invalidate();
+  assert.equal(f.service.exportSource('one', markup.id).text, expected.text, 'Older snapshots remain exact after resources change');
+  assert.equal(f.count(), calls, 'Export does not compile');
+  assert.throws(() => f.service.exportSource('two', markup.id), /no longer available/);
+  assert.throws(() => f.service.exportSource('one', 'missing'), /no longer available/);
+  const none = await f.service.build({ ...input, after: input.before });
+  assert.throws(() => f.service.exportSource('one', none.id), /no longer available/);
+  f.projects.get = () => { throw Error('Paper closed'); };
+  assert.throws(() => f.service.exportSource('one', markup.id), /Paper closed/);
+});
 
 test('local PDF is reused after Sol adds only explanations; new reasons never borrow a visual verdict', async () => {
   const f = fixture(), local = await f.service.build(input), plan = await f.service.smartPlan(input, () => {});

@@ -1,7 +1,7 @@
 {
   "name": "modern-codex-editor",
   "productName": "Modern Codex Editor",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "license": "MIT",
   "type": "module",

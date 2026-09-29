@@ -8,7 +8,11 @@ Windows is currently unsupported. The application and its save/compile tests nee
 
 ## What works without an account or internet?
 
-After installation, editing, prepared sample comments, text/version comparison, proposal PDF compilation, recovery, Help, PDF reading/search, local reference previews, and compilation with installed TeX work locally. AI review, discussion, Codex Side Chat, Changes PDF arrangement, preamble generation, and conversion of outside feedback require your configured Codex service. The sample has prepared comments, but no prepared discussion replies.
+After installation, editing, prepared sample comments, text/version comparison, proposal PDF compilation, PDF review mode, recovery, Help, PDF reading/search, local reference previews, and compilation with installed TeX work locally. Changes PDF also offers **Build locally without Sol**. AI review, discussion, Codex Side Chat, Sol arrangement or visual checks, preamble generation, and conversion of outside feedback require your configured Codex service. The sample has prepared comments, but no prepared discussion replies.
+
+## Does PDF mode accept the entire proposal when it opens?
+
+No. **View → PDF mode** previews the whole proposed revision. Suggestions remain tentative until you accept them; rejected suggestions are retained in History. Save writes only the working draft, while PDF export writes the displayed snapshot. Faint gray identifies tentative inline edits in the viewer. Those live decision cues are not included in exports. See [PDF review mode](USER_GUIDE.md#pdf-review-mode).
 
 ## Build reports a missing Electron runtime or licence file
 
@@ -130,9 +134,13 @@ Choose **Details → Accept all applicable (N)** in the Comments pane. The count
 
 **Reject** or **Shift+R** moves the current comment into History without changing the source; Undo restores it. Later reviews include a bounded summary of rejected suggestions, and automatic review/feedback integration suppresses exact repeated proposals. Different advice on the same passage is allowed; paraphrased repeats are not guaranteed to be caught. Reopen a rejected comment in History to reconsider it. **Skip** or **Shift+S** advances while leaving the comment pending. **Resolve** separately records that you have addressed an author question. **Accept** or **Shift+A** applies without compiling and advances. **Accept & compile** checks compilation first. Hover over the buttons for these key hints; the shortcuts work from comment controls outside typing fields. **Option+Backspace** still rejects a suggestion or resolves an author question.
 
-## How do I dismiss pending comments together?
+## How do I reject all remaining comments together?
 
-In the Comments pane, choose **Details → Dismiss pending**. This closes the current pending batch without changing the source. Later comments, existing history and discussions are retained. One Undo restores the batch; comments arriving afterward retain their own status through Undo and Redo. You can also reopen individual dismissed comments from History.
+In the Comments pane, choose **Details → Reject all remaining (N)**. This rejects the current pending batch without changing the source, even when passages cannot be matched. Rejected comments stay in **History** with their discussions; Later comments and earlier history are retained. One **Undo** restores the batch; comments arriving afterward retain their own status through Undo and Redo. You can also reopen individual rejected comments from History. **Accept all applicable (0)** is disabled when no suggestions can be applied safely; rejection still works.
+
+## Can I save the LaTeX diff?
+
+Yes. Open **⋯** in Changes PDF or PDF mode and choose **Save Changes PDF…**. It saves the displayed comparison, including an older snapshot, without another compilation or Sol request. **Save comparison LaTeX…** saves its generated `.tex` source to a new file; it never overwrites the manuscript. Figures, bibliography and other project resources are not copied. The exported PDF keeps the printed revision markup, but interactive comment buttons, explanations and tentative gray cues stay in the editor.
 
 ## A question refers to wording I have rewritten
 
@@ -213,6 +221,6 @@ If Save reports that version history needs attention, the source was saved but h
 
 ## How should I report a problem?
 
-Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **1.4.0**.
+Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **1.5.0**.
 
 Add the exact action and error, whether the synthetic sample reproduces it, your Node version (`node --version`), and the editor commit if known. A small synthetic `.tex` example is most useful. Inspect logs, screenshots, and `.modern-editor` records before sharing: they may contain source, discussion, or local paths. Do not include authentication tokens or account configuration. The [testing guide](../TESTING.md) separates offline checks from optional live Codex requests.

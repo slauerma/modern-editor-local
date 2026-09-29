@@ -4,7 +4,7 @@ A local desktop editor for LaTeX source, compiled PDF reading, and Codex-assiste
 
 [Watch the quick overview or the 50-second Changes PDF demonstration](demo/README.md).
 
-**Version 1.4.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
+**Version 1.5.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
 
 This is a personal project, kept lean for individual use. **macOS is the currently validated platform. Windows is not yet supported.** The repository contains development source; there is no packaged application or installer.
 
@@ -12,6 +12,7 @@ This is a personal project, kept lean for individual use. **macOS is the current
 
 - [Install and run on a Mac](docs/SETUP.md): repository access, prerequisites, executable paths, first launch, and safe updates.
 - [User guide and shortcuts](docs/USER_GUIDE.md): review a paper, accept or discuss suggestions, follow comments in the PDF, and compare versions.
+- [PDF review mode](docs/USER_GUIDE.md#pdf-review-mode): inspect the whole proposed revision in two PDFs, with a popup comment inspector and section decisions.
 - [Import comments from Astra Pro or another reviewer](docs/USER_GUIDE.md#import-prepared-comments): prepare JSON, load it locally, and review each suggestion. Includes a [ready-to-use prompt](docs/USER_GUIDE.md#generate-comment-json).
 - [FAQ and troubleshooting](docs/FAQ.md): saved files, recovery, Codex connection problems, compilation, and current limitations.
 - [Privacy and local data](PRIVACY.md) · [Developer tests](TESTING.md).
@@ -20,9 +21,17 @@ These Markdown guides can be read locally without an account or internet connect
 
 ## Overview
 
-Open a `.tex` or `.txt` file, review a selection or document, discuss comments, and inspect proposed replacements before applying them. Text and LaTeX fragments open with a live text diff; complete LaTeX papers can show a compiled PDF. **Preview** displays a tentative change without accepting it. **Changes PDF** uses GPT-6 Sol when requested to arrange revisions as struck-through/underlined markup or a clean paper with change markers and expandable explanations. The editor can also compile before acceptance, keep the result open for inspection, preserve the last successful PDF after a failed build, compare saved versions, and export source recovery. Discussion replies show their proposed source changes beside the explanation. The **Codex Side Chat** drawer answers editor and paper questions with optional screenshots and inspectable context. Scroll continuously through the PDF or search its text. Prepared comment JSON can be imported directly without another model call. You can also convert unstructured outside feedback with Codex and attach reference files, folders or large pasted text. Paper instructions and minimal-edit preferences are shared across reviews and discussions. **View → Classic view** offers a cream writing surface with bottom suggestions; **Actions → Files & history…** gathers saved state, context and PDF export.
+Open a `.tex` or `.txt` file, import prepared comments or request a review, then inspect each suggestion before applying it. **Accept** changes the working draft; **Save** writes the source file. Previewing or exporting a proposal does not accept it.
 
-[Watch the 55-second overview](demo/2026-09-28/modern-editor-overview-55s.mp4) · [Three-minute walkthrough, downloads and credits](demo/README.md).
+- **Source and comments:** read a contextual inline diff, switch to clean wording, edit or discuss a suggestion, and choose among saved alternatives. Text fragments have a live text diff; complete LaTeX papers also have a compiled PDF.
+- **Changes PDF:** compare the draft with a fixed baseline using struck deletions and underlined additions, or a clean paper with change markers. The workspace comparison prepares a local PDF, then requests GPT-6 Sol explanations. A local-only option is available.
+- **PDF mode:** choose **View → PDF mode** to preview the whole proposed revision, with Changes on the left and Proposed or Original on the right. Click a change to inspect, edit, accept or reject it in a popup. Bulk acceptance checks compilation, including a batch of one. Routine preview updates are local; Sol refinement is optional.
+- **Context and guidance:** import [comment JSON](docs/USER_GUIDE.md#import-prepared-comments) directly, convert outside prose feedback with Codex, or attach references and large pasted text. Paper instructions and minimal-edit preferences are shared across reviews and discussions. Side Chat offers optional screenshots and inspectable context.
+- **Reading and recovery:** scroll or search PDFs, preserve the last successful PDF after a failed build, compare saved versions, and export source recovery. **View → Classic view** offers a cream writing surface with bottom suggestions. **Actions → Files & history…** gathers saved state, context and named PDF exports.
+
+PDF mode shares the workspace's source, comments, Save and Undo. Its Original snapshot lasts for the open paper session. Exports can contain tentative or removed text; live comment controls and tentative gray shading remain in the editor. See the [PDF mode guide](docs/USER_GUIDE.md#pdf-review-mode) for session behavior and limitations.
+
+[Watch the 55-second overview](demo/2026-09-28/modern-editor-overview-55s.mp4) · [Three-minute walkthrough, downloads and credits](demo/README.md). These recordings show the three-column workspace; the new two-PDF mode is described in the guide.
 
 ## Install and run on Mac
 

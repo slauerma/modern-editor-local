@@ -13,7 +13,7 @@ GlobalWorkerOptions.workerSrc = workerURL;
 
 export type PdfChangeTarget = { buildId: string; id: string; requestId: number };
 export type PdfPaneHandle = { find: () => void };
-type Props = { toolbarHost?: RefObject<HTMLDivElement>; compactControls?: boolean; onExport?: () => void; findHandle?: Ref<PdfPaneHandle>; bottomOverlay?: RefObject<HTMLElement>; bottomControls?: boolean; hideState?: boolean; onFind?: () => void; changeTarget?: PdfChangeTarget | null; hideClose?: boolean; hideFollow?: boolean; showChangeNotes?: boolean; changeIds?: string[]; onChangeNote?: (id: string) => void; build: Build | null; freshness: string; position: PdfPosition; visible?: boolean; followComments: boolean; onFollowChange: (value: boolean) => void; jump?: PdfJump | null; onPositionChange: (position: Partial<PdfPosition>) => void; onUserNavigate: () => void; onClose: () => void };
+type Props = { changeStates?: Record<string, string>; tentativeRegions?: string[]; onChangeRegion?: (id: string, index: number) => void; toolbarHost?: RefObject<HTMLDivElement>; compactControls?: boolean; onExport?: () => void; findHandle?: Ref<PdfPaneHandle>; bottomOverlay?: RefObject<HTMLElement>; bottomControls?: boolean; hideState?: boolean; onFind?: () => void; changeTarget?: PdfChangeTarget | null; hideClose?: boolean; hideFollow?: boolean; showChangeNotes?: boolean; changeIds?: string[]; onChangeNote?: (id: string) => void; build: Build | null; freshness: string; position: PdfPosition; visible?: boolean; followComments: boolean; onFollowChange: (value: boolean) => void; jump?: PdfJump | null; onPositionChange: (position: Partial<PdfPosition>) => void; onUserNavigate: () => void; onClose: () => void };
 type Loaded = { id: string; document: PDFDocumentProxy; sizes: PdfPageSize[] };
 const positionKey = (position: PdfPosition) => [position.page, position.zoom, position.scrollX ?? 0, position.scrollY ?? 0, !!position.flow].join(':');
 const noMatches: PdfSearchMatch[] = [];
@@ -51,9 +51,9 @@ function highlightText(layer: TextLayer, matches: PdfSearchMatch[], active: PdfS
   });
 }
 
-function RenderedPage({ pdf, layout, matches, active, onReady, changeIds, showChangeNotes = false, onChangeNote, activeNote }: { activeNote?: string; showChangeNotes?: boolean; changeIds?: string[]; onChangeNote?: (id: string) => void; pdf: PDFDocumentProxy; layout: PdfPageLayout; matches: PdfSearchMatch[]; active?: PdfSearchMatch; onReady: () => void }) {
+function RenderedPage({ changeStates, tentativeRegions, onChangeRegion, pdf, layout, matches, active, onReady, changeIds, showChangeNotes = false, onChangeNote, activeNote }: { changeStates?: Record<string, string>; tentativeRegions?: string[]; onChangeRegion?: (id: string, index: number) => void; activeNote?: string; showChangeNotes?: boolean; changeIds?: string[]; onChangeNote?: (id: string) => void; pdf: PDFDocumentProxy; layout: PdfPageLayout; matches: PdfSearchMatch[]; active?: PdfSearchMatch; onReady: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null), container = useRef<HTMLDivElement>(null), text = useRef<TextLayer | null>(null);
-  const [notes, setNotes] = useState<{ id: string; rect: number[] }[]>([]);
+  const [notes, setNotes] = useState<{ id: string; rect: number[]; region?: number }[]>([]);
   const noteMode = !!changeIds;
   const [ready, setReady] = useState(false), [error, setError] = useState('');
   useEffect(() => {
@@ -76,9 +76,9 @@ function RenderedPage({ pdf, layout, matches, active, onReady, changeIds, showCh
       if (noteMode) {
         const annotations = await page.getAnnotations({ intent: 'display' });
         if (!disposed) setNotes(annotations.flatMap(a => {
-          const match = /^https:\/\/modern-editor\.invalid\/changes\/(\d+)$/.exec(a.url ?? '');
+          const match = /^https:\/\/modern-editor\.invalid\/changes\/(\d+)(?:\/edit\/(\d+))?$/.exec(a.url ?? '');
           if (!match || !Array.isArray(a.rect)) return [];
-          return [{ id: 'change-' + match[1], rect: [...viewport.convertToViewportPoint(a.rect[0], a.rect[1]), ...viewport.convertToViewportPoint(a.rect[2], a.rect[3])] }];
+          return [{ id: 'change-' + match[1], region: match[2] === undefined ? undefined : Number(match[2]), rect: [...viewport.convertToViewportPoint(a.rect[0], a.rect[1]), ...viewport.convertToViewportPoint(a.rect[2], a.rect[3])] }];
         }));
       }
     }).catch(error => { if (!disposed && error?.name !== 'RenderingCancelledException') setError(String(error)); });
@@ -92,11 +92,12 @@ function RenderedPage({ pdf, layout, matches, active, onReady, changeIds, showCh
     {!ready && <span className="pdf-page-placeholder" role={error ? 'alert' : undefined}>{error || `Loading page ${layout.page}…`}</span>}
     <canvas ref={canvas} style={{ width: layout.width, height: layout.height, visibility: ready ? 'visible' : 'hidden' }} aria-label={`PDF page ${layout.page}${ready ? ', rendered' : ', loading'}`} />
     <div ref={container} className="textLayer" />
-    {notes.filter(n => changeIds?.includes(n.id)).map((n, i) => <button key={i} data-change-note={n.id} aria-hidden={!showChangeNotes} disabled={!showChangeNotes} className={"pdf-change-note" + (activeNote === n.id ? " selected" : "")} aria-label={'Explain change ' + n.id.replace('change-', '')} title="Show change explanation" style={{ visibility: showChangeNotes ? 'visible' : 'hidden', fontSize: Math.max(10, layout.scale * 8), left: Math.min(n.rect[0], n.rect[2]), top: Math.min(n.rect[1], n.rect[3]), width: Math.max(18, Math.abs(n.rect[2] - n.rect[0])), height: Math.max(18, Math.abs(n.rect[3] - n.rect[1])) }} onClick={() => onChangeNote?.(n.id)}>[{n.id.replace('change-', '')}]</button>)}
+    {notes.filter(n => n.region === undefined && changeIds?.includes(n.id)).map((n, i) => <button key={i} data-change-note={n.id} aria-hidden={!showChangeNotes} disabled={!showChangeNotes} className={"pdf-change-note" + (changeStates?.[n.id] ? " review-" + changeStates[n.id].toLowerCase() : "") + (activeNote === n.id ? " selected" : "")} aria-label={'Explain change ' + n.id.replace('change-', '')} title={changeStates?.[n.id] ? changeStates[n.id] + " · inspect change" : "Show change explanation"} style={{ visibility: showChangeNotes ? 'visible' : 'hidden', fontSize: Math.max(10, layout.scale * 8), left: Math.min(n.rect[0], n.rect[2]), top: Math.min(n.rect[1], n.rect[3]), width: Math.max(18, Math.abs(n.rect[2] - n.rect[0])), height: Math.max(18, Math.abs(n.rect[3] - n.rect[1])) }} onClick={() => onChangeNote?.(n.id)}>[{n.id.replace('change-', '')}]</button>)}
+    {onChangeRegion && showChangeNotes && notes.filter(n => n.region !== undefined && changeIds?.includes(n.id)).map((n, i) => <button key={'region-' + i} className={'pdf-review-region' + (tentativeRegions?.includes(n.id + ':' + n.region) ? ' tentative' : '')} aria-label={(tentativeRegions?.includes(n.id + ':' + n.region) ? 'Tentative' : 'Accepted') + ' edit · change ' + n.id.replace('change-', '')} title="Inspect this edit" style={{ left: Math.min(n.rect[0], n.rect[2]), top: Math.min(n.rect[1], n.rect[3]), width: Math.max(2, Math.abs(n.rect[2] - n.rect[0])), height: Math.max(2, Math.abs(n.rect[3] - n.rect[1])) }} onClick={() => onChangeRegion(n.id, n.region!)} />)}
   </>;
 }
 
-export function PdfPane({ toolbarHost, compactControls = false, onExport, findHandle, bottomOverlay, bottomControls = false, hideState = false, onFind, changeTarget, hideClose = false, hideFollow = false, changeIds, showChangeNotes = false, onChangeNote, build, freshness, position, visible = true, followComments, onFollowChange, jump, onPositionChange, onUserNavigate, onClose }: Props) {
+export function PdfPane({ changeStates, tentativeRegions, onChangeRegion, toolbarHost, compactControls = false, onExport, findHandle, bottomOverlay, bottomControls = false, hideState = false, onFind, changeTarget, hideClose = false, hideFollow = false, changeIds, showChangeNotes = false, onChangeNote, build, freshness, position, visible = true, followComments, onFollowChange, jump, onPositionChange, onUserNavigate, onClose }: Props) {
   const [controlsHost, setControlsHost] = useState<HTMLDivElement | null>(null);
   useLayoutEffect(() => { setControlsHost(toolbarHost?.current ?? null); }, [toolbarHost, visible]);
   const [loaded, setLoaded] = useState<Loaded | null>(null), [error, setError] = useState(''), [progress, setProgress] = useState('');
@@ -331,7 +332,7 @@ export function PdfPane({ toolbarHost, compactControls = false, onExport, findHa
           const marker = validJump?.page === layout.page && expiredJump !== jumpKey ? validJump : null;
           const left = marker ? Math.max(0, Math.min(marker.x * layout.scale, layout.width - 8)) : 0, top = marker ? Math.max(0, Math.min(marker.y * layout.scale, layout.height - 8)) : 0;
           return <div key={`${build?.id}:${layout.page}`} className="pdf-paper" data-pdf-page={layout.page} style={{ position: 'absolute', top: layout.top, width: layout.width, height: layout.height, '--scale-factor': layout.scale, '--total-scale-factor': layout.scale } as React.CSSProperties} aria-label={`PDF page ${layout.page}`}>
-            {renderedPages.has(layout.page) ? <RenderedPage activeNote={targetNote?.page === layout.page ? changeTarget?.id : undefined} changeIds={changeIds} showChangeNotes={showChangeNotes} onChangeNote={onChangeNote} pdf={pdf} layout={layout} matches={matchesByPage.get(layout.page) ?? noMatches} active={active?.page === layout.page ? active : undefined} onReady={pageReady} /> : <span className="pdf-page-placeholder">Page {layout.page}</span>}
+            {renderedPages.has(layout.page) ? <RenderedPage changeStates={changeStates} tentativeRegions={tentativeRegions} onChangeRegion={onChangeRegion} activeNote={targetNote?.page === layout.page ? changeTarget?.id : undefined} changeIds={changeIds} showChangeNotes={showChangeNotes} onChangeNote={onChangeNote} pdf={pdf} layout={layout} matches={matchesByPage.get(layout.page) ?? noMatches} active={active?.page === layout.page ? active : undefined} onReady={pageReady} /> : <span className="pdf-page-placeholder">Page {layout.page}</span>}
             {marker && <div key={jumpKey} data-pdf-jump={layout.page} className={`pdf-passage-marker ${marker.persistent ? 'persistent' : ''} ${emphasis === jumpKey ? 'emphasize' : ''}`} style={{ left, top, width: Math.min(Math.max(8, marker.width * layout.scale), layout.width - left), height: Math.min(Math.max(8, marker.height * layout.scale), layout.height - top), '--passage-left': `${left}px`, '--cue-height': `${Math.min(28, Math.max(8, marker.height * layout.scale), layout.height - top)}px`, '--cue-pad': `${Math.min(2, Math.max(8, marker.height * layout.scale) * .12)}px` } as React.CSSProperties} role="img" aria-label="Approximate source passage in PDF" title="Nearby typeset line. Source-to-PDF mapping may identify a region rather than the exact quotation." />}
           </div>;
         })}

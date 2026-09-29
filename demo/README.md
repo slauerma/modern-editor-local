@@ -1,6 +1,6 @@
 # Modern Editor demonstrations
 
-These three narrated demonstrations show the updated 28 September writing and review layout. Each has a smaller download, English captions, a transcript and background music. The later JSON-import shortcut, Copy review prompt and settings-reset controls are described in the [current guide](../docs/USER_GUIDE.md) and are not shown in these recordings.
+These three narrated demonstrations show the updated 28 September writing and review layout. Each has a smaller download, English captions, a transcript and background music. The later two-PDF review mode, comparison exports, JSON-import shortcut, Copy review prompt and settings-reset controls are described in the [current guide](../docs/USER_GUIDE.md) and are not shown in these recordings.
 
 | Video | Length | Large · 1600×1000 | Small · 1280×800 |
 | --- | --- | --- | --- |

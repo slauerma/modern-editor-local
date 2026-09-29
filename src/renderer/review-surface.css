@@ -5,6 +5,8 @@
 .review-heading.review-nav { flex-wrap:nowrap; gap:6px; justify-content:flex-start; position:relative; z-index:30; }
 .review-heading.review-nav .pane-title { font-weight:400; color:inherit; margin-right:auto; }
 .review-heading.review-nav > button { min-width:30px; min-height:32px; font-size:20px; line-height:1; border:0; background:transparent; }
+.review-heading.review-nav > .collapse-comments { font-size:13px; padding:4px 8px; color:inherit; }
+.classic-comments-toggle[aria-expanded=true] { font-weight:600; }
 .review-heading.review-nav > span { white-space:nowrap; font-size:13px; }
 .pane-heading button,.viewer-controls button,.viewer-controls select,.changes-toolbar button,.changes-toolbar select { font-size:13px; }
 .pane-heading button { min-height:32px; }

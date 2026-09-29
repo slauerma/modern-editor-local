@@ -15,7 +15,7 @@ export type ComparisonChange = {
 export type ComparisonPlan = { changes: ComparisonChange[]; notice?: string };
 export type ChangesPresentation = 'markup' | 'clean';
 export type ChangesInput = { projectId: string; before: string; after: string; name: string; engine: Engine;
-  presentation?: ChangesPresentation; proposalId?: string; layouts?: Record<string, 'inline' | 'paired'>; arrangementId?: string; selectedPaths?: string[] };
+  presentation?: ChangesPresentation; proposalId?: string; interactive?: boolean; layouts?: Record<string, 'inline' | 'paired'>; arrangementId?: string; selectedPaths?: string[] };
 export type ChangesArtifact = { id: string; presentation: ChangesPresentation; build: Build | null; changes: ComparisonChange[]; notice?: string; reused?: boolean; visual?: import('./changes-agent.ts').ChangesVisual };
 export type ArrangementPreview = { id: string; prompt: string };
 export const arrangementSchema = z.object({ groups: z.array(z.object({

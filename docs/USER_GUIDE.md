@@ -33,7 +33,9 @@ The comparison uses the opened root source and current project resources; it doe
 
 Ordinary `%` source notes do not hide nearby prose corrections. Their exact text and line endings stay in the generated source; if a note itself changes, that difference is counted separately as a **source note**, with its exact wording in **Text diff**. If only these notes changed, **Source notes only** appears without compilation or a model request. Comments inside command arguments or formulas remain part of that syntax and are not split into prose.
 
-The single viewer menu offers **PDF**, **Text diff**, **Revision markup** and **Clean paper**. Page navigation, zoom and Find share the top viewer toolbar. In Changes PDF, open the compact **Page** menu for page, zoom, Find and PDF export controls. Opening menus, search or explanations leaves the PDF in place.
+The single viewer menu offers **PDF**, **Text diff**, **Revision markup** and **Clean paper**. Page navigation, zoom and Find share the top viewer toolbar. In Changes PDF, open the compact **Page** menu for page, zoom and Find. Opening menus, search or explanations leaves the PDF in place.
+
+Use **Comparison options (⋯) → Save Changes PDF…** to save the displayed comparison through the native Save dialog. **Save comparison LaTeX…** saves its exact generated source to a new `.tex` file. Both save the displayed presentation, including an older snapshot, without compiling, contacting Sol, accepting suggestions or saving the manuscript. The PDF retains printed revision markup; numbered buttons, explanations and tentative gray cues are editor-only overlays. The LaTeX copy still needs the paper's figures, bibliography and other project resources; it is not a self-contained project archive.
 
 **Revision markup** strikes through deleted wording and underlines additions. Small edits stay inline; substantial ordinary prose rewrites use labelled **Before** and **After** paragraphs. Ordinary single display formulas can be marked as complete old/new formulas. **Clean paper** shows the revised text once, with optional numbered change markers. Both views use the same captured comparison; switching presentation compiles locally when needed and makes no additional Codex request. It does not include newer typing until the next scheduled update or **Refresh**.
 
@@ -46,6 +48,32 @@ Unsupported changes—such as preamble edits, labels, numbered environments, whi
 Sol receives the changed source blocks and recorded reasons. It groups adjacent changes, selects supported layouts and supplies labelled summaries; the editor inserts the exact old/new source and checks every change is accounted for. Sol decides whether to inspect up to three comparison pages as images. **Options** reports which pages of the current presentation were checked, or that it has not been checked. Switching presentation does not reuse the other view’s visual verdict. A visual check concerns presentation, not the correctness of the paper. Failed or incomplete checks are labelled; they do not start repair loops. Unsupported comparisons stop with **Preview not possible**, with **Text diff** available. The agent always uses **GPT-6 Sol**, independently of the model chosen for reviews and Side Chat.
 
 Changes PDF has its own pagination, zoom, search and position. Its artifacts cannot become the restored paper PDF or satisfy an acceptance compilation check. Source edits make the comparison visibly out of date; changed resources are checked when the pane is shown, periodically while visible, and before locating changes.
+
+## PDF review mode
+
+Choose **View → PDF mode** for a complete LaTeX document with imported or generated comments. It captures the current draft as the session's **Original**. The left pane shows **Changes**; the right switches between **Proposed revision** and **Original**. Proposed includes all applicable remaining suggestions, using their selected wording and edits. Preparing the PDFs takes local compilation time.
+
+Suggestions have three review states:
+
+- **Tentative:** included in Proposed, but not applied to the working draft. Inline edits have a faint gray background in Changes.
+- **Accepted:** still visible in Changes; applied to the draft. Accepting unchanged wording removes the gray cue without rebuilding or reloading the same proposed PDF.
+- **Rejected:** removed from Proposed and Changes, retained in comment History. Undo restores the decision.
+
+Click changed text or a numbered marker to open a small inspector. The reason comes first, followed by the contextual text diff. **Clean**, **Edit**, saved wordings, **Quick alternative**, and **Discuss** use the same comments as the ordinary workspace. Move the popup by its title bar, **Expand** it, or choose **Back to PDFs**. None of these actions resizes or moves the PDFs. Multiple suggestions in one comparison block remain individually selectable.
+
+Inline gray shading and marker status are live viewer cues; they are not baked into exported PDFs. For paired text, formulas, clean presentation or omitted changes, use the marker: gray means tentative, plain means accepted, and half gray means mixed. Hover for the status and inspect for individual decisions. The comparison preserves exact revision markup regardless of decision.
+
+Decision shading follows the suggestion's source region. If you manually rewrite other words within a broad suggestion, those changes can inherit its marker status; inspect the exact diff and the comment's recorded decision before relying on the cue.
+
+**Accept** applies one exact suggestion without compiling, just as in the workspace. **Accept all applicable (N)** and **Reject all remaining (N)** use the selected **Whole paper**, section or subsection scope. A section includes its subsections; headings and scope membership are fixed from the captured original. Bulk acceptance always checks compilation, even when only one suggestion remains, and forms one Undo action. A failed check leaves the source and decisions unchanged. Questions are not bulk accepted/rejected; inspect them and use **Resolve** or **Reject** individually. Suggestions spanning a scope boundary stay for a wider scope or individual review.
+
+Comments already in Later stay outside the PDF session. Within the session, overlapping, stale, incomplete or newly deferred suggestions are explicitly listed as not included in the combined preview. You can inspect them individually or return to **Source** to confirm placement. The editor does not guess an order for conflicting proposals. If a comparison cannot be typeset, it says **Preview not possible** while keeping exact comment wording and any valid PDFs available.
+
+Rejecting or changing proposed wording refreshes the local preview; typing in its edit field waits until you leave that field. The last matching set of PDFs stays readable during generation and is labelled out of date. **Refresh** also rechecks project resources. **PDF review options (⋯) → Refine comparison with Sol** optionally uses the existing Sol arrangement and visual-check pipeline. Routine PDF-mode updates do not call a model.
+
+**Workspace** returns to ordinary editing. This is an isolated preview session using the same source, comment records, discussion, rejection history, recovery and Undo—not a separate copy of the editor's database. **Save** writes the working draft, containing accepted edits, rather than the whole tentative proposal. Choose **PDF review options (⋯) → Save Changes PDF…** or **Save comparison LaTeX…** for the left comparison. Export the Proposed or Original PDF from that reader’s **Page** menu. Exports include the displayed tentative preview; they do not accept it.
+
+The original snapshot and membership remain fixed while this paper stays open. New background comments appear in the workspace; **Restart from current draft** explicitly includes the current pending set and captures a new original. Closing/reopening the paper starts a new PDF session; accepted/rejected decisions and proposal drafts are still saved through ordinary recovery. PDFs use the opened root source and current figures, bibliography and included files, not historical copies of those resources. Both readers scroll independently because comparison pagination can differ.
 
 ## Preview a suggestion
 
@@ -174,7 +202,7 @@ To start a note without Codex, select source text and choose **Actions → Add c
 | **Skip** / **Next** | Advances without making a decision or setting a persistent skipped status. |
 | **Details → Later** | Sets an open comment aside, retaining its proposal and discussion across reopening. Use **Later (n)** and **Return to pending** to revisit it. |
 | **Reject** / **Shift+R** | Moves the current comment into History without changing the source. Undo restores it. |
-| **Details → Dismiss pending** | Closes the current pending batch in one undoable action, retaining Later comments, history and discussions. |
+| **Details → Reject all remaining (N)** | Rejects the current pending batch in one undoable action, retaining every comment and discussion in History; Later comments are unchanged. |
 | **Details → Mark addressed manually** / **Resolve** | Closes a comment you handled yourself or an author question. |
 
 In **Edit**, **Use original** copies the original passage into the editable proposal, so you can start from the author’s wording. It changes no source; **Undo** restores the previous proposal.
@@ -185,7 +213,7 @@ Hover over or click **Details** in the compact comment header for additional con
 
 In LaTeX mode, with **Accept & compile** or **Accept all**, if the candidate produces a PDF with verified inputs but acceptance warnings, the editor explains the issue, such as undefined citations or references, duplicate labels, or missing characters (glyphs). Inspect **View candidate PDF** and **Build details**, then choose **Apply despite warnings** to proceed deliberately. Before applying, the editor rechecks the source, suggestions and compilation inputs; changed inputs require a new compile. Failed compilation or unverified inputs never offer this override. Ordinary **Accept** skips compilation for an individual suggestion while retaining source-placement guards.
 
-The Comments pane's **Details → Dismiss pending** affects the pending comments present when clicked. One **Undo** restores that batch. Comments that arrive afterward retain their own status when you Undo or Redo the dismissal.
+The Comments pane's **Details → Reject all remaining (N)** rejects the pending comments present when clicked, including comments whose passages are missing or changed. They remain in **History** with their discussions; Later comments are unchanged. One **Undo** restores that batch. Comments that arrive afterward retain their own status when you Undo or Redo the rejection. **Accept all applicable (0)** stays disabled when no suggestions can be applied safely; this does not prevent rejection.
 
 For a replacement suggestion, acceptance stays disabled if the original passage has changed or its location is uncertain. Select its exact original words at the intended source location and choose **Attach to selected text**. If those words no longer exist, revise manually or request a new review.
 
@@ -269,7 +297,7 @@ Each paste supports up to **2 MB of UTF-8 text**, with up to **12** combined pas
 
 ## Classic view
 
-**View → Classic view** switches to a cream writing surface, narrow left controls and a bottom suggestion panel, inspired by the original ModernEditor. **Write / View** switches between the source and the current PDF or text comparison. **Notes** hides the bottom panel for writing. The same Changes, Clean, Edit and comment Details controls remain available. **Actions → Workspace view** returns to the regular pane layout.
+**View → Classic view** switches to a cream writing surface, narrow left controls and a bottom suggestion panel, inspired by the original ModernEditor. **Write / View** switches between the source and the current PDF or text comparison. **Comments** hides or restores the bottom panel for writing. The same Changes, Clean, Edit and comment Details controls remain available. **Actions → Workspace view** returns to the regular pane layout.
 
 Both layouts use the same live source editor, proposal drafts, comments and Undo history. Switching layout does not save, compile or accept anything. The selected layout is remembered for the paper; Undo remains session-only.
 
@@ -277,13 +305,13 @@ Both layouts use the same live source editor, proposal drafts, comments and Undo
 
 Open **Actions → Files & history…** for source and neighboring resources, saved paper state, attached context, Side Chat and available PDF builds. **Reveal** opens the item’s location in the system file manager; **Copy path** copies its local path. **Saved versions…** opens existing history and comparison controls. The inventory does not delete or restore files.
 
-**Save displayed PDF…** exports the exact displayed PDF, including an older PDF, proposal preview or Changes PDF when selected. Check its status label first. It does not compile, apply proposals or save the source. The same export is in **PDF options (⋯)** or the Changes PDF **Page** menu. **Compile current draft & save PDF…** deliberately compiles the current buffer before exporting; unsaved source remains unsaved. These commands use the native Save dialog, so the PDF goes where you choose.
+**Save displayed PDF…** exports the exact workspace PDF, including an older PDF, proposal preview or Changes PDF when selected. In **PDF mode**, Files & history instead offers **Save Changes PDF…**, **Save Proposed revision PDF…** and **Save Original PDF…**, each bound to that session’s named snapshot. Proposed may include tentative edits; an older snapshot is labelled accordingly. Check its status label first. It does not compile, apply proposals or save the source. The same export is in **PDF options (⋯)**; comparisons also have **⋯ → Save Changes PDF…** directly. **Compile current draft & save PDF…** deliberately compiles the current buffer before exporting; unsaved source remains unsaved. These commands use the native Save dialog, so the PDF goes where you choose.
 
 ## Arrange your workspace
 
 Use **View** in the top bar to choose **Automatic**, **Source + comments**, **PDF + comments**, **Three panes**, **Source + PDF · writing**, or **PDF below · stacked**. Automatic uses three panes in a wide, tall window; smaller windows use **Source / PDF** tabs beside Comments so both have useful reading height. Left and right arrow keys switch between the focused tabs.
 
-Switching views keeps your current comment, replacement draft, source selection, Undo, and reading positions. The view is saved for this paper. Hide Comments with **Details → Hide comments** or choose the writing view; **Show comments** or **Command+2** restores it. **View → Reset pane widths** restores the default proportions.
+Switching views keeps your current comment, replacement draft, source selection, Undo, and reading positions. The view is saved for this paper. Collapse Comments with **Hide** in its header or choose the writing view; **Show comments** or **Command+2** restores it. **View → Reset pane widths** restores the default proportions.
 
 For papers named `main.tex`, an optional **Actions → Compile & layout → Paper display name** makes the header easier to recognize. It changes only the local display label, not filenames.
 
@@ -333,7 +361,7 @@ If a completed reply cannot be saved, **Review unsaved replies** remains availab
 
 ## Keyboard shortcuts on Mac
 
-To write with more room, choose **Details → Hide comments** in the Comments heading or turn off **Actions → Show comments**. The source and PDF expand into the available space. **Show comments** above the source, **Command+2**, or **View → Show/hide comments** brings the pane back. The choice is remembered for this paper; comments, discussions and pane widths are retained. A new review deliberately opens the pane, but background comments arriving after you hide it leave it hidden.
+To write with more room, choose **Hide** directly in the Comments heading or turn off **Actions → Show comments**. The source and PDF expand into the available space. **Show comments** above the source, **Command+2**, or **View → Show/hide comments** brings the pane back. In Classic view, the left **Comments** button restores the bottom panel. The choice is remembered for this paper; the current suggestion, proposal draft, discussions and pane widths are retained. A new review deliberately opens the pane, but background comments arriving after you hide it leave it hidden.
 
 During a review, a prominent progress card appears in the Comments pane. Section reviews show the current section and completed-section count, with Pause/Continue and Stop. Existing comments remain usable while later sections are prepared. **Accept & compile** is a compact button beneath Accept/Reject/Skip. Both acceptance actions keep placement guards and Undo.
 
@@ -369,7 +397,7 @@ Open **Actions → Settings and Check setup…** or press **Command+,** to choos
 
 **Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It excludes manuscript text, file paths and account details. Expand **Copied setup details** to inspect the copied summary.
 
-**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **1.4.0**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
+**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **1.5.0**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
 
 ## Changed settings and defaults
 

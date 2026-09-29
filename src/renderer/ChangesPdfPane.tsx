@@ -6,7 +6,7 @@ import type { PdfJump, PdfPosition } from './pdf-position.ts';
 import { PdfPane, type PdfChangeTarget, type PdfPaneHandle } from './PdfPane.tsx';
 import { comparisonScreenshots } from './comparison-screenshots.ts';
 
-type Props = { onExport: (buildId: string) => void; onExportReady: (pdf: { id: string; label: string } | null) => void; findHandle?: Ref<PdfPaneHandle>; input: ChangesInput; reasonsKey?: string; visible: boolean; disabled: boolean; proposalCurrent: boolean; previewRequest?: number;
+type Props = { onExport: (buildId: string) => void; onExportSource: (artifactId: string) => void; onExportReady: (pdf: { id: string; label: string } | null) => void; findHandle?: Ref<PdfPaneHandle>; input: ChangesInput; reasonsKey?: string; visible: boolean; disabled: boolean; proposalCurrent: boolean; previewRequest?: number;
   events: { accepted: number; saved: number };
   work: <T>(kind: 'build' | 'arrange', action: () => Promise<T>) => Promise<T>;
   baselineControl: ReactNode; onFormat: (format: 'pdf' | 'text') => void;
@@ -15,7 +15,7 @@ type Snapshot = { key: string; proposal?: string; last: ChangesPresentation; val
 const errorText = (e: unknown) => String(e instanceof Error ? e.message : e).replace(/^Error invoking remote method '[^']+': Error: /, '');
 const label = (p: ChangesPresentation) => p === 'clean' ? 'Clean paper' : 'Revision markup';
 
-export function ChangesPdfPane({ onExport, onExportReady, findHandle, input, reasonsKey, visible, disabled, proposalCurrent, previewRequest, events, work, baselineControl, onFormat, onClose, onSource, onText }: Props) {
+export function ChangesPdfPane({ onExport, onExportSource, onExportReady, findHandle, input, reasonsKey, visible, disabled, proposalCurrent, previewRequest, events, work, baselineControl, onFormat, onClose, onSource, onText }: Props) {
   const identity = useMemo(() => JSON.stringify([input.projectId, input.before, input.after, input.name, input.engine, input.proposalId, input.selectedPaths, reasonsKey]), [input.projectId, input.before, input.after, input.name, input.engine, input.proposalId, input.selectedPaths, reasonsKey]);
   const [presentation, setPresentation] = useState<ChangesPresentation>('markup');
   const key = JSON.stringify([identity, presentation]);
@@ -240,7 +240,9 @@ export function ChangesPdfPane({ onExport, onExportReady, findHandle, input, rea
       </div>
       <div ref={toolbar} className="pdf-toolbar-slot changes-pdf-tools" /><button className="change-details-toggle text-button" aria-label={noteOpen ? 'Hide explanation' : 'Explain change'} title="Reason for this change" aria-expanded={noteOpen} onClick={() => { traceInteraction('changes-why', { projectId: input.projectId, mode: noteOpen ? 'close' : 'open' }); setNoteOpen(!noteOpen); }}>Why?</button>
       <button className={'changes-refresh' + (!fresh && !working ? ' primary' : '')} aria-label="Refresh Changes PDF" title="Refresh Changes PDF with Sol" onClick={() => { setPaused(false); setRefreshRequest(n => n + 1); }} disabled={blocked}>↻</button>
-      <details className="changes-options" onKeyDown={e => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary')?.focus(); e.stopPropagation(); } }}><summary aria-label="Comparison options" title="Baseline and update settings">⋯</summary><div>
+      <details className="changes-options" onKeyDown={e => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary')?.focus(); e.stopPropagation(); } }}><summary aria-label="Comparison options" title="Save comparison, baseline and update settings">⋯</summary><div>
+        <button disabled={!artifact?.build?.success} title="Save the displayed comparison, including an older snapshot. Numbered buttons and explanations are available only in the editor." onClick={e => { if (artifact?.build) { e.currentTarget.closest('details')?.removeAttribute('open'); onExport(artifact.build.id); } }}>Save Changes PDF…</button>
+        <button disabled={!artifact?.build?.success} title="Save the generated source for the displayed comparison to a new .tex file. Figures, bibliography and other project resources are not copied." onClick={e => { if (artifact?.build) { e.currentTarget.closest('details')?.removeAttribute('open'); onExportSource(artifact.id); } }}>Save comparison LaTeX…</button>
         {baselineControl}
         <label>Update after <select aria-label="Accepted changes per update" value={every} disabled={working} onChange={e => { const n = Number(e.target.value); void window.editor.changesSettings(n).then(s => setEvery(s.every)).catch(e => setError(errorText(e))); }}>{[1,3,5,10,20,50].map(n => <option key={n} value={n}>{n}</option>)}</select> accepts, and on Save.</label>
         <button disabled={blocked} onClick={() => void generate(false, true, true)}>Build locally without Sol</button>

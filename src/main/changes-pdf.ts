@@ -60,7 +60,7 @@ function mark(text: string, kind: 'Add' | 'Del') {
 }
 
 /** Insert only exact source owned by the app; Codex never supplies TeX. */
-export function renderComparison(before: string, after: string, sourcePlan: ComparisonPlan, name: string, proposal = false, presentation: ChangesPresentation = 'markup') {
+export function renderComparison(before: string, after: string, sourcePlan: ComparisonPlan, name: string, proposal = false, presentation: ChangesPresentation = 'markup', interactive = false) {
   const plan = presentationPlan(sourcePlan, presentation);
   const body = documentBody(after);
   if (!body || /MECompare/.test(before + after)) throw new Error('Preview not possible: unsupported document wrapper or comparison macro conflict.');
@@ -98,9 +98,10 @@ export function renderComparison(before: string, after: string, sourcePlan: Comp
       for (const [index, e] of edits.entries()) {
         text += c.newText.slice(cursor, e.fromB);
         if (index === 0) { text += '\\MECompareMark{' + number + '}'; start = text.length; }
-        if (e.toA > e.fromA) text += mark(c.oldText.slice(e.fromA, e.toA), 'Del');
+        const linked = (value: string) => interactive && value.trim() ? '\\href{https://modern-editor.invalid/changes/' + number + '/edit/' + index + '}{' + value + '}' : value;
+        if (e.toA > e.fromA) text += linked(mark(c.oldText.slice(e.fromA, e.toA), 'Del'));
         if (c.oldText.slice(e.fromA, e.toA).trim() && c.newText.slice(e.fromB, e.toB).trim()) text += '\\MECompareSep{}';
-        if (e.toB > e.fromB) text += mark(c.newText.slice(e.fromB, e.toB), 'Add');
+        if (e.toB > e.fromB) text += linked(mark(c.newText.slice(e.fromB, e.toB), 'Add'));
         cursor = e.toB;
       }
       text += c.newText.slice(cursor);
@@ -147,7 +148,7 @@ export class ChangesPdfService {
   cancel() { this.generation++; this.prepared = null; this.arranged = null; this.basePlan = null; for (const reader of this.markerReaders) reader.abort(); }
   async settle() { await Promise.allSettled([...this.pending]); }
   private track<T>(task: Promise<T>) { this.pending.add(task); void task.then(() => this.pending.delete(task), () => this.pending.delete(task)); return task; }
-  private key(input: ChangesInput) { return digest(JSON.stringify([input.projectId, input.before, input.after, input.name, input.engine, input.proposalId, input.selectedPaths])); }
+  private key(input: ChangesInput) { return digest(JSON.stringify([input.projectId, input.before, input.after, input.name, input.engine, input.proposalId, input.selectedPaths, input.interactive])); }
   private check(projectId: string, generation: number) {
     this.projects.get(projectId);
     if (generation !== this.generation) throw new Error('Changes PDF cancelled.');
@@ -205,7 +206,7 @@ export class ChangesPdfService {
         this.remember({ projectId: input.projectId, text: '', ranges: {}, artifact, input: structuredClone(input), plan });
         return artifact;
       }
-      const generated = renderComparison(input.before, input.after, plan, input.name, !!input.proposalId, presentation);
+      const generated = renderComparison(input.before, input.after, plan, input.name, !!input.proposalId, presentation, input.interactive);
       const inspectionIds = input.arrangementId && this.arranged?.id === input.arrangementId ? this.arranged.inspect?.slice() : undefined;
       this.check(input.projectId, generation);
       // Reuse only an identical generated document in the same presentation,
@@ -254,6 +255,15 @@ export class ChangesPdfService {
     this.projects.get(projectId);
     const record = this.records.get(id);
     return record?.projectId === projectId && record.artifact.build ? this.compiler.inspect(projectId, record.artifact.build.id, record.text) : { status: 'unavailable' as const };
+  }
+  exportSource(projectId: string, id: string) {
+    const paper = this.projects.get(projectId), record = this.records.get(id);
+    if (!record || record.projectId !== projectId || !record.text || !record.artifact.build?.success) {
+      throw new Error('This comparison source is no longer available. Refresh Changes PDF.');
+    }
+    // Export the captured document that produced this comparison, never a new
+    // rendering or the current manuscript. Resources remain in the project.
+    return { name: paper.name, text: record.text };
   }
   async locate(projectId: string, id: string, changeId: string) {
     const generation = this.generation;

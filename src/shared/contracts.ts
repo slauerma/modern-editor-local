@@ -120,6 +120,7 @@ export type EditorAPI = {
   projectFiles(projectId: string): Promise<import('./project-files.ts').ProjectFiles>;
   fileAction(projectId: string, id: string, action: 'reveal' | 'copy'): Promise<void>;
   exportPdf(projectId: string, buildId: string): Promise<import('./project-files.ts').PdfExport | null>;
+  exportChangesSource(projectId: string, artifactId: string): Promise<string | null>;
   debugState(): Promise<import('./debugging.ts').DebugState>;
   debugInteraction(event: import('./debugging.ts').DebugInteraction): Promise<void>;
   configureDebug(settings: import('./debugging.ts').DebugSettings): Promise<import('./debugging.ts').DebugState>;

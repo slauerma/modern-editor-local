@@ -19,12 +19,13 @@ import * as contextTools from '../src/shared/codex-context.ts';
 import { attachmentPromptContext } from '../src/shared/attachments.ts';
 import * as acceptanceTools from '../src/shared/acceptance.ts';
 import * as preambleTools from '../src/shared/fragment-preamble.ts';
+import { pdfReviewPlan } from '../src/renderer/pdf-review-plan.ts';
 
 // Exercise the actual App function bodies and its actual transaction filter with
 // real CodeMirror/Zod, replacing only DOM painting and the narrow IPC boundary.
 const source = await fs.readFile('src/renderer/App.tsx', 'utf8');
 const syntax = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['previewSuggestion', 'leavePreview', 'input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf', 'clearBuilds'];
+const names = ['previewSuggestion', 'leavePreview', 'input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf', 'clearBuilds', 'decidePdfReview', 'savePdfSnapshot'];
 const extracted: string[] = []; let filter = '', bindings = '';
 function visit(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? '')) extracted.push(node.getText(syntax));
@@ -65,7 +66,8 @@ function fixture(text = quote) {
     lastSource: { current: null }, lastReviewTop: { current: 0 }, revealPdf: () => {}, revealSource: () => {}, workspaceValues: { current: defaultWorkspace() }, restoredSource: { current: null }, laterRef: { current: false }, discussionLock: { current: false }, autoAddRef: { current: true }, followPending: { current: null }, followTasks: { current: new LatestTask() },
     sourcePosition: () => defaultWorkspace().source,
     previewJob: { current: null }, previewCache: { current: null }, representation: 'pdf', pdfPosition: {page:1,zoom:1.25}, docMode: 'latex', build: null, candidateBuild: null, preambleRun: { current: null }, buildRun: { current: null }, sectionRun: { current: null }, comparisonPosition: { current: {} },
-    warningAcceptance: null, laterOnly: false,
+    warningAcceptance: null, laterOnly: false, pdfReviewBuilds: [], pdfReview: false, pdfReviewPlan,
+    pdfSession: { id: 'pdf-session', original: text, comments: [c] },
     approvedBuildInputs: { current: undefined }, buildHelpEpoch: { current: 0 }, buildRetry: null,
     displayedBuild: { current: null }, pdfRequest: { current: 0 }, keyboardReviewFocus: { current: null },
     gate: { current: gate }, window: { editor: api }, view: { current: editor }, projectRef: { current: p }, reviewRef: { current: review }, activeRef: { current: c.id }, historyRef: { current: false }, active: c,
@@ -74,7 +76,7 @@ function fixture(text = quote) {
     choose: (v: string) => { scope.activeRef.current = v; }, move: () => {},
   };
   for (const setter of ['Preview', 'PreviewPosition', 'DocMode', 'Representation', 'SessionText', 'ComparisonBase', 'Layout', 'CompactTab', 'DisplayName', 'ChangesOpen', 'CommentsHidden', 'ReviewBusy', 'ReviewOpen', 'CandidatePosition', 'DiscussionBusy', 'LaterOnly', 'PaneSizes', 'ToolbarCollapsed', 'FollowComments', 'Busy', 'AiBusy', 'PreambleBusy', 'LastAttempt', 'Build', 'PdfText', 'DependencyStale', 'PdfOpen', 'PdfJump', 'PdfNavigation', 'PdfLocating', 'ViewCandidate', 'CandidateBuild', 'ShowHistory', 'NotesOpen', 'Project', 'CompareOpen', 'Baseline', 'Effort', 'FastMode', 'Engine', 'Text', 'SavedText', 'PdfPosition', 'FindOpen', 'FindNotice', 'ActiveId', 'PaperInstructions', 'SavedInstructions', 'SectionProgress', 'ContextOpen', 'OverviewOpen', 'InboxOpen', 'ContextText']) scope['set' + setter] = (value: any) => { states[setter] = value; };
-  for (const setter of ['AutoAddComments', 'BuildRetry', 'ReferenceState', 'SourcesOpen', 'FilesOpen', 'ChangesExport', 'Inspection', 'GuidanceOpen', 'SavedPreferences', 'LocalEditsOnly', 'PreserveVoice', 'Classic', 'ClassicSurface', 'ClassicDetails']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  for (const setter of ['PdfReview', 'PdfSession', 'PdfReviewBuilds', 'PdfReviewExports', 'AutoAddComments', 'BuildRetry', 'ReferenceState', 'SourcesOpen', 'FilesOpen', 'ChangesExport', 'Inspection', 'GuidanceOpen', 'SavedPreferences', 'LocalEditsOnly', 'PreserveVoice', 'Classic', 'ClassicSurface', 'ClassicDetails']) scope['set' + setter] = (value: any) => { states[setter] = value; };
   states.changeEvents = { accepted: 0, saved: 0 };
   scope.setChangeEvents = (value: any) => { states.changeEvents = typeof value === 'function' ? value(states.changeEvents) : value; };
   scope.setWarningAcceptance = (value: any) => { states.WarningAcceptance = value; scope.warningAcceptance = value; };
@@ -87,6 +89,61 @@ function fixture(text = quote) {
 
 // Exercise the real key bindings and final dispatch boundary, including history
 // transactions marked filter:false. Each large synthetic case runs serially.
+test('PDF-mode bulk acceptance checks a single suggestion and failed compilation keeps source, decisions and Undo unchanged', async () => {
+  const f = fixture(); let calls = 0;
+  f.scope.patch('c1', { draft: '\\undefinedCommand{broken}' });
+  const before = f.editor.state;
+  f.api.compile = async (request: any) => { calls++; assert.equal(request.text, '\\undefinedCommand{broken}'); return { id: 'failed', success: false, clean: false }; };
+  assert.equal(await f.scope.decidePdfReview(['c1'], 'applied', 'bulk'), false);
+  assert.equal(calls, 1); assert.equal(f.editor.state.doc.toString(), quote);
+  assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'open');
+  assert.equal(undoDepth(f.editor.state), undoDepth(before));
+  assert.match(f.states.errors.at(-1), /No suggestion was applied/); assert.equal(f.states.saved, undefined);
+});
+test('PDF-mode single-item bulk acceptance applies only after validation and is one Undo action', async () => {
+  const f = fixture(), pending = deferred<boolean>(); let calls = 0;
+  const compile = f.api.compile; f.api.compile = async () => { calls++; return compile(); };
+  f.api.validateBuild = () => pending.promise;
+  const operation = f.scope.decidePdfReview(['c1'], 'applied', 'bulk'); await turns();
+  assert.equal(f.editor.state.doc.toString(), quote);
+  pending.resolve(true);
+  assert.equal(await operation, true); assert.equal(calls, 1);
+  assert.equal(f.editor.state.doc.toString(), 'The allocation is increasing.');
+  assert.equal(undoDepth(f.editor.state), 1); assert.equal(f.states.saved, undefined);
+  assert(f.scope.doHistory()); assert.equal(f.editor.state.doc.toString(), quote);
+  assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'open');
+});
+test('PDF-mode single-item bulk acceptance refuses stale input and ignores a result after cancellation', async () => {
+  const f = fixture(); let calls = 0;
+  f.scope.patch('c1', { validity: 'stale' });
+  const compile = f.api.compile; f.api.compile = async () => { calls++; return compile(); };
+  assert.equal(await f.scope.decidePdfReview(['c1'], 'applied', 'bulk'), false); assert.equal(calls, 0);
+  f.scope.patch('c1', { validity: 'current' });
+  const pending = deferred<any>(); f.api.compile = () => { calls++; return pending.promise; };
+  const operation = f.scope.decidePdfReview(['c1'], 'applied', 'bulk'); await turns();
+  await f.scope.cancelCompilation(); pending.resolve({ id: 'cancelled', success: true, clean: true });
+  assert.equal(await operation, false); assert.equal(calls, 1);
+  assert.equal(f.editor.state.doc.toString(), quote);
+  assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'open');
+});
+test('PDF-mode individual Accept retains the intentional no-compile workflow', async () => {
+  const f = fixture(); f.api.compile = async () => { assert.fail('Individual Accept must not compile'); };
+  assert.equal(await f.scope.decidePdfReview(['c1'], 'applied', 'individual'), true);
+  assert.equal(f.editor.state.doc.toString(), 'The allocation is increasing.');
+  assert(f.scope.doHistory()); assert.equal(f.editor.state.doc.toString(), quote);
+});
+test('PDF-mode export requires a named snapshot and never falls back to the hidden workspace PDF', async () => {
+  const f = fixture(), exports: string[] = [];
+  f.scope.pdfReview = true; f.scope.displayedBuild.current = { id: 'hidden-workspace' };
+  f.api.exportPdf = async (projectId: string, id: string) => { assert.equal(projectId, 'p1'); exports.push(id); return null; };
+  await f.scope.savePdfSnapshot(); assert.deepEqual(exports, []);
+  assert.match(f.states.notice, /Choose Changes/);
+  for (const id of ['changes', 'proposed', 'original']) await f.scope.savePdfSnapshot(id);
+  assert.deepEqual(exports, ['changes', 'proposed', 'original']);
+  f.scope.pdfReview = false; await f.scope.savePdfSnapshot();
+  assert.equal(exports.at(-1), 'hidden-workspace');
+  assert.equal(f.editor.state.doc.toString(), quote); assert.equal(f.states.saved, undefined);
+});
 test('Close project waits for cancelled work and final recovery before clearing the project and returning home', async () => {
   const f = fixture(), done = f.gate.begin('codex')!;
   f.editor.dispatch({ changes: { from: 0, insert: 'Unsaved introduction. ' } });
@@ -165,12 +222,14 @@ test('clearing old builds protects the displayed Changes PDF as well as draft an
   f.scope.build = { id: 'draft' }; f.scope.candidateBuild = { id: 'candidate' };
   f.scope.preview = { build: { id: 'proposal' } };
   f.scope.changesExport = { id: 'older-cached-comparison', label: 'Revision markup' };
+  f.scope.pdfReviewBuilds = ['review-original', 'review-proposed', 'review-changes'];
   const requests: string[][] = [];
   f.api.clearOldBuilds = async (ids: string[]) => { requests.push(ids); return { removed: 2 }; };
   await f.scope.clearBuilds();
-  assert.deepEqual(new Set(requests[0]), new Set(['draft', 'candidate', 'proposal', 'older-cached-comparison']));
+  assert.deepEqual(new Set(requests[0]), new Set(['draft', 'candidate', 'proposal', 'older-cached-comparison', 'review-original', 'review-proposed', 'review-changes']));
   assert.equal(f.editor.state, before); assert.equal(f.gate.locked, false);
   f.scope.build = f.scope.candidateBuild = f.scope.preview = f.scope.changesExport = null;
+  f.scope.pdfReviewBuilds = [];
   await f.scope.clearBuilds(); assert.deepEqual(requests[1], []);
 });
 
@@ -573,6 +632,7 @@ test('opening another paper clears the latest outgoing Codex context', () => {
   const next = { ...f.scope.projectRef.current, id: 'paper-b', path: '/synthetic/paper-b.tex', name: 'paper-b.tex', notices: [], text: quote };
   f.scope.load(next);
   assert.equal(f.states.ContextText, ''); assert.equal(f.states.ContextOpen, false);
+  assert.equal(f.states.PdfReview, false); assert.equal(f.states.PdfSession, null); assert.deepEqual(f.states.PdfReviewBuilds, []);
 });
 
 const previewSource = '\\documentclass{article}\n\\begin{document}\n' + quote + '\n\\end{document}';

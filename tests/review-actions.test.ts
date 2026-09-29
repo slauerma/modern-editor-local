@@ -6,6 +6,7 @@ import { commentSchema, reviewSchema } from '../src/shared/contracts.ts';
 import { adoptComment, linkQuestionToSelection, proposalChanges, reattachComment, replyFields } from '../src/shared/review.ts';
 import { initialState, commentsField, loadComments, patchComments, dismissPendingComments } from '../src/renderer/editor-state.ts';
 import { replyContext } from '../src/shared/codex-context.ts';
+import { bulkAcceptancePlan } from '../src/shared/acceptance.ts';
 
 const original = 'The boundaries are reached.', current = 'The pointwise bounds are attained.';
 const question = () => adoptComment(original, commentSchema.parse({ id: 'q', title: 'Which boundaries?', original, replacement: null, explanation: 'Clarify boundaries.', messages: [{ role: 'assistant', text: 'Earlier alternative', createdAt: '2026-09-11', proposal: { replacement: 'Earlier suggested wording.', packages: [] } }] }));
@@ -23,6 +24,20 @@ test('bulk dismissal preserves Later/history/source/discussion; one Undo/Redo af
   assert.equal(state.field(commentsField)[3].decision, 'open'); assert(redo({ state, dispatch }));
   assert.equal(state.field(commentsField)[0].decision, 'dismissed'); assert.equal(state.field(commentsField)[3].decision, 'open'); assert.equal(state.doc.toString(), original);
 });
+test('zero applicable suggestions can still be rejected together and restored from History with Undo', () => {
+  const missing = adoptComment(current, commentSchema.parse({ id: 'missing', title: 'Earlier wording', explanation: 'The old passage is absent.', original, replacement: 'A new proposal.', messages: [{ role: 'user', text: 'Keep this discussion.', createdAt: '2026-09-29' }] }));
+  assert.equal(missing.validity, 'missing');
+  let state = initialState(current, [missing]);
+  const dispatch = (tr: Transaction) => { state = tr.state; };
+  assert.equal(bulkAcceptancePlan(current, state.field(commentsField)).ids.length, 0);
+  state = state.update(dismissPendingComments(state)).state;
+  assert.equal(state.doc.toString(), current);
+  assert.deepEqual(state.field(commentsField), [{ ...missing, decision: 'dismissed' }]);
+  assert(undo({ state, dispatch }));
+  assert.deepEqual(state.field(commentsField), [missing]);
+  assert.equal(state.doc.toString(), current);
+});
+
 test('explicit question linking preserves earlier wording and old alternatives, persists, and is a single undoable metadata change', () => {
   const q = { ...question(), validity: 'stale' as const, to: current.length };
   const linked = linkQuestionToSelection(current, q, 0, current.length);

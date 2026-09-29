@@ -4,6 +4,7 @@ const api: EditorAPI = {
   projectFiles: projectId => ipcRenderer.invoke('project:files', projectId),
   fileAction: (projectId, id, action) => ipcRenderer.invoke('project:file-action', { projectId, id, action }),
   exportPdf: (projectId, buildId) => ipcRenderer.invoke('build:export-pdf', { projectId, buildId }),
+  exportChangesSource: (projectId, artifactId) => ipcRenderer.invoke('build:export-changes-source', { projectId, artifactId }),
   debugState: () => ipcRenderer.invoke('debug:state'),
   debugInteraction: event => ipcRenderer.invoke('debug:interaction', event),
   configureDebug: settings => ipcRenderer.invoke('debug:configure', settings),

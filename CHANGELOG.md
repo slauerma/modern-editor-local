@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.0 — PDF review mode
+
+- Preview the whole proposed revision in two PDFs: Changes beside Proposed or Original. Open a movable, expandable comment inspector directly from measured change regions without shifting the pages.
+- Show accepted and tentative edits together; use faint gray live cues for tentative edits. Keep rejected suggestions in History and remove them from the proposed revision.
+- Accept or reject individual suggestions or a manuscript section's remaining edits, using the existing source checks, comments, Save and Undo. Bulk acceptance verifies compilation even when only one suggestion remains.
+- Prepare previews locally, keep the previous pair readable while updating, and offer an explicit Sol arrangement and optional visual check.
+- Put Save Changes PDF and Save comparison LaTeX directly in the comparison's ⋯ menu, saving the displayed snapshot without rebuilding or changing the manuscript.
+- In PDF mode, Files & history offers explicit Changes, Proposed revision and Original PDF exports, without falling back to the hidden workspace PDF.
+- Use consistent Accept all applicable and Reject all remaining labels. Rejection keeps unmatched comments and discussions in History with Undo.
+- Collapse the comments column directly with Hide in its header; restore it with Show comments above the source or Comments in Classic view. Keep the current suggestion, draft, discussion and chosen layout.
+
 ## 1.4.0 — Quieter contextual review and settings defaults
 
 - Copy the external-review prompt, JSON example and import format notes directly from Help.
