@@ -12,7 +12,7 @@ import { editorAuthor, predecessorCredit } from '../shared/editor-credits.ts';
 const editorVersion = (JSON.parse(packageInfo) as { version: string }).version;
 const sections = [...helpSections(guide, 'guide'), ...helpSections(setup, 'setup'), ...helpSections(faq, 'faq'), ...helpSections(changelog, 'changelog')];
 const titles: Record<HelpDocument, string> = { guide: 'Writing & review', setup: 'Setup', faq: 'FAQ & recovery', changelog: 'Changelog' };
-type Props = { onClose(): void; disabled?: boolean };
+type Props = { onClose(): void; disabled?: boolean; initialQuery?: string };
 function inline(value: string): ReactNode[] {
   return value.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean).map((part, index) => {
     if (part.startsWith('`') && part.endsWith('`')) return <code key={index}>{part.slice(1, -1)}</code>;
@@ -52,14 +52,15 @@ export function MarkdownText({ text }: { text: string }) {
   return <>{blocks}</>;
 }
 
-export function HelpPanel({ onClose }: Props) {
-  const [query, setQuery] = useState(''), [tab, setTab] = useState<HelpDocument | 'shortcuts'>('guide');
+export function HelpPanel({ onClose, initialQuery = '' }: Props) {
+  const [query, setQuery] = useState(initialQuery), [tab, setTab] = useState<HelpDocument | 'shortcuts'>('guide');
   const [selected, setSelected] = useState(sections.find(section => section.document === 'guide' && /first session/i.test(section.title))?.id ?? sections[0]?.id);
   const search = useRef<HTMLInputElement>(null), article = useRef<HTMLElement>(null), panel = useRef<HTMLElement>(null);
+  const [copyStatus, setCopyStatus] = useState('');
   useDialogFocus(panel, onClose, { initialFocus: search });
   const choices = useMemo(() => query.trim() ? findHelpSections(sections, query) : sections.filter(section => tab === 'shortcuts' ? section.document === 'guide' && /keyboard shortcuts/i.test(section.title) : section.document === tab), [query, tab]);
   const current = choices.find(section => section.id === selected) ?? choices[0];
-  useEffect(() => { article.current?.scrollTo({ top: 0 }); }, [current?.id]);
+  useEffect(() => { article.current?.scrollTo({ top: 0 }); setCopyStatus(''); }, [current?.id]);
   return <div className="help-overlay"><section ref={panel} tabIndex={-1} className="help-panel" role="dialog" aria-modal="true" aria-labelledby="editor-help-title">
     <header><div><h2 id="editor-help-title">Help</h2><p className="help-version">Modern Codex Editor · Version {editorVersion}</p><p className="help-version">By {editorAuthor}. {predecessorCredit}</p></div><button onClick={onClose}>Close</button></header>
     <div className="help-search"><input ref={search} type="search" aria-label="Search editor help" placeholder="Search help, shortcuts, or recovery…" value={query} onChange={event => setQuery(event.target.value)} maxLength={200} />{query && <button onClick={() => { setQuery(''); search.current?.focus(); }}>Clear</button>}</div>
@@ -68,6 +69,11 @@ export function HelpPanel({ onClose }: Props) {
       {query && <p role="status">{choices.length} matching {choices.length === 1 ? 'section' : 'sections'}</p>}
       {choices.map(section => <button key={section.id} aria-current={current?.id === section.id ? 'true' : undefined} onClick={() => setSelected(section.id)}><strong>{section.title}</strong>{query && <small>{titles[section.document]} · {helpPlainText(section.body).slice(0, 100)}…</small>}</button>)}
       {!choices.length && <p>No matching section. Try “save”, “preamble”, “PDF”, or “Codex”.</p>}
-    </nav><article ref={article} tabIndex={0} aria-label="Help section">{current && <><p className="help-document-label">{titles[current.document]}</p><h3>{current.title}</h3><MarkdownText text={current.body} /></>}</article></div>
+    </nav><article ref={article} tabIndex={0} aria-label="Help section">{current && <><p className="help-document-label">{titles[current.document]}</p><h3>{current.title}</h3>
+      {current.document === 'guide' && current.title === 'Generate comment JSON' && <div className="help-copy-prompt"><button onClick={async () => {
+        try { await window.editor.copyReviewPrompt(current.body); setCopyStatus('Prompt, JSON example and format notes copied.'); }
+        catch { setCopyStatus('Could not copy. Select the instructions below and copy them manually.'); }
+      }}>Copy review prompt</button><span role="status">{copyStatus}</span></div>}
+      <MarkdownText text={current.body} /></>}</article></div>
   </section></div>;
 }

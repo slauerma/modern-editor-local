@@ -6,7 +6,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ProjectService } from '../src/main/project-service.ts';
 import { atomicWrite, digest } from '../src/main/files.ts';
-import { commentSchema, defaultWorkspace } from '../src/shared/contracts.ts';
+import { commentSchema, defaultWorkspace, defaultPaperReviewSettings } from '../src/shared/contracts.ts';
 import { locate, proposalChanges, reattachComment } from '../src/shared/review.ts';
 import { initialState, commentsField } from '../src/renderer/editor-state.ts';
 
@@ -16,6 +16,37 @@ async function fixture(bytes = 'Original source\n') {
   const service = new ProjectService(path.join(root, 'cache')), project = await service.open(file);
   return { root, paper, file, service, project };
 }
+test('resetting paper review settings preserves instructions, comments, recovery and reading position', async () => {
+  const f = await fixture(), defaults = defaultPaperReviewSettings();
+  await f.service.setPaperGuidance(f.project.id, 'Keep my notation and mathematical claims.', { localEditsOnly: false, preserveVoice: false });
+  await f.service.setPaperReviewSettings(f.project.id, { ...defaults, engine: 'lualatex', effort: 'high', fastMode: true, localEditsOnly: false, preserveVoice: false });
+  const review = { ...f.project.review, comments: [commentSchema.parse({ id: 'keep-note', title: 'Keep this comment', original: '', replacement: null, explanation: 'Retained note' })] };
+  await f.service.persist({ projectId: f.project.id, text: 'Unsaved manuscript\n', review });
+  await f.service.setWorkspace(f.project.id, { ...defaultWorkspace(), pdf: { ...defaultWorkspace().pdf, page: 3 }, autoAddComments: false });
+  const home = await f.service.stateDirectory(f.project.id);
+  const files = [f.file, ...['review.json', 'recovery/session.json', 'workspace.json'].map(file => path.join(home, file))];
+  const before = await Promise.all(files.map(file => fs.readFile(file)));
+  await f.service.setPaperReviewSettings(f.project.id, defaults);
+  assert.deepEqual(await Promise.all(files.map(file => fs.readFile(file))), before);
+  const reopened = await new ProjectService(path.join(f.root, 'cache')).open(f.file);
+  assert.deepEqual({ engine: reopened.engine, effort: reopened.effort, fastMode: reopened.fastMode, ...reopened.editPreferences }, defaults);
+  assert.equal(reopened.paperInstructions, 'Keep my notation and mathematical claims.');
+  assert.equal(reopened.text, 'Unsaved manuscript\n');
+  assert.equal(reopened.review.comments[0].id, 'keep-note');
+  assert.equal(reopened.workspace?.pdf.page, 3);
+  assert.equal(reopened.workspace?.autoAddComments, false);
+});
+test('invalid or failed paper settings writes leave live settings and the existing file unchanged', async () => {
+  const f = await fixture(), defaults = defaultPaperReviewSettings();
+  await f.service.setPaperReviewSettings(f.project.id, { ...defaults, effort: 'high' });
+  const home = await f.service.stateDirectory(f.project.id), file = path.join(home, 'settings.json'), before = await fs.readFile(file);
+  await assert.rejects(f.service.setPaperReviewSettings(f.project.id, { ...defaults, fastMode: 'yes' } as never));
+  assert.deepEqual(await fs.readFile(file), before); assert.equal(f.service.get(f.project.id).effort, 'high');
+  await fs.rename(file, file + '.kept'); await fs.mkdir(file);
+  try { await assert.rejects(f.service.setPaperReviewSettings(f.project.id, defaults)); assert.equal(f.service.get(f.project.id).effort, 'high'); }
+  finally { await fs.rmdir(file); await fs.rename(file + '.kept', file); }
+  assert.deepEqual(await fs.readFile(file), before);
+});
 test('unsaved recovery preserves original source and resumes text and comments together', async () => {
   const f = await fixture(), text = 'Unsaved source\n';
   await f.service.persist({ projectId: f.project.id, text, review: f.project.review });

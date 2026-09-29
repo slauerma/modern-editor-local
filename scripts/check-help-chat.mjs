@@ -14,20 +14,27 @@ const appRequire = createRequire(path.join(appRoot, 'package.json'));
 const { _electron } = (args.length ? createRequire(path.resolve(args[1])) : appRequire)('playwright');
 const version = JSON.parse(await fs.readFile(path.join(appRoot, 'package.json'), 'utf8')).version;
 const root = path.join(appRoot, '.test-runs', 'help-chat-desktop-' + Date.now());
-const copy = path.join(root, 'desktop-copy'), evidence = path.join(root, 'evidence');
-await fs.mkdir(copy, { recursive: true }); await fs.mkdir(evidence);
+const copy = path.join(root, 'desktop-copy'), evidence = process.env.ME_TEST_EVIDENCE || path.join(root, 'evidence');
+await fs.mkdir(copy, { recursive: true }); await fs.mkdir(evidence, { recursive: true });
 await fs.cp(path.join(appRoot, 'dist'), path.join(copy, 'dist'), { recursive: true });
 await fs.writeFile(path.join(copy, 'package.json'), JSON.stringify({ name: 'help-chat-check', version, private: true, main: 'dist/main.cjs' }));
+const probeFile=path.join(root,'chat-probe.json');
 const injection = `
 const chatProbe={requests:[],pending:null,compileAttempts:0};
+const probePath=${JSON.stringify(probeFile)};
+function writeChatProbe(){
+  const fs=require('node:fs');
+  fs.writeFileSync(probePath+'.tmp',JSON.stringify({count:chatProbe.requests.length,pending:!!chatProbe.pending,compileAttempts:chatProbe.compileAttempts,request:chatProbe.requests.at(-1)}));
+  fs.renameSync(probePath+'.tmp',probePath);
+}
 codex.client.run=async(prompt,schema,progress,effort,fast,reader,options)=>{
   if(chatProbe.pending)throw new Error('Concurrent requests');
   chatProbe.requests.push({prompt:JSON.parse(prompt),effort,fast,images:options?.images??[]});
-  return new Promise((resolve,reject)=>{chatProbe.pending={resolve,reject};});
+  return new Promise((resolve,reject)=>{chatProbe.pending={resolve,reject};writeChatProbe();});
 };
-codex.client.cancel=codex.client.stop=async()=>{const p=chatProbe.pending;chatProbe.pending=null;p?.reject(new Error('Synthetic cancellation'));};
-compiler.compile=async()=>{chatProbe.compileAttempts++;throw new Error('Unexpected compilation from chat');};
-globalThis.__chatProbe=chatProbe;
+codex.client.cancel=codex.client.stop=async()=>{const p=chatProbe.pending;chatProbe.pending=null;writeChatProbe();p?.reject(new Error('Synthetic cancellation'));};
+compiler.compile=async()=>{chatProbe.compileAttempts++;writeChatProbe();throw new Error('Unexpected compilation from chat');};
+globalThis.__chatProbe=chatProbe;globalThis.__writeChatProbe=writeChatProbe;writeChatProbe();
 `;
 await build({ entryPoints: [path.join(appRoot,'src/main/index.ts')], outfile: path.join(copy,'dist/main.cjs'), bundle: true, platform:'node', format:'cjs', target:'node22', external:['electron'], plugins:[{name:'synthetic-chat',setup(b){b.onLoad({filter:/src\/main\/index\.ts$/},async a=>({contents:await fs.readFile(a.path,'utf8')+injection,loader:'ts'}));}}] });
 const reader = await build({ stdin:{contents:"import {EditorView} from '@codemirror/view';window.editorViewForTest=element=>EditorView.findFromDOM(element);",resolveDir:appRoot},bundle:true,write:false,format:'iife',platform:'browser' });
@@ -41,9 +48,12 @@ const drawer=()=>page.getByRole('complementary',{name:'Codex Side Chat'});
 const button=name=>drawer().getByRole('button',{name,exact:true});
 const question=()=>page.getByLabel('Message to Codex Side Chat');
 const scope=()=>page.getByLabel('Chat conversation');
-async function probe(){return application.evaluate(()=>({requests:globalThis.__chatProbe.requests,pending:!!globalThis.__chatProbe.pending,compileAttempts:globalThis.__chatProbe.compileAttempts}));}
-async function ask(text){const count=(await probe()).requests.length;await question().fill(text);await button('Ask Codex').click();await poll(async()=>{const p=await probe();return p.pending&&p.requests.length===count+1;},'chat request');}
-async function complete(answer){await application.evaluate((_,answer)=>{const p=globalThis.__chatProbe.pending;globalThis.__chatProbe.pending=null;p.resolve(answer);},answer);await drawer().locator('.chat-answer').filter({hasText:answer.reply}).waitFor();await poll(()=>button('Ask Codex').isEnabled().then(x=>!x),'composer cleared');await poll(()=>question().isEnabled(),'reply complete');}
+// Observe the injected fake client without polling Electron's inspector during image IPC.
+// Atomic snapshots also keep large bundled prompts out of inspector serialization.
+async function probe(){return JSON.parse(await fs.readFile(probeFile,'utf8'));}
+async function lastRequest(){return (await probe()).request;}
+async function ask(text){const count=(await probe()).count;await question().fill(text);await button('Ask Codex').click();await poll(async()=>{const p=await probe();return p.pending&&p.count===count+1;},'chat request');}
+async function complete(answer){await application.evaluate((_,answer)=>{const p=globalThis.__chatProbe.pending;globalThis.__chatProbe.pending=null;globalThis.__writeChatProbe();p.resolve(answer);},answer);await drawer().locator('.chat-answer').filter({hasText:answer.reply}).waitFor();await poll(()=>button('Ask Codex').isEnabled().then(x=>!x),'composer cleared');await poll(()=>question().isEnabled(),'reply complete');}
 async function shot(name){await page.screenshot({path:path.join(evidence,name+'.png'),scale:'css'});receipt.screenshots.push(name+'.png');}
 async function check(name){assert.equal((await probe()).compileAttempts,0);assert.equal(await fs.readFile(file,'utf8'),source);receipt.checks.push(name);console.log('PASS',name);}
 async function buffer(){return page.getByLabel('Document source',{exact:true}).evaluate(el=>window.editorViewForTest(el).state.doc.toString());}
@@ -54,7 +64,7 @@ async function pasteScreenshot(dataUrl,name){await question().evaluate((el,{data
 const answer={reply:'Allocation is singular. The proposed sentence keeps the meaning.',suggestion:{title:'Correct the verb',explanation:'Use a singular verb.',original:'The allocation are monotone.',before:'',after:'',replacement:'The allocation is monotone.',packages:[]}};
 try{
   await launch();await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();await question().waitFor();
-  await ask('Which version is running, and how can I compile?');let request=(await probe()).requests.at(-1);assert.equal(request.prompt.application.version,version);assert(request.prompt.application.documentation.includes('Command+T'));assert(!request.prompt.source);assert.equal(request.effort,'medium');
+  await ask('Which version is running, and how can I compile?');let request=await lastRequest();assert.equal(request.prompt.application.version,version);assert(request.prompt.application.documentation.includes('Command+T'));assert(!request.prompt.source);assert.equal(request.effort,'medium');
   await complete({reply:`This is Modern Editor ${version}. Command+T compiles the current draft.`,suggestion:null});await shot('01-editor-help');await check('Editor help without a paper uses bundled docs and actual version');
   const image=await application.evaluate(({nativeImage})=>'data:image/png;base64,'+nativeImage.createFromBitmap(Buffer.alloc(240*120*4,180),{width:240,height:120}).toPNG().toString('base64'));
   await pasteScreenshot(image,'Pasted synthetic warning.png');await drawer().getByAltText('Pasted synthetic warning.png').waitFor();
@@ -64,13 +74,13 @@ try{
   await drawer().getByAltText('Dropped synthetic screenshot.png').waitFor();await button('Remove Dropped synthetic screenshot.png').click();
   const png=Buffer.from(image.split(',')[1],'base64'), imagePath=path.join(root,'Synthetic warning.png');await fs.writeFile(imagePath,Buffer.concat([png,Buffer.from('SYNTHETIC_METADATA_TO_REMOVE')]));
   await page.getByLabel('Choose chat screenshots').setInputFiles(imagePath);await drawer().getByAltText('Synthetic warning.png').waitFor();
-  await ask('Explain this screenshot.');request=(await probe()).requests.at(-1);assert.equal(request.images.length,1);assert(!Buffer.from(request.images[0].split(',')[1],'base64').includes(Buffer.from('SYNTHETIC_METADATA_TO_REMOVE')));assert(!JSON.stringify(request.prompt).includes('data:image'));
+  await ask('Explain this screenshot.');request=await lastRequest();assert.equal(request.images.length,1);assert(!Buffer.from(request.images[0].split(',')[1],'base64').includes(Buffer.from('SYNTHETIC_METADATA_TO_REMOVE')));assert(!JSON.stringify(request.prompt).includes('data:image'));
   await complete({reply:'The attached synthetic image is available as an image input.',suggestion:null});await shot('02-screenshot-message');await check('Paste, drop, enlarge, remove, file attachment and main-process image normalization');
   await ask('Retry this same question after stopping.');await button('Stop').click();await poll(()=>question().isEnabled(),'cancel completion');assert.equal(await question().inputValue(),'Retry this same question after stopping.');await ask('Retry this same question after stopping.');await complete({reply:'The unchanged question can be retried after Stop.',suggestion:null});await check('Stop retains question and unchanged retry uses a fresh preview');
   await question().fill('Keep this unsent question.');await button('Close Codex Side Chat').click();await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert.equal(await question().inputValue(),'Keep this unsent question.');await button('Close Codex Side Chat').click();
   await openPaper();await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert.equal(await scope().inputValue(),'paper');assert.equal(await drawer().locator('.chat-turn').count(),0);
-  await ask('Improve the grammar of the first sentence.');request=(await probe()).requests.at(-1);assert.equal(request.prompt.source.text,source);assert(!request.prompt.diagnostics);await complete(answer);assert.equal(await buffer(),source);assert.equal(await drawer().locator('.chat-suggestion').count(),1);await shot('03-paper-proposal');
-  await button('Turn into comment').click();await poll(()=>drawer().isHidden(),'drawer closes for review');assert.equal(await buffer(),source);assert.equal(await page.getByLabel('Proposed replacement',{exact:true}).inputValue(),answer.suggestion.replacement);
+  await ask('Improve the grammar of the first sentence.');request=await lastRequest();assert.equal(request.prompt.source.text,source);assert(!request.prompt.diagnostics);await complete(answer);assert.equal(await buffer(),source);assert.equal(await drawer().locator('.chat-suggestion').count(),1);await shot('03-paper-proposal');
+  await button('Turn into comment').click();await poll(()=>drawer().isHidden(),'drawer closes for review');assert.equal(await buffer(),source);await page.getByRole('button',{name:'Edit',exact:true}).click();assert.equal(await page.getByLabel('Proposed replacement',{exact:true}).inputValue(),answer.suggestion.replacement);
   await application.evaluate(({Menu,BrowserWindow})=>{const item=Menu.getApplicationMenu().items.find(x=>x.label==='Edit').submenu.items.find(x=>x.label==='Undo');item.click(item,BrowserWindow.getAllWindows()[0],{});});await poll(()=>page.getByLabel('Proposed replacement',{exact:true}).count().then(n=>n===0),'undo added comment');await check('Adding a visible proposal is undoable and never changes source');
   await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();await ask('Improve that sentence again while I edit.');
   await page.getByLabel('Document source',{exact:true}).evaluate(el=>{const view=window.editorViewForTest(el);view.dispatch({changes:{from:0,insert:'% synthetic edit\n'}});});

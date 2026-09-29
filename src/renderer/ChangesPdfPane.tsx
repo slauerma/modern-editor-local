@@ -1,7 +1,7 @@
 import { traceInteraction } from './debug-interactions.ts';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import type { ChangesArtifact, ChangesInput, ChangesPresentation } from '../shared/changes-pdf.ts';
-import { changesUpdateDue } from '../shared/changes-agent.ts';
+import { changesUpdateDue, defaultChangesEvery } from '../shared/changes-agent.ts';
 import type { PdfJump, PdfPosition } from './pdf-position.ts';
 import { PdfPane, type PdfChangeTarget, type PdfPaneHandle } from './PdfPane.tsx';
 import { comparisonScreenshots } from './comparison-screenshots.ts';
@@ -28,7 +28,7 @@ export function ChangesPdfPane({ onExport, onExportReady, findHandle, input, rea
     const timer = setInterval(() => setElapsed(Math.floor((performance.now() - started.current) / 1000)), 500);
     return () => clearInterval(timer);
   }, [working]);
-  const [every, setEvery] = useState(5), [settingsReady, setSettingsReady] = useState(false), [paused, setPaused] = useState(false), [refreshRequest, setRefreshRequest] = useState(0);
+  const [every, setEvery] = useState(defaultChangesEvery), [settingsReady, setSettingsReady] = useState(false), [paused, setPaused] = useState(false), [refreshRequest, setRefreshRequest] = useState(0);
   const [position, setPosition] = useState<PdfPosition>({ page: 1, zoom: 1 }), [jump, setJump] = useState<PdfJump | null>(null);
   const [noteTarget, setNoteTarget] = useState<PdfChangeTarget | null>(null);
   const bottomOverlay = useRef<HTMLDivElement>(null), toolbar = useRef<HTMLDivElement>(null);
@@ -58,6 +58,11 @@ export function ChangesPdfPane({ onExport, onExportReady, findHandle, input, rea
   useEffect(() => { let live = true;
     void window.editor.changesSettings().then(s => { if (live) setEvery(s.every); }).catch(e => { if (live) setError(errorText(e)); }).finally(() => { if (live) setSettingsReady(true); });
     return () => { live = false; };
+  }, []);
+  useEffect(() => {
+    const changed = (event: Event) => { const value = (event as CustomEvent<number>).detail; if (Number.isInteger(value) && value >= 1 && value <= 50) setEvery(value); };
+    window.addEventListener('changes-settings-updated', changed);
+    return () => window.removeEventListener('changes-settings-updated', changed);
   }, []);
   const snapshot = saved?.proposal === input.proposalId ? saved : null;
   // Keep the previous PDF while compiling another presentation, with its actual

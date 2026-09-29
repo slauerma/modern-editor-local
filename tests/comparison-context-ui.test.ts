@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
-import { changesUpdateDue } from '../src/shared/changes-agent.ts';
+import { changesUpdateDue, defaultChangesEvery } from '../src/shared/changes-agent.ts';
 import { comparisonPlan } from '../src/shared/changes-pdf.ts';
 import { PASTED_CONTEXT_BYTES } from '../src/shared/references.ts';
 
@@ -30,7 +30,7 @@ function mount(file: string, name: string, props: Record<string, any>, editor: R
   } };
   const target = new EventTarget();
   const scope = {
-    useState, useRef, useMemo, useEffect, PASTED_CONTEXT_BYTES, changesUpdateDue,
+    useState, useRef, useMemo, useEffect, PASTED_CONTEXT_BYTES, changesUpdateDue, defaultChangesEvery,
     React: { createElement: (type: unknown, props: any, ...children: any[]) => ({ type, props: props ?? {}, children: children.flat(Infinity) }) },
     window: { editor, addEventListener: target.addEventListener.bind(target), removeEventListener: target.removeEventListener.bind(target) },
     requestAnimationFrame: (fn: () => void) => queueMicrotask(fn), traceInteraction: () => {}, PdfPane: 'PdfPane',

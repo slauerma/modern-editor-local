@@ -368,7 +368,7 @@ test('explicit unchecked acceptance applies even invalid TeX with its packages, 
   assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'applied');
   assert.equal(f.states.writes[0].text, source); assert.equal(f.states.writes.at(-1).text, expected); assert.equal(f.states.saved, undefined);
   assert.equal(f.states.Build.id, 'old-pdf'); assert.equal(f.states.PdfText, source); assert.equal(f.states.ViewCandidate, false); assert.equal(f.states.CandidateBuild, null);
-  assert.match(f.states.status, /Applied.*Undo/); assert.equal(f.states.notice, undefined);
+  assert.equal(f.states.status, 'Applied'); assert.equal(f.states.notice, undefined);
   assert(f.scope.doHistory()); assert.equal(f.editor.state.doc.toString(), source); assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'open'); assert.equal(f.states.notice, '');
 });
 

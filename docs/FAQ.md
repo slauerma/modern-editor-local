@@ -22,6 +22,10 @@ If the error says **Codex review restrictions could not be verified**, no paper 
 
 If the error names an unsupported effort, choose an effort listed as supported in that error. If Fast mode was refused, turn **Fast mode** off in Actions or check the model's access before retrying. The app reports an unsupported setting instead of silently substituting one. Authentication details belong in your own CLI configuration, never in a paper or shared bug report.
 
+## How can I see or undo settings changes?
+
+**Settings → Changed settings** lists values that differ from the installed defaults, with current and default values side by side. Reset one row or all settings in a named group, then use that group's Save button. **Undo reset** restores the previous values; save again if necessary. Closing Settings discards unsaved settings changes. Paper text, comments, authored instructions, reading positions, sign-in and existing debug records are preserved. Debug recording returns to off only when you save that reset. See [settings scopes](USER_GUIDE.md#changed-settings-and-defaults).
+
 ## Do I need to update the editor whenever Codex updates?
 
 Desktop and global CLI updates do not affect **Editor-managed CLI**. Its exact version is locked with this editor release. Installing an editor update with changed dependencies may update the managed CLI after compatibility testing. Account access and service availability still depend on Codex.
@@ -46,9 +50,11 @@ The editor reviews the opened root file or the selected passage. It does not exp
 
 ## Can I import comments from elsewhere?
 
-For unstructured notes, choose **Actions → Import outside feedback…**, paste the feedback, and inspect **Preview request**. **Turn into comments with Codex** saves the raw feedback first, then asks Codex to evaluate it and propose source-linked comments. Inspect the result and choose **Add selected comments**; this changes the review, not the manuscript. Failed attempts and unmatched advice remain available under Saved feedback. See the [outside-feedback guide](USER_GUIDE.md#turn-outside-feedback-into-comments).
+Yes. **Review → Import comments…** (also **Actions → Import JSON…**) loads prepared JSON locally, without a Codex request. This is the direct route for comments generated in Astra Pro or another model. Use the [generation prompt and workflow](USER_GUIDE.md#generate-comment-json), based on the exact current source. More than 30 comments are supported, within the 2,000-comment review limit and 10 MB import-file limit.
 
-Use **Actions → Import JSON…** for a JSON object with a `comments` array, or a bare array of comments. A simple example is:
+For a prose report or a different JSON format, **Actions → Import outside feedback…** saves it verbatim and uses Codex to convert it in batches. You can preview each request, add results as they arrive or inspect them first, and resume later. General or unmatched advice stays available. See the [outside-feedback guide](USER_GUIDE.md#turn-outside-feedback-into-comments). Attaching a report as context does not itself add comments.
+
+Direct import accepts an object with a `comments` array or a bare array. A simple example is:
 
 ```json
 {
@@ -96,7 +102,7 @@ Yes. Put an `alternatives` array on the same comment. Every option replaces the 
 }
 ```
 
-The main `replacement` is the initial wording. Omit it or use `null` to require a choice before acceptance. An empty option replacement means deletion. Each option may have an `id`, unique within that comment; import creates IDs when omitted. Labels and reasons are optional on import. Package lists belong to individual options. Use **Wording** to choose, edit the single replacement field, then Accept or Preview. Each option's edits are kept when switching, and choosing a wording is undoable without changing the manuscript. **Quick alternative** adds one choice with Sol at low effort and nearby context; **Three alternatives** remains available in Discuss.
+The main `replacement` is the initial wording. Omit it or use `null` to require a choice before acceptance. An empty option replacement means deletion. Each option may have an `id`, unique within that comment; import creates IDs when omitted. Labels and reasons are optional on import. Package lists belong to individual options. Use **Wording** to choose, use **Edit** to adjust that wording, then Accept or Preview. Each option's edits are kept when switching, and choosing a wording is undoable without changing the manuscript. **Quick alternative** adds one choice with Sol at low effort and nearby context; **Three alternatives** remains available in Discuss.
 
 There is a limit of 30 saved choices per comment, including the original suggestion. Reviews containing choices are saved as version 2. Older editor versions cannot open that review format; keep using the updated editor for these papers. Existing version-1 reviews remain supported. Importing the same file again may create duplicate comments.
 
@@ -110,7 +116,7 @@ Up to 12 reference locations can be remembered. Reading uses at most 40 tool cal
 
 ## How do I return to the home screen?
 
-Choose **Close project** beside the filename or in Actions/File. It preserves the draft in recovery, comments and reading position, then clears the paper from the window and automatic reopening. Reopen the same `.tex` file to continue; unsaved source is recovered when the disk version still matches. Save writes the source separately. If closing cannot preserve recovery, it leaves the project open.
+Choose **Actions → Close project** or use the File menu. It preserves the draft in recovery, comments and reading position, then clears the paper from the window and automatic reopening. Reopen the same `.tex` file to continue; unsaved source is recovered when the disk version still matches. Save writes the source separately. If closing cannot preserve recovery, it leaves the project open.
 
 ## Why does compilation ask about the paper folder?
 
@@ -118,15 +124,15 @@ Above **50 MB or 500 files**, a deterministic local dependency check identifies 
 
 ## Can I accept several suggestions together?
 
-Choose **More → Accept all applicable suggestions (N)** in the Comments pane. The count includes pending, current replacements that match the source exactly and do not overlap. Questions, stale or ambiguous suggestions, overlapping proposals and Later comments stay for individual review. The editor compiles the combined draft once before applying the eligible batch. One Undo restores its source changes and review decisions; Save remains separate. A candidate with warnings may pause for the explicit override described below.
+Choose **Details → Accept all applicable (N)** in the Comments pane. The count includes pending, current replacements that match the source exactly and do not overlap. Questions, stale or ambiguous suggestions, overlapping proposals and Later comments stay for individual review. The editor compiles the combined draft once before applying the eligible batch. One Undo restores its source changes and review decisions; Save remains separate. A candidate with warnings may pause for the explicit override described below.
 
 ## What is the difference between Reject, Skip and Resolve?
 
-**Reject** or **Shift+R** moves the current comment into History without changing the source; Undo restores it. Later reviews include a bounded summary of rejected suggestions, and automatic review/feedback integration suppresses exact repeated proposals. Different advice on the same passage is allowed; paraphrased repeats are not guaranteed to be caught. Reopen a rejected comment in History to reconsider it. **Skip** or **Shift+S** advances while leaving the comment pending. **Resolve** separately records that you have addressed an author question. **Accept** or **Shift+A** applies without compiling and advances. **Accept & compile** checks compilation first. The buttons show these key hints; the shortcuts work from comment controls outside typing fields. **Option+Backspace** still rejects a suggestion or resolves an author question.
+**Reject** or **Shift+R** moves the current comment into History without changing the source; Undo restores it. Later reviews include a bounded summary of rejected suggestions, and automatic review/feedback integration suppresses exact repeated proposals. Different advice on the same passage is allowed; paraphrased repeats are not guaranteed to be caught. Reopen a rejected comment in History to reconsider it. **Skip** or **Shift+S** advances while leaving the comment pending. **Resolve** separately records that you have addressed an author question. **Accept** or **Shift+A** applies without compiling and advances. **Accept & compile** checks compilation first. Hover over the buttons for these key hints; the shortcuts work from comment controls outside typing fields. **Option+Backspace** still rejects a suggestion or resolves an author question.
 
 ## How do I dismiss pending comments together?
 
-In the Comments pane, choose **More → Dismiss pending comments**. This closes the current pending batch without changing the source. Later comments, existing history and discussions are retained. One Undo restores the batch; comments arriving afterward retain their own status through Undo and Redo. You can also reopen individual dismissed comments from History.
+In the Comments pane, choose **Details → Dismiss pending**. This closes the current pending batch without changing the source. Later comments, existing history and discussions are retained. One Undo restores the batch; comments arriving afterward retain their own status through Undo and Redo. You can also reopen individual dismissed comments from History.
 
 ## A question refers to wording I have rewritten
 
@@ -207,6 +213,6 @@ If Save reports that version history needs attention, the source was saved but h
 
 ## How should I report a problem?
 
-Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **1.3.0**.
+Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **1.4.0**.
 
 Add the exact action and error, whether the synthetic sample reproduces it, your Node version (`node --version`), and the editor commit if known. A small synthetic `.tex` example is most useful. Inspect logs, screenshots, and `.modern-editor` records before sharing: they may contain source, discussion, or local paths. Do not include authentication tokens or account configuration. The [testing guide](../TESTING.md) separates offline checks from optional live Codex requests.

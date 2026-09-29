@@ -1,40 +1,36 @@
+import { presentableDiff } from '@codemirror/merge';
+import type { Comment } from './contracts.ts';
+
 export type DiffPart = { kind: 'same' | 'removed' | 'added'; text: string };
 
-// When edits dominate, interleaved red/green tokens obscure the resulting text.
-// This affects presentation only: both exact strings remain available.
-export function preferDiffBlocks(parts: DiffPart[]): boolean {
-  const changed = parts.filter(p => p.kind !== 'same');
-  const changedSize = changed.reduce((n, p) => n + p.text.length, 0);
-  const total = parts.reduce((n, p) => n + p.text.length, 0);
-  return changedSize > 100 && (changed.length > 8 || changedSize > total * .65);
-}
+// Word-aligned, bounded comparison also handles ordinary paragraph rewrites
+// that exceeded the old quadratic token-table cutoff.
 export function tokenDiff(original: string, proposed: string): DiffPart[] {
-  const tokens = (text: string) => text.match(/\\[a-zA-Z]+|\\.|[\p{L}\p{N}]+|\s+|[^\s]/gu) ?? [];
-  const a = tokens(original), b = tokens(proposed), result: DiffPart[] = [];
-  const push = (kind: DiffPart['kind'], text: string) => {
-    if (!text) return;
-    const last = result.at(-1);
-    if (last?.kind === kind) last.text += text; else result.push({ kind, text });
-  };
-  let start = 0, endA = a.length, endB = b.length;
-  while (start < endA && start < endB && a[start] === b[start]) start++;
-  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
-  push('same', a.slice(0, start).join(''));
-  const rows = endA - start, cols = endB - start;
-  // Bound comparison work for large replacements; retain the full exact text.
-  if (!rows || !cols || rows + cols > 2000 || rows * cols > 40000) {
-    push('removed', a.slice(start, endA).join('')); push('added', b.slice(start, endB).join(''));
-  } else {
-    const lengths = Array.from({ length: rows + 1 }, () => new Uint32Array(cols + 1));
-    for (let i = rows - 1; i >= 0; i--) for (let j = cols - 1; j >= 0; j--)
-      lengths[i][j] = a[start + i] === b[start + j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1]);
-    let i = 0, j = 0;
-    while (i < rows || j < cols) {
-      if (i < rows && j < cols && a[start + i] === b[start + j]) { push('same', a[start + i++]); j++; }
-      else if (i < rows && (j === cols || lengths[i + 1][j] >= lengths[i][j + 1])) push('removed', a[start + i++]);
-      else push('added', b[start + j++]);
-    }
+  const result: DiffPart[] = [];
+  const push = (kind: DiffPart['kind'], text: string) => { if (text) result.push({ kind, text }); };
+  let from = 0;
+  for (const change of presentableDiff(original, proposed, { scanLimit: 2000 })) {
+    push('same', original.slice(from, change.fromA));
+    push('removed', original.slice(change.fromA, change.toA));
+    push('added', proposed.slice(change.fromB, change.toB));
+    from = change.toA;
   }
-  push('same', a.slice(endA).join(''));
+  push('same', original.slice(from));
   return result;
+}
+
+// Context is display-only. Acceptance and editing still use the exact comment
+// span. Never attach a stale/history quotation to a guessed place in the draft.
+export function proposalContext(text: string, c: Pick<Comment, 'original' | 'from' | 'to' | 'validity' | 'decision'>) {
+  const empty = { before: '', after: '', contextual: false };
+  if (c.decision !== 'open' || c.validity !== 'current' || !c.original || c.from < 0 || c.to > text.length || text.slice(c.from, c.to) !== c.original) return empty;
+  const separators = /\r?\n[\t ]*\r?\n|^[\t ]*\\(?:begin|end|section|subsection|subsubsection|paragraph|chapter)\b[^\r\n]*(?:\r?\n|$)/gm;
+  let start = 0, end = text.length;
+  for (const match of text.matchAll(separators)) {
+    const stop = match.index! + match[0].length;
+    if (stop <= c.from) start = stop;
+    else if (match.index! >= c.to) { end = match.index!; break; }
+  }
+  // Very long blocks use nearby context. The actual proposal is never shortened.
+  return { before: text.slice(Math.max(start, c.from - 4000), c.from), after: text.slice(c.to, Math.min(end, c.to + 4000)), contextual: true };
 }

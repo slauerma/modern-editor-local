@@ -40,6 +40,8 @@ import { debugSettingsSchema, debugInteractionSchema } from '../shared/debugging
 import { chatImageSchema } from '../shared/help-chat.ts';
 import { managedCodexLocation, managedCodexVersion, verifyManagedCodex } from './managed-codex.ts';
 import { editorAuthor, predecessorCredit } from '../shared/editor-credits.ts';
+import { paperReviewSettingsSchema } from '../shared/contracts.ts';
+import { defaultChangesEvery } from '../shared/changes-agent.ts';
 
 app.setName('Modern Codex Editor');
 const runtimeOverride = process.env.MODERN_EDITOR_RUNTIME_DIR;
@@ -110,7 +112,7 @@ handle('debug:open', async () => { const state = await debug.state(); if (!state
 handle('changes:settings', async value => {
   const file = path.join(runtime, 'changes-settings.json'), schema = z.object({ every: z.number().int().min(1).max(50) }).strict();
   if (value !== undefined) { const settings = schema.parse({ every: value }); await writeJSON(file, settings); return settings; }
-  try { return schema.parse(await readJSON(file, 2000)); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { every: 5 }; throw e; }
+  try { return schema.parse(await readJSON(file, 2000)); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { every: defaultChangesEvery }; throw e; }
 });
 async function restoreWorkspace(p: Project | null) {
   if (p && storageNotices.length) p.notices.push(...storageNotices);
@@ -131,7 +133,7 @@ handle('project:draft', async () => {
 async function toolSettingsState(): Promise<ToolSettingsState> {
   const saved = await tools.load();
   const managed = managedCodexLocation(app.getAppPath());
-  return { settings: saved.settings, identity: setupIdentity(), runtimePath: runtime, notices: [...storageNotices, ...saved.notices], verifiedCodexVersions: [...verifiedCodexVersions], managedCodex: { version: managed.version, path: managed.path } };
+  return { settings: saved.settings, defaults: tools.defaults(), identity: setupIdentity(), runtimePath: runtime, notices: [...storageNotices, ...saved.notices], verifiedCodexVersions: [...verifiedCodexVersions], managedCodex: { version: managed.version, path: managed.path } };
 }
 const setupIdentity = () => ({ editorVersion: app.getVersion(), platform: process.platform, osVersion: process.getSystemVersion() });
 function reserveSetup() {
@@ -139,6 +141,7 @@ function reserveSetup() {
   setupBusy = true;
 }
 handle('setup:get', toolSettingsState);
+handle('help:copy-review-prompt', input => { clipboard.writeText(z.string().min(1).max(20000).parse(input)); });
 handle('setup:choose', async input => {
   const tool = z.enum(['codex', 'latexmk']).parse(input);
   const result = await dialog.showOpenDialog(window!, { title: `Choose the ${tool} executable`, properties: ['openFile', 'showHiddenFiles'] });
@@ -203,6 +206,10 @@ handle('project:demo', async () => {
 handle('project:persist', input => projects.persist(input));
 handle('project:save', input => projects.save(input));
 handle('project:engine', input => { const p = z.object({ projectId: z.string(), engine: engineSchema }).parse(input); return projects.setEngine(p.projectId, p.engine); });
+handle('project:review-settings', async input => {
+  const p = z.object({ projectId: z.string(), settings: paperReviewSettingsSchema }).strict().parse(input); reserveSetup();
+  try { await projects.setPaperReviewSettings(p.projectId, p.settings); } finally { setupBusy = false; }
+});
 handle('project:effort', input => { const p = z.object({ projectId: z.string(), effort: effortSchema }).parse(input); return projects.setEffort(p.projectId, p.effort); });
 handle('project:fast-mode', input => { const p = z.object({ projectId: z.string(), fastMode: fastModeSchema }).parse(input); return projects.setFastMode(p.projectId, p.fastMode); });
 handle('project:instructions', input => { const p = z.object({ projectId: z.string(), instructions: paperInstructionsSchema }).parse(input); return projects.setPaperInstructions(p.projectId, p.instructions); });

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0 — Quieter contextual review and settings defaults
+
+- Copy the external-review prompt, JSON example and import format notes directly from Help.
+- Inspect settings that differ from defaults and stage individual or scoped resets, with Undo reset and explicit Save. Preserve paper content, authored instructions and existing debug records.
+- Compile uses the same neutral toolbar style as Save and Review. Review offers Import comments with optional help for generating JSON in Astra Pro or another reviewer. Direct import remains local; the documentation separates it from feedback conversion and context attachments.
+- Uniform comment actions and pane headers, quieter selected modes and preview status, and a simpler review dialog with optional info hints. PDF passage highlights no longer include a margin bar.
+- Show one contextual inline diff per suggestion, with Clean and Edit modes; acceptance still applies only the exact proposal span.
+- Keep discussion closed until requested; preserve replies while switching comments.
+- Use one compact comment header with hover/click/keyboard Details, and move infrequent main-toolbar actions into menus.
+- Reduce repeated instructions, borders and status text; show PDF navigation warnings without shifting the workspace.
+- Refresh the three narrated demonstrations with the three-column Changes PDF workflow.
+
 ## 1.3.0 — Writing workflow and outside feedback
 
 - Add one-click Quick alternative with Sol Low, and import/save multiple wordings on one comment with per-option drafts, reasons, packages and Undo. Reviews with choices use version 2; older review files remain supported.

@@ -4,6 +4,7 @@ import * as fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { bufferSchema, reviewSchema, commentSchema, engineSchema, effortSchema, fastModeSchema, baselineSchema, paperInstructionsSchema, workspaceSchema } from '../shared/contracts.ts';
+import { defaultPaperReviewSettings, paperReviewSettingsSchema, type PaperReviewSettings } from '../shared/contracts.ts';
 import type { Project, Review, BufferInput, Engine, Effort, Baseline, WorkspaceState } from '../shared/contracts.ts';
 import { editPreferencesSchema, defaultEditPreferences, type EditPreferences } from '../shared/paper-guidance.ts';
 import { prepareDocumentState, readStateFile } from './document-state.ts';
@@ -101,7 +102,8 @@ export class ProjectService {
     const notices: string[] = [];
     let recoveryRevision = 0;
     let review: Review = { schemaVersion: 1, rootFile: name, sourceHash: digest(text), activeId: null, comments: [], updatedAt: new Date().toISOString() };
-    const p: Project = { id: randomUUID(), path: actual, name, text, diskHash, review, notices, recovered: false, engine: 'pdflatex', effort: 'medium', fastMode: false, paperInstructions: '', baseline: null };
+    const defaults = defaultPaperReviewSettings();
+    const p: Project = { id: randomUUID(), path: actual, name, text, diskHash, review, notices, recovered: false, engine: defaults.engine, effort: defaults.effort, fastMode: defaults.fastMode, paperInstructions: '', baseline: null };
     const home = await prepareDocumentState(actual, false, notices);
     if (await exists(home)) {
       if ((await fs.lstat(home)).isSymbolicLink()) throw new Error('The review directory is a symbolic link. Choose a paper with a local review directory.');
@@ -119,8 +121,8 @@ export class ProjectService {
           const settings = await readJSON(settingsFile) as { rootFile: string; engine: unknown; effort?: unknown; fastMode?: unknown; paperInstructions?: unknown; editPreferences?: unknown };
           if (settings.rootFile !== name) throw new Error('Different root document');
           p.engine = engineSchema.parse(settings.engine);
-          p.effort = effortSchema.parse(settings.effort ?? 'medium');
-          p.fastMode = fastModeSchema.parse(settings.fastMode ?? false);
+          p.effort = effortSchema.parse(settings.effort ?? defaults.effort);
+          p.fastMode = fastModeSchema.parse(settings.fastMode ?? defaults.fastMode);
           p.paperInstructions = paperInstructionsSchema.parse(settings.paperInstructions ?? '');
           p.editPreferences = editPreferencesSchema.parse(settings.editPreferences ?? {});
         } catch { notices.push('Some saved paper settings could not be used. Check the review instructions and selectors; the settings file was kept.'); }
@@ -216,6 +218,12 @@ export class ProjectService {
     const p = this.get(projectId), checked = engineSchema.parse(engine), dirs = await this.dirs(p);
     await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine: checked, effort: p.effort, paperInstructions: p.paperInstructions, editPreferences: p.editPreferences ?? defaultEditPreferences(), fastMode: p.fastMode });
     p.engine = checked;
+  }); }
+  async setPaperReviewSettings(projectId: string, input: PaperReviewSettings) { return this.serial(async () => {
+    const p = this.get(projectId), checked = paperReviewSettingsSchema.parse(input), dirs = await this.dirs(p);
+    const { engine, effort, fastMode, ...editPreferences } = checked;
+    await writeJSON(path.join(dirs.home, 'settings.json'), { rootFile: p.name, engine, effort, fastMode, editPreferences, paperInstructions: p.paperInstructions });
+    Object.assign(p, { engine, effort, fastMode, editPreferences });
   }); }
   async setEffort(projectId: string, effort: Effort) { return this.serial(async () => {
     const p = this.get(projectId), checked = effortSchema.parse(effort), dirs = await this.dirs(p);

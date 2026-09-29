@@ -20,7 +20,9 @@ const executablePath = appRequire('electron');
 const stamp = Date.now();
 const root = path.join(appRoot, '.test-runs', `discussion-proposals-${stamp}`);
 const copy = path.join(root, 'desktop-copy');
-const evidence = path.join(appRoot, 'test-evidence/discussion-proposals-2026-09-09', `native-${stamp}`);
+const evidence = process.env.ME_TEST_EVIDENCE
+  ? path.resolve(process.env.ME_TEST_EVIDENCE)
+  : path.join(appRoot, 'test-evidence/discussion-proposals-2026-09-09', `native-${stamp}`);
 await fs.mkdir(copy, { recursive: true });
 await fs.mkdir(evidence, { recursive: true });
 await fs.cp(path.join(appRoot, 'dist'), path.join(copy, 'dist'), { recursive: true });
@@ -132,6 +134,7 @@ async function record() {
   catch (error) { if (error.code === 'ENOENT') return null; throw error; }
 }
 async function proposalIs(text, packages) {
+  if (!await replacement().count()) await button('Edit').click();
   await poll(async () => await replacement().inputValue() === text, 'proposal field');
   await poll(async () => {
     const saved = await record();
@@ -223,6 +226,7 @@ try {
   if (await button('Dismiss notice').count()) await button('Dismiss notice').click();
   await page.getByRole('button', { name: /^Discuss\b/ }).click();
   await ask('Please propose precise wording, keeping the literal LaTeX available for inspection.');
+  await button('Edit').click();
   await replacement().fill(manualDraft);
   await note().fill(newerNote);
   await complete(answerA);
@@ -293,13 +297,13 @@ try {
   await check('Deletion is explicit, selects an empty proposal only, and remains undoable');
 
   await button('Reject').click();
-  await button('History').click();
+  await page.locator('.comment-details > button').click();await button('History').click();
   await page.getByRole('heading', { name: comment.title, exact: true }).waitFor();
-  assert(await replacement().isDisabled());
+  assert.equal(await replacement().count(),0);assert.equal(await button('Edit').count(),0);await button('Discuss').click();
   for (const answer of [answerA, answerB, deletion]) assert(await use(answer.reply).isDisabled());
   assert.equal(await page.locator('.reply-current').count(), 0);
   assert.equal(await wording(answerA.reply).textContent(), answerA.replacement);
-  await button('Comment options ▾').click();
+  await page.locator('.comment-details > button').click();
   await button('Reopen').click();
   await proposalIs(manualDraft, ['amsmath']);
   for (const answer of [answerA, answerB, deletion]) assert(await use(answer.reply).isEnabled());
@@ -341,7 +345,7 @@ try {
   await check('Minimum-width layout shows the complete long suggestion with wrapping and no clipped inner ending');
 
   await button('Save').click();
-  await page.locator('footer [role="status"]').filter({ hasText: 'Source and review saved' }).waitFor();
+  await page.locator('footer [role="status"]').filter({ hasText: /^Saved$/ }).waitFor();
   assert.equal((await probe()).requests.length, 5);
   receipt.controlledRequests = (await probe()).requests.length;
   await closeOwned();

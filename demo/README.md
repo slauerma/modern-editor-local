@@ -1,24 +1,30 @@
 # Modern Editor demonstrations
 
-These three narrated **1.3.0** demonstrations show the current writing and review workflow. Each has a smaller download, English captions, a transcript and background music.
+These three narrated demonstrations show the updated 28 September writing and review layout. Each has a smaller download, English captions, a transcript and background music. The later JSON-import shortcut, Copy review prompt and settings-reset controls are described in the [current guide](../docs/USER_GUIDE.md) and are not shown in these recordings.
 
 | Video | Length | Large · 1600×1000 | Small · 1280×800 |
 | --- | --- | --- | --- |
-| Quick overview | 0:55 | [6.0 MB](2026-09-27/modern-editor-overview-55s.mp4) | [2.8 MB](2026-09-27/modern-editor-overview-55s-small.mp4) |
-| Full walkthrough | 3:00 | [17.5 MB](2026-09-27/modern-editor-walkthrough-3min.mp4) | [8.3 MB](2026-09-27/modern-editor-walkthrough-3min-small.mp4) |
-| Changes PDF / LaTeXdiff | 0:50 | [4.7 MB](2026-09-27/modern-editor-latexdiff-50s.mp4) | [2.2 MB](2026-09-27/modern-editor-latexdiff-50s-small.mp4) |
+| Quick overview | 0:55 | [6.4 MB](2026-09-28/modern-editor-overview-55s.mp4) | [2.8 MB](2026-09-28/modern-editor-overview-55s-small.mp4) |
+| Full walkthrough | 3:00 | [17.5 MB](2026-09-28/modern-editor-walkthrough-3min.mp4) | [7.9 MB](2026-09-28/modern-editor-walkthrough-3min-small.mp4) |
+| Changes PDF / LaTeXdiff | 0:50 | [5.3 MB](2026-09-28/modern-editor-latexdiff-50s.mp4) | [2.5 MB](2026-09-28/modern-editor-latexdiff-50s-small.mp4) |
 
-[![Changes PDF with revision markup](2026-09-27/latexdiff-poster.png)](2026-09-27/modern-editor-latexdiff-50s.mp4)
+[![Changes PDF with revision markup](2026-09-28/latexdiff-poster.png)](2026-09-28/modern-editor-latexdiff-50s.mp4)
 
 The overview introduces reviewing and choosing wording. The walkthrough also covers Classic view, Side Chat and saving. The focused Changes PDF clip shows struck deletions, underlined additions, explanations, Clean paper and exact Text diff.
 
 | Captions and text | Transcript | SRT | VTT |
 | --- | --- | --- | --- |
-| Overview | [Read](2026-09-27/modern-editor-overview-55s-transcript.md) | [Download](2026-09-27/modern-editor-overview-55s.srt) | [Download](2026-09-27/modern-editor-overview-55s.vtt) |
-| Walkthrough | [Read](2026-09-27/modern-editor-walkthrough-3min-transcript.md) | [Download](2026-09-27/modern-editor-walkthrough-3min.srt) | [Download](2026-09-27/modern-editor-walkthrough-3min.vtt) |
-| Changes PDF | [Read](2026-09-27/modern-editor-latexdiff-50s-transcript.md) | [Download](2026-09-27/modern-editor-latexdiff-50s.srt) | [Download](2026-09-27/modern-editor-latexdiff-50s.vtt) |
+| Overview | [Read](2026-09-28/modern-editor-overview-55s-transcript.md) | [Download](2026-09-28/modern-editor-overview-55s.srt) | [Download](2026-09-28/modern-editor-overview-55s.vtt) |
+| Walkthrough | [Read](2026-09-28/modern-editor-walkthrough-3min-transcript.md) | [Download](2026-09-28/modern-editor-walkthrough-3min.srt) | [Download](2026-09-28/modern-editor-walkthrough-3min.vtt) |
+| Changes PDF | [Read](2026-09-28/modern-editor-latexdiff-50s-transcript.md) | [Download](2026-09-28/modern-editor-latexdiff-50s.srt) | [Download](2026-09-28/modern-editor-latexdiff-50s.vtt) |
 
-Recorded with the local 1.3.0 preview using a synthetic paper and scripted Codex responses. Editing, saving, compilation and comparison PDFs are real. Waiting time is sped up or omitted, as noted on screen; these clips do not demonstrate live model latency or answer quality. All six downloads use H.264 video and AAC audio. Download and play locally if browser playback is unavailable.
+Recorded on 28 September 2026 with the local layout update using a synthetic paper and scripted Codex responses. Editing, saving, compilation and comparison PDFs are real. Waiting time is sped up or omitted, as noted on screen; these clips do not demonstrate live model latency or answer quality. All six downloads use H.264 video and AAC audio. Download and play locally if browser playback is unavailable.
+
+The Changes PDF sequence keeps Source, Comments and PDF in the same three columns. It switches only the right-hand viewer; no pane enlargement or cropped close-up is used.
+
+## Previous layout recordings
+
+The 27 September versions remain available: [quick tour](2026-09-27/modern-editor-overview-55s.mp4), [full walkthrough](2026-09-27/modern-editor-walkthrough-3min.mp4) and [LaTeXdiff](2026-09-27/modern-editor-latexdiff-50s.mp4).
 
 ## Earlier Changes PDF demonstration
 

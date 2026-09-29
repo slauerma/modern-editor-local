@@ -30,4 +30,17 @@
 .settings-panel code { font:11px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
 .settings-storage { border-top:1px solid #dce4d7; padding-top:12px; margin-top:18px; }
 .settings-storage summary { cursor:pointer; color:#456247; }
+.settings-view { display:flex; gap:8px; margin:16px 0 8px; }
+.settings-panel [hidden] { display:none; }
+.settings-view button[aria-pressed="true"] { color:#2d6553; font-weight:600; background:#edf2ed; }
+.settings-differences { margin:12px 0; overflow-x:auto; }
+.settings-differences table { width:100%; border-collapse:collapse; text-align:left; table-layout:fixed; }
+.settings-differences th,.settings-differences td { padding:9px 6px; vertical-align:top; border-bottom:1px solid #e1e6df; overflow-wrap:anywhere; }
+.settings-differences thead th { color:#65725f; font-weight:400; }
+.settings-differences th:first-child { width:30%; font-weight:500; }
+.settings-differences th:last-child { width:64px; }
+.settings-differences .settings-actions { margin-top:10px; }
+.settings-storage>label select { margin-left:8px; }
+.debug-preferences { display:grid; gap:10px; margin:12px 0; }
+.debug-preferences input[type="number"] { width:72px; padding:6px; margin:0 6px; }
 @media(max-width:700px) { .settings-panel { left:10px; right:10px; width:calc(100% - 20px); padding:15px; } .settings-executables label>div { flex-wrap:wrap; } .settings-executables input { flex-basis:100%; } }

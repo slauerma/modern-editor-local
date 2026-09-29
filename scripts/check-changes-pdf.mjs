@@ -133,7 +133,7 @@ try {
   assert.equal(sections.length,2); assert(sections.every(p=>p.editPolicy===previewed.editPolicy && p.authorInstructions===previewed.authorInstructions));
   assert.deepEqual(await read(),reviewStart,'Review controls preserve source and Undo');
   receipt.checks.push('Editable Kevin Bryan style presets / smallest local edits enabled by default and switchable / exact preview reaches ordinary and every section request / no source edits');
-  await button('Compile').click(); await page.getByLabel('PDF matches the current source', { exact:true }).waitFor({ timeout:60000 });
+  await button('Compile').click(); await page.getByLabel('PDF matches the current source', { exact:true }).waitFor({state:'attached',timeout:60000});
   const ordinaryId = await application.evaluate(() => globalThis.__comparisonProbe.ids.find(b=>b.purpose==='paper').id);
   await page.getByLabel('Viewer format').selectOption('changes');
   await pane().getByText('No source changes.', { exact: true }).waitFor();
@@ -474,6 +474,7 @@ try {
   const batchComments = Array.from({length:6},(_,i)=>{const original=`Paragraph ${i+1} have a small error. % old source note ${i+1}`,from=batchText.indexOf(original);return {id:`batch-${i}`,title:`Correct paragraph ${i+1}`,explanation:'Use the singular verb.',category:'Grammar',original,replacement:original.replace('have','has').replace('old source note','updated source note'),from,to:from+original.length,validity:'current',decision:'open',packages:[],messages:[]};});
   await fs.writeFile(batchFile,batchText);
   await fs.writeFile(path.join(paper,'.modern-editor/review.json'),JSON.stringify({schemaVersion:1,rootFile:'batch.tex',sourceHash:createHash('sha256').update(batchText).digest('hex'),activeId:'batch-0',updatedAt:new Date().toISOString(),comments:batchComments}));
+  if (!await button('Close project').isVisible()) await button('Actions ▾').click();
   await button('Close project').click(); await button('Open a LaTeX or text file').waitFor();
   await page.evaluate(reader.outputFiles[0].text);
   await application.evaluate((_,file)=>{globalThis.__comparisonProbe.file=file;},batchFile);

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { arrangementSchema, arrangementOutputSchema } from './changes-pdf.ts';
 
 export const changesAgentModel = 'gpt-6-sol';
+export const defaultChangesEvery = 5;
 export const changesAgentSchema = arrangementSchema.extend({ inspect: z.array(z.string().max(40)).max(3)
   .refine(ids => new Set(ids).size === ids.length, 'Inspection IDs must be distinct.') }).strict();
 export const changesAgentOutputSchema = {

@@ -107,10 +107,9 @@ textarea:disabled { color:#708074; background:#f5f6f3; }
 /* Keep the mapped box for navigation; visual padding adds emphasis without moving the target. */
 .pdf-passage-marker::before { content:""; position:absolute; top:calc(-1 * var(--cue-pad,2px)); left:-3px; right:-3px; height:calc(var(--cue-height,12px) + 2 * var(--cue-pad,2px)); border-radius:3px; background:#edc75526; }
 .pdf-passage-marker.emphasize::before { animation:passage-pulse 1.2s ease-out; }
-.pdf-passage-marker::after { content:""; position:absolute; top:calc(-1 * var(--cue-pad,2px)); height:calc(var(--cue-height,12px) + 2 * var(--cue-pad,2px)); left:max(-9px,calc(-1 * var(--passage-left,0px))); width:4px; border-radius:2px; background:#a97013; }
 @keyframes passage-pulse { from { background:#edc75550; } to { background:#edc75526; } }
 @media (prefers-reduced-motion:reduce) { .pdf-passage-marker.emphasize::before { animation:none; } }
-@media (forced-colors:active) { .pdf-passage-marker::before,.pdf-passage-marker.emphasize::before { background:Highlight; opacity:.25; animation:none; forced-color-adjust:none; } .pdf-passage-marker::after { background:CanvasText; forced-color-adjust:none; } }
+@media (forced-colors:active) { .pdf-passage-marker::before,.pdf-passage-marker.emphasize::before { background:Highlight; opacity:.25; animation:none; forced-color-adjust:none; } }
 .stale-notice { font-size:12px; background:#fff3de; padding:10px; border-radius:4px; color:#936833; }.stale-notice p { margin:0 0 8px; }.stale-notice button { font-size:11px; white-space:normal; }
 .question-note { font-size:12px; line-height:1.6; background:#f2f5ed; border-radius:5px; padding:12px; color:#617156; }
 .discussion { margin-top:20px; border-top:1px solid var(--line); padding-top:8px; }.discussion h2 { font-size:12px; margin:12px 0; }.discussion textarea { min-height:86px; }.discussion>button { font-size:12px; margin-top:8px; }

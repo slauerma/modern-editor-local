@@ -46,13 +46,14 @@ export class ToolSettingsService {
     }
     return settings;
   }
+  defaults(): ToolSettings { return this.resolve(defaultToolSettings); }
   async load(): Promise<{ settings: ToolSettings; notices: string[] }> {
     try {
       const previous = toolSettingsSchema.parse(await readJSON(this.file, 16000)), settings = this.resolve(previous);
       return { settings, notices: !previous.codexSource && settings.codexSource === 'managed' ? ['Codex now uses the editor-managed CLI. Choose Custom executable in Settings to use another installation.'] : [] };
     }
     catch (error) {
-      return { settings: this.resolve(defaultToolSettings), notices: (error as NodeJS.ErrnoException).code === 'ENOENT' ? [] : ['Saved executable settings could not be read. Defaults are shown; the existing settings file was preserved.'] };
+      return { settings: this.defaults(), notices: (error as NodeJS.ErrnoException).code === 'ENOENT' ? [] : ['Saved executable settings could not be read. Defaults are shown; the existing settings file was preserved.'] };
     }
   }
   async save(input: unknown): Promise<ToolSettings> {

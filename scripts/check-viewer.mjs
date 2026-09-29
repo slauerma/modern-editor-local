@@ -159,10 +159,11 @@ try {
   assert.equal(await page.getByLabel('Viewer format').inputValue(),'text'); assert.equal(await button('Accept & compile').count(),0);
   receipt.checks.push('One checked preamble attempt / unchanged text body / one-step Undo');
   await home(); await open(texFile);
-  await button('Compile').click(); await page.getByLabel('PDF matches the current source', {exact:true}).waitFor({ timeout:60000 });
+  await button('Compile').click(); await page.getByLabel('PDF matches the current source', {exact:true}).waitFor({ state:'attached', timeout:60000 });
   await pdfStaysRendered();
   await page.locator('#pdf-surface').getByLabel('PDF zoom', {exact:true}).selectOption('1.25');
   const before = await read();
+  await button('Edit').click();
   await page.getByLabel('Proposed replacement', {exact:true}).fill('The allocation is weakly increasing.');
   const draftGeometry = await pdfGeometry();
   await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor({timeout:60000});
@@ -196,7 +197,7 @@ try {
   await poll(async()=>await page.locator('#pdf-surface > .pdf-reader .pdf-find-hit.active').count()>0,'proposal-only search hit');
   await proposalSearch.fill('weakly increasing '); // leave a debounced search pending across the switch
   await button('Return to draft').click();
-  await page.getByLabel('PDF matches the current source',{exact:true}).waitFor();
+  await page.getByLabel('PDF matches the current source',{exact:true}).waitFor({state:'attached'});
   await poll(async()=>(await page.locator('#pdf-surface > .pdf-reader .pdf-search').innerText()).includes('No matches'),'draft has no proposal-only match');
   await page.waitForTimeout(350);
   assert.equal(await page.locator('#pdf-surface > .pdf-reader .pdf-find-hit').count(),0,'Old search hits cannot leak into the draft PDF');
@@ -206,7 +207,7 @@ try {
   await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor();
   receipt.checks.push('Active proposal Find and pending query survive Return to draft without stale matches, source/Undo changes or lost hosted controls');
   await button('Return to draft').click(); const cachedAttempts=(await probe()).builds; await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor(); assert.equal((await probe()).builds,cachedAttempts); await button('Return to draft').click(); assert.equal(await page.locator('#pdf-surface').getByLabel('PDF zoom',{exact:true}).inputValue(),'1.25');
-  await page.getByLabel('PDF matches the current source', {exact:true}).waitFor();
+  await page.getByLabel('PDF matches the current source', {exact:true}).waitFor({state:'attached'});
   receipt.checks.push('Real candidate PDF / edited wording / own highlight / unchanged source, decisions and Undo / ordinary PDF and zoom restored');
   // The root and proposal are unchanged, but an external include changes after Preview.
   await button('Preview').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor();
@@ -214,7 +215,7 @@ try {
   await fs.writeFile(includedFile, 'A revised synthetic included paragraph.\n');
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.locator('.preview-banner strong').filter({hasText:'Preview out of date'}).waitFor();
-  assert.equal(await page.locator('.viewer-controls:visible .pdf-state').innerText(), 'Preview out of date');
+  assert.equal(await page.locator('.preview-banner [role="status"]').innerText(), 'Preview out of date');
   assert.equal(await page.locator('.pdf-passage-marker:visible').count(), 0);
   assert.equal((await probe()).builds, previewBuilds);
   await page.locator('.preview-details > summary').click(); await button('Show text diff').click(); await page.locator('.preview-banner strong').filter({hasText:'Preview · not applied'}).waitFor();
@@ -225,7 +226,7 @@ try {
   assert.equal((await probe()).builds, previewBuilds + 1);
   assert.equal((await read()).text, beforeInputs.text); assert.equal((await read()).undo, beforeInputs.undo);
   await snapshot('03-preview-inputs-refreshed'); await button('Return to draft').click();
-  await button('Compile').click(); await page.getByLabel('PDF matches the current source', {exact:true}).waitFor({timeout:60000});
+  await button('Compile').click(); await page.getByLabel('PDF matches the current source', {exact:true}).waitFor({state:'attached',timeout:60000});
   receipt.checks.push('Proposal input changes on focus / no stale highlight / exact text preview stays usable / return checks inputs / explicit refresh preserves source and Undo');
   const attempts=(await probe()).builds;
   await page.getByLabel('Proposed replacement',{exact:true}).fill(''); await button('Preview').click();

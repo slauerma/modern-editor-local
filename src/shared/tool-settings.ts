@@ -12,6 +12,7 @@ export type ToolSettings = z.infer<typeof toolSettingsSchema>;
 export type SetupIdentity = { editorVersion: string; platform: string; osVersion: string };
 export type ToolSettingsState = {
   settings: ToolSettings;
+  defaults: ToolSettings;
   identity: SetupIdentity;
   runtimePath: string;
   notices: string[];

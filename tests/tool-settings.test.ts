@@ -9,6 +9,7 @@ import { CodexClient } from '../src/main/codex-client.ts';
 import { CompileService } from '../src/main/compile-service.ts';
 import { ProjectService } from '../src/main/project-service.ts';
 import { formatSetupDetails, type SetupCheck, type SetupTool, type ToolCheck } from '../src/shared/tool-settings.ts';
+import { managedCodexLocation } from '../src/main/managed-codex.ts';
 
 async function fixture() {
   const root = path.resolve('.test-runs', 'tool-settings-' + randomUUID()), bin = path.join(root, 'bin'), runtime = path.join(root, 'runtime');
@@ -18,6 +19,16 @@ async function fixture() {
   const settings = { codexPath: path.join(bin, 'codex'), latexmkPath: path.join(bin, 'latexmk') };
   return { root, bin, runtime, settings, service: new ToolSettingsService(runtime, 1500) };
 }
+test('reset defaults resolve the managed CLI against this installation and match a fresh profile', async () => {
+  const f = await fixture(), appDirectory = path.join(f.root, 'another-editor');
+  const service = new ToolSettingsService(f.runtime, 1500, appDirectory);
+  const defaults = service.defaults();
+  assert.equal(defaults.codexPath, managedCodexLocation(appDirectory).path);
+  assert.deepEqual((await service.load()).settings, defaults);
+  await service.save({ ...f.settings, codexModel: 'gpt-6-sol' });
+  assert.deepEqual(service.defaults(), defaults);
+  assert.equal((await service.load()).settings.codexModel, 'gpt-6-sol');
+});
 
 test('tool settings preserve the previous readable file when a new path is missing or invalid', async () => {
   const f = await fixture(); assert.deepEqual((await f.service.load()).settings, defaultToolSettings);

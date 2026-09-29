@@ -1,0 +1,159 @@
+1
+00:00:00,150 --> 00:00:06,433
+Modern Editor brings your source, PDF, and review comments into one place. Open a paper and
+
+2
+00:00:06,433 --> 00:00:07,218
+start writing.
+
+3
+00:00:07,817 --> 00:00:12,845
+Choose a review template, or give your own instructions. Here, we ask for grammar and
+
+4
+00:00:12,845 --> 00:00:17,874
+clarity, with the smallest local edits. New comments can join the queue as they arrive.
+
+5
+00:00:19,083 --> 00:00:24,192
+Read the reason, then see the changes in their paragraph. Switch to Clean for the proposed
+
+6
+00:00:24,192 --> 00:00:26,107
+wording, or Edit to adjust it.
+
+7
+00:00:26,917 --> 00:00:32,107
+Want another wording? Quick alternative adds a saved choice. Switch between versions, or
+
+8
+00:00:32,107 --> 00:00:37,696
+edit one yourself. Asking for an alternative leaves both the source and your selected
+
+9
+00:00:37,696 --> 00:00:38,494
+wording alone.
+
+10
+00:00:39,383 --> 00:00:45,232
+Preview compiles a tentative draft and marks the nearby passage in the PDF. Inspect how the
+
+11
+00:00:45,232 --> 00:00:49,253
+suggestion reads on the page, then return to your unchanged draft.
+
+12
+00:00:49,917 --> 00:00:55,826
+Use Shift A to accept and move forward. These three corrections go straight into the draft,
+
+13
+00:00:55,826 --> 00:00:58,411
+without waiting for compilation after each one.
+
+14
+00:00:58,950 --> 00:01:04,857
+Compile once to refresh the PDF from the current draft. Acceptance and compilation are
+
+15
+00:01:04,857 --> 00:01:05,701
+separate actions.
+
+16
+00:01:06,217 --> 00:01:11,773
+For an edit you want to check immediately, choose Accept and compile. The editor checks the
+
+17
+00:01:11,773 --> 00:01:16,634
+proposed draft, applies it, and waits while you inspect the PDF. Then choose Next.
+
+18
+00:01:17,183 --> 00:01:23,571
+Codex Side Chat can help with the substance of the paper. Here, we ask why the optimum is
+
+19
+00:01:23,571 --> 00:01:28,539
+unique and whether the distribution matters. The answer refers to the current draft, while
+
+20
+00:01:28,539 --> 00:01:29,959
+the manuscript stays unchanged.
+
+21
+00:01:30,650 --> 00:01:35,559
+Switch to editor help for questions about the application. The conversation makes its scope
+
+22
+00:01:35,559 --> 00:01:40,468
+visible, and the response explains the controls. You can return to the paper conversation
+
+23
+00:01:40,468 --> 00:01:41,871
+whenever you need it.
+
+24
+00:01:42,383 --> 00:01:48,206
+A useful answer can become a review comment. Here, a proposed clarification returns to the
+
+25
+00:01:48,206 --> 00:01:54,028
+usual queue, where you can edit, preview, accept, or reject it. Chatting alone never applies
+
+26
+00:01:54,028 --> 00:01:54,804
+the change.
+
+27
+00:01:55,317 --> 00:02:01,667
+Classic view offers a cream writing surface and a compact suggestion panel. It uses the same
+
+28
+00:02:01,667 --> 00:02:05,635
+draft, saving, and review workflow. Switch back whenever you prefer.
+
+29
+00:02:06,150 --> 00:02:12,474
+Switch the right-hand PDF pane to Changes PDF. All three columns stay in place. Generation
+
+30
+00:02:12,474 --> 00:02:15,004
+takes time; this wait is shortened.
+
+31
+00:02:15,517 --> 00:02:21,349
+This is the LaTeX diff view. Deleted wording is struck through, and new wording is
+
+32
+00:02:21,349 --> 00:02:26,404
+underlined. Step through the changes in the typeset paper, keeping equations and surrounding
+
+33
+00:02:26,404 --> 00:02:31,069
+prose in view. It is a separate comparison; your manuscript stays clean.
+
+34
+00:02:31,583 --> 00:02:36,820
+Press Why to see the recorded reason for a change. The explanation opens below the paper,
+
+35
+00:02:36,820 --> 00:02:40,420
+with the exact source comparison tucked away until you need it.
+
+36
+00:02:41,050 --> 00:02:46,380
+Switch to Clean paper to read the revised wording without deletion markup, using the same
+
+37
+00:02:46,380 --> 00:02:47,091
+captured comparison.
+
+38
+00:02:47,650 --> 00:02:53,757
+Text diff shows the exact LaTeX changes. It is also the place to inspect differences that
+
+39
+00:02:53,757 --> 00:02:56,047
+the PDF comparison cannot safely display.
+
+40
+00:02:56,517 --> 00:02:59,563
+Save your draft, close the project, and return home.

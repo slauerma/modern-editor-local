@@ -2,6 +2,7 @@ import type { FeedbackRequest, FeedbackRecord, FeedbackList } from './feedback.t
 import type { PrepareFeedback, ResumeFeedback } from './feedback-batches.ts';
 import type { AttachmentInventory, AttachmentPreview, AttachmentSelection } from './attachments.ts';
 import type { ToolSettings, ToolSettingsState, SetupCheck, CopiedSetupDetails } from './tool-settings.ts';
+import { editPreferencesSchema } from './paper-guidance.ts';
 import type { ReferenceState, SourcesHistory } from './references.ts';
 import { z } from 'zod';
 import { assertRecoveryFits, serializeJSON } from './persistence.ts';
@@ -78,6 +79,12 @@ export function defaultWorkspace(): WorkspaceState {
 export const effortSchema = z.enum(['low', 'medium', 'high', 'max']);
 export type Effort = z.infer<typeof effortSchema>;
 export const fastModeSchema = z.boolean();
+export const paperReviewSettingsSchema = z.object({
+  engine: engineSchema.default('pdflatex'), effort: effortSchema.default('medium'), fastMode: fastModeSchema.default(false),
+  ...editPreferencesSchema.shape
+}).strict();
+export type PaperReviewSettings = z.infer<typeof paperReviewSettingsSchema>;
+export const defaultPaperReviewSettings = (): PaperReviewSettings => paperReviewSettingsSchema.parse({});
 export const paperInstructionsSchema = z.string().max(10000);
 export const baselineSchema = z.object({ schemaVersion: z.literal(1), rootFile: z.string().max(500), name: z.string().trim().min(1).max(200), text: z.string().max(2000000), sourceHash: z.string().regex(/^[a-f0-9]{64}$/), createdAt: z.string().datetime(), sourcePath: z.string().max(10000).nullable() });
 export type Baseline = z.infer<typeof baselineSchema>;
@@ -137,9 +144,11 @@ export type EditorAPI = {
   getSetup(): Promise<ToolSettingsState>;
   chooseTool(tool: 'codex' | 'latexmk'): Promise<string | null>;
   saveSetup(settings: ToolSettings): Promise<ToolSettingsState>;
+  setPaperReviewSettings(projectId: string, settings: PaperReviewSettings): Promise<void>;
   checkSetup(settings: ToolSettings): Promise<SetupCheck>;
   listCodexModels(settings: ToolSettings): Promise<import('./codex-models.ts').CodexModel[]>;
   copySetupDetails(settings: ToolSettings): Promise<CopiedSetupDetails>;
+  copyReviewPrompt(text: string): Promise<void>;
   attachmentInventory(projectId: string): Promise<AttachmentInventory>;
   chooseAttachments(projectId: string, folder: boolean): Promise<AttachmentInventory | null>;
   previewAttachments(projectId: string, selections: AttachmentSelection[]): Promise<AttachmentPreview>;

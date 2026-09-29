@@ -17,6 +17,8 @@
 .help-content article { min-width:0; min-height:0; overflow:auto; border-left:1px solid #e1e7dc; padding:14px 4px 12px 20px; overflow-wrap:anywhere; }
 .help-document-label { font-size:10px; color:#71806c; margin:0 0 5px; }
 .help-content h3 { margin:0 0 12px; font-size:16px; line-height:1.4; }
+.help-copy-prompt { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:14px; }
+.help-copy-prompt span { color:#657260; font-size:11px; }
 .help-content p,.help-content li { line-height:1.75; }.help-content li { margin-bottom:6px; }
 .help-content code { font:11px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace; background:#edf2e8; padding:1px 3px; border-radius:2px; }
 .help-content pre { font:11px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; overflow-wrap:anywhere; background:#f0f4ec; padding:12px; border-radius:5px; }

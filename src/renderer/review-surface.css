@@ -1,0 +1,111 @@
+/* The normal review surface: one header, one reading passage, fixed decisions. */
+.workspace { isolation:isolate; }
+.review-rail { background:#fff; padding:0; }
+.pane-heading,.review-heading.review-nav,.viewer-controls,.changes-toolbar { height:44px; min-height:44px; flex:0 0 44px; padding:0 12px; margin:0; background:#fff; border-bottom:1px solid var(--line); color:#59685f; font-size:13px; font-weight:400; }
+.review-heading.review-nav { flex-wrap:nowrap; gap:6px; justify-content:flex-start; position:relative; z-index:30; }
+.review-heading.review-nav .pane-title { font-weight:400; color:inherit; margin-right:auto; }
+.review-heading.review-nav > button { min-width:30px; min-height:32px; font-size:20px; line-height:1; border:0; background:transparent; }
+.review-heading.review-nav > span { white-space:nowrap; font-size:13px; }
+.pane-heading button,.viewer-controls button,.viewer-controls select,.changes-toolbar button,.changes-toolbar select { font-size:13px; }
+.pane-heading button { min-height:32px; }
+.viewer-controls select,.viewer-controls input,.changes-toolbar select { height:32px; }
+.viewer-controls > label:first-child select { font-size:13px; }
+.pdf-toolbar-slot .pdf-controls { font-size:13px; flex-wrap:nowrap; }
+.pdf-toolbar-slot .pdf-state { font-size:13px; max-width:98px; color:inherit; }
+.pdf-toolbar-slot .pdf-state.current { display:none; }
+.pdf-toolbar-slot select { font-size:13px; max-width:100px; }
+.pdf-toolbar-slot button,.continuous-pdf .pdf-controls .pdf-find-toggle { font-size:13px; min-height:32px; }
+.pdf-toolbar-slot .pdf-page-controls button { width:24px; padding:0; font-size:20px; }
+.pdf-toolbar-slot .pdf-page-controls input { width:40px; }
+.viewer-controls .viewer-close { font-size:20px; width:28px; min-height:32px; padding:0; }
+.comment-details { margin-left:8px; }
+.comment-details > button { min-height:34px; font-size:13px; padding:4px 8px; }
+.comment-details-popover { position:absolute; right:0; top:100%; width:min(320px,100%); max-height:min(520px,65vh); overflow:auto; padding:12px; background:white; border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 28px #20302025; display:flex; flex-direction:column; gap:4px; font-size:13px; }
+.comment-details-popover button { font-size:13px; min-height:34px; border:0; text-align:left; padding:6px 8px; white-space:normal; }
+.comment-details-popover .selected-comment-actions,.comment-details-popover .batch-comment-actions { display:flex; flex-direction:column; border-top:1px solid var(--line); padding-top:6px; margin-top:4px; }
+.comment-details-popover .arrival-option { margin:6px 0; padding:6px 8px; line-height:1.5; display:flex; align-items:flex-start; font-size:13px; }
+.comment-details-popover input { margin-top:4px; flex-shrink:0; }
+.comment-details-popover .comment-location { justify-content:flex-start; margin:0; }
+.review-content { padding:12px 14px 16px; }
+.comment-card { padding:10px 6px; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.comment-card h1 { font-size:15px; margin:0 0 8px; }
+.comment-card .explanation { margin:0 0 18px; color:#37493e; }
+.contextual-proposal { margin-top:8px; }
+.proposal-views { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:12px; }
+.proposal-views .text-button { min-height:34px; padding:5px 3px; color:#56665b; font-size:13px; }
+.proposal-views button[aria-pressed=true] { color:var(--green); box-shadow:none; font-weight:600; }
+.proposal-views .use-original { margin-left:auto; }
+.proposal-reading { white-space:pre-wrap; overflow-wrap:anywhere; font:14px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace; color:#253a2b; }
+.proposal-reading del { background:#faeae5; color:#8b3d2b; text-decoration:line-through; }
+.proposal-reading ins { background:#e9f3e5; color:#285c39; text-decoration:underline; font-weight:650; }
+.proposal-reading del + ins { margin-left:.16em; }
+.contextual-proposal .sized-replacement { font-size:14px; line-height:1.75; background:#fff; }
+.review-decisions { background:#fff; border-color:#e9ede7; margin:0 14px; padding:10px 0; }
+.review-decisions .comment-actions,.review-decisions .decision-secondary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.review-decisions .comment-actions[hidden],.review-decisions .decision-secondary[hidden] { display:none; }
+.review-decisions .decision-secondary { margin-top:8px; }
+.review-decisions .comment-actions > button,.review-decisions .decision-secondary > button { display:flex; justify-content:center; align-items:center; width:100%; min-width:0; height:38px; padding:5px 6px; border:1px solid var(--line); border-radius:6px; background:#fff; color:#344a3c; font-size:13px; font-weight:400; white-space:normal; line-height:1.2; }
+.review-decisions .comment-actions > button:hover:not(:disabled),.review-decisions .decision-secondary > button:hover:not(:disabled) { background:#f5f7f4; border-color:#a9bbad; }
+.review-decisions kbd { display:none; }
+.wording-choices { margin-block:8px; }
+.proposal-views .wording-choices { margin:0 0 0 auto; }
+.proposal-views .wording-choices:has(select) { flex-basis:100%; }
+.wording-choices .wording-choice-row { gap:12px; }
+.wording-choice-row .text-button { font-size:13px; min-height:34px; }
+.discussion { border-top:1px solid var(--line); margin-top:24px; }
+.discussion .message { background:transparent; border:0; padding:8px 0; }
+.discussion .message.user { border-left:2px solid #dbe3dc; padding-left:12px; }
+
+/* Quiet chrome, with stable space for status and explicit warnings. */
+.unified-toolbar { height:52px; gap:10px; }
+.unified-toolbar .toolbar-actions > button,.unified-toolbar .actions-menu > button { font-size:13px; min-height:34px; }
+.file-name .saved { display:none; }
+.file-name .unsaved { padding:0; background:transparent; border-radius:0; color:#77572d; font-size:12px; }
+.app-shell > .notice { position:absolute; bottom:32px; left:12px; z-index:40; width:min(540px,calc(100% - 24px)); background:#fff; color:#425548; border:1px solid var(--line); border-radius:7px; box-shadow:0 3px 12px #20302015; padding:8px 12px; }
+.pdf-navigation { position:absolute; bottom:12px; left:12px; right:12px; z-index:35; padding:10px 12px; border:1px solid #e2d4b1; border-radius:7px; box-shadow:0 3px 12px #20302015; font-size:13px; line-height:1.5; }
+.pdf-navigation > span { min-width:0; max-height:8em; overflow:auto; }
+.pdf-navigation button { flex-shrink:0; min-height:34px; }
+footer .routine-status { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Optional help uses the same hover/click/keyboard behavior as Details. */
+.info-hint { display:inline-flex; margin:0; position:relative; flex:0 0 auto; }
+.info-hint > button { display:grid; place-items:center; width:28px; height:32px; min-height:32px; padding:0; color:#68776d; }
+.info-hint > button > span { display:grid; place-items:center; border:1px solid currentColor; border-radius:50%; width:15px; height:15px; font:12px/1 Georgia,serif; }
+.info-hint .info-popover { position:fixed; right:auto; bottom:auto; width:min(320px,calc(100vw - 24px)); max-height:calc(100vh - 24px); padding:12px; z-index:80; font-size:13px; font-weight:400; line-height:1.55; color:#405247; }
+.review-request { max-width:760px; padding:18px 20px; background:#fff; border-color:var(--line); border-radius:8px; font-size:13px; }
+.review-request .request-heading { margin-bottom:16px; }
+.review-request .request-heading strong { font-size:14px; font-weight:600; }
+.request-import { display:flex; align-items:center; gap:4px; }
+.request-import .info-popover > button { display:block; margin-top:10px; }
+.review-request button,.review-request select,.review-request label,.review-request summary { font-size:13px; }
+.review-request button:not(.icon):not(.text-button),.review-request select { min-height:34px; }
+.review-request textarea { font-size:14px; line-height:1.6; background:#fff; padding:10px; height:110px; margin:6px 0 0; }
+.review-instructions { display:block; margin-top:14px; }
+.review-options { display:flex; flex-wrap:wrap; gap:4px 18px; margin-top:10px; }
+.review-options > div,.review-options label,.request-guidance-heading { display:flex; align-items:center; gap:6px; }
+.review-options input { margin:0; }
+.review-request .request-guidance { margin-top:10px; }
+.request-guidance > summary { padding-block:6px; color:#53675a; }
+.request-guidance-heading { margin-top:8px; }
+.request-guidance > button { margin-top:8px; }
+.review-request .request-actions { gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); align-items:center; }
+.section-review-action { display:flex; align-items:center; gap:2px; }
+.request-unsaved { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:12px; color:#77572d; }
+
+/* Preview stays distinct in words without a warning-colored container. */
+.preview-banner { background:#fff; border-color:var(--line); color:#59685f; box-shadow:none; font-size:13px; }
+.preview-banner > strong { font-weight:400; }
+.preview-banner button,.preview-details > summary { font-size:13px; }
+.preview-attention > strong { color:#835b21; }
+.preview-info { background:#fff; border-color:var(--line); font-size:13px; }
+
+.workspace.layout-classic .review-heading.review-nav { grid-column:1; grid-row:1; padding:0 12px; margin:0; }
+.workspace.layout-classic .review-progress { grid-column:1; grid-row:2; }
+.workspace.layout-classic .review-content { grid-column:1; grid-row:3; }
+.workspace.layout-classic .review-decisions { grid-row:1 / 4; background:transparent; margin:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:8px; }
+.workspace.layout-classic .review-decisions .comment-actions:not([hidden]),.workspace.layout-classic .review-decisions .decision-secondary:not([hidden]) { display:contents; }
+.workspace.layout-classic .review-decisions .accepted-inspection { grid-column:1 / -1; }
+.workspace.layout-classic .review-decisions .review-action { min-width:0; }
+.workspace.layout-classic .review-rail { overflow:visible; }
+.workspace.layout-classic .comment-details-popover { top:auto; bottom:100%; max-height:60vh; }
+.workspace.layout-classic .proposal-reading { font-family:Georgia,'Times New Roman',serif; font-size:16px; }

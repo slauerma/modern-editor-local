@@ -1,0 +1,39 @@
+1
+00:00:00,150 --> 00:00:04,464
+Review your LaTeX beside the PDF, with suggestions you control.
+
+2
+00:00:06,083 --> 00:00:11,884
+Quick alternative adds a saved choice. Pick the wording you prefer, or edit it yourself.
+
+3
+00:00:13,183 --> 00:00:17,362
+Preview a suggestion in the PDF before changing the draft.
+
+4
+00:00:18,383 --> 00:00:23,117
+Accept several corrections with Shift A, without compiling after each one.
+
+5
+00:00:24,450 --> 00:00:26,815
+Compile once to refresh the PDF.
+
+6
+00:00:27,683 --> 00:00:30,373
+Ask Side Chat about the paper or the editor.
+
+7
+00:00:33,083 --> 00:00:36,795
+Turn useful answers into suggestions for your own review.
+
+8
+00:00:38,117 --> 00:00:43,828
+Changes PDF shows revisions in the typeset paper: deletions struck out, additions
+
+9
+00:00:43,828 --> 00:00:47,160
+underlined. Step through the changes in context.
+
+10
+00:00:48,217 --> 00:00:53,694
+Save the draft and close the project. Your paper, your decisions. Modern Editor.

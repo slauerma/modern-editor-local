@@ -24,7 +24,6 @@
 .workspace.layout-classic .comment-card h1 { font-size: 16px; margin: 4px 0; }
 .workspace.layout-classic .explanation { margin: 6px 0; }
 .workspace.layout-classic .comment-location { float: right; }
-.workspace.layout-classic:not(.classic-details) .original-passage, .workspace.layout-classic:not(.classic-details) .proposal-diff { display: none; }
 .workspace.layout-classic .review-decisions { grid-column: 2; grid-row: 2 / 4; border: 0; border-left: 1px solid #e8e5d9; padding: 10px; overflow: auto; }
 .workspace.layout-classic .comment-actions { display: flex; flex-wrap: wrap; }
 .workspace.layout-classic .decision-secondary, .workspace.layout-classic .decision-meta { flex-wrap: wrap; }

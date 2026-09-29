@@ -57,6 +57,9 @@ async function open() {
   await button('Open a LaTeX or text file').click(); await page.locator('.source-pane .cm-content').waitFor();
   if(await button('Dismiss notice').count()) await button('Dismiss notice').click();
 }
+async function actions(name) { await button('Actions ▾').click(); await button(name).click(); }
+async function commentAction(name) { await page.locator('.comment-details > button').click(); await button(name).click(); }
+async function arrival(value) { await page.locator('.comment-details > button').click(); const control=page.getByLabel('Add new comments as they arrive'); if(value!==undefined) await control.setChecked(value); const checked=await control.isChecked(); await page.keyboard.press('Escape'); return checked; }
 async function snapshot(name) { await page.screenshot({ path:path.join(evidence,name+'.png') }); }
 try {
   application = await _electron.launch({ executablePath:require('electron'),args:[copy],cwd:appRoot,env:{...process.env,MODERN_EDITOR_RUNTIME_DIR:path.join(root,'runtime')},chromiumSandbox:true,timeout:25000 });
@@ -67,6 +70,7 @@ try {
   await application.evaluate((_,file)=>{globalThis.__choiceProbe.file=file;},imported);
   await button('Actions ▾').click(); await button('Import JSON…').click();
   await page.getByRole('heading',{name:'Choose a concise wording'}).waitFor();
+  await button('Edit').click();
   const wording=page.getByLabel('Alternative wording'), draft=page.locator('#replacement');
   await draft.fill('My starting wording.');
   await wording.selectOption({label:'2. Concise'}); await draft.fill('My shorter wording.');
@@ -89,24 +93,23 @@ try {
   await application.evaluate(()=>{globalThis.__choiceProbe.hold=true;});
   await button('Review with Codex').click(); await button('Start review').click();
   await poll(()=>application.evaluate(()=>!!globalThis.__choiceProbe.release),'background review started');
-  const automatic=page.getByLabel('Add new comments as they arrive');
-  await automatic.uncheck(); await draft.fill('My draft while Codex works.');
+  await arrival(false); await button('Edit').click(); await draft.fill('My draft while Codex works.');
   await application.evaluate(()=>{globalThis.__choiceProbe.release();globalThis.__choiceProbe.release=null;});
   await poll(()=>button('Review with Codex').isEnabled(),'background review finished');
-  assert.match(await page.locator('.review-nav').innerText(),/1 of 1/);
-  await automatic.check();
-  await poll(async()=>/1 of 2/.test(await page.locator('.review-nav').innerText()),'waiting review integrated without the rejected duplicate');
+  assert.match(await page.locator('.review-nav').innerText(),/1 \/ 1/);
+  await arrival(true);
+  await poll(async()=>/1 \/ 2/.test(await page.locator('.review-nav').innerText()),'waiting review integrated without the rejected duplicate');
   assert.equal(await draft.inputValue(),'My draft while Codex works.');
   assert.equal(await page.evaluate(()=>window.choiceRead()),source);
   const reviewCalls=await application.evaluate(()=>globalThis.__choiceProbe.calls);
   assert.equal(reviewCalls[1].value.rejectedSuggestions.totalRejected,1);
   await snapshot('02-background-arrival');
   receipt.checks.push('Current automatic-arrival switch controls an in-flight review; integration preserves selection/draft and suppresses rejected repeat.');
-  await automatic.uncheck(); await button('Close project').click(); await button('Open a LaTeX or text file').waitFor();
-  await open(); await page.getByRole('heading',{name:'Choose a concise wording'}).waitFor();
-  assert.equal(await draft.inputValue(),'My draft while Codex works.'); assert.equal(await automatic.isChecked(),false);
+  await arrival(false); await actions('Close project'); await button('Open a LaTeX or text file').waitFor();
+  await open(); await page.getByRole('heading',{name:'Choose a concise wording'}).waitFor(); await button('Edit').click();
+  assert.equal(await draft.inputValue(),'My draft while Codex works.'); assert.equal(await arrival(),false);
   assert.equal(await wording.locator('option').count(),4);
-  await button('History').click(); await button('Next comment').click(); await page.getByRole('heading',{name:'Qualify the claim'}).waitFor(); await button('Reopen').count();
+  await commentAction('History'); await button('Next comment').click(); await page.getByRole('heading',{name:'Qualify the claim'}).waitFor(); await button('Reopen').count();
   receipt.checks.push('Close/reopen restores selected wording, edited drafts, all alternatives, rejected history and paper arrival preference.');
   assert.equal(await fs.readFile(paper,'utf8'),source); assert.deepEqual(receipt.rendererErrors,[]); receipt.passed=true;
 } catch(error) { receipt.passed=false;receipt.failure=String(error.stack??error);try{await snapshot('failure');}catch{}throw error; }

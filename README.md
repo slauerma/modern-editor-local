@@ -4,7 +4,7 @@ A local desktop editor for LaTeX source, compiled PDF reading, and Codex-assiste
 
 [Watch the quick overview or the 50-second Changes PDF demonstration](demo/README.md).
 
-**Version 1.3.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
+**Version 1.4.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
 
 This is a personal project, kept lean for individual use. **macOS is the currently validated platform. Windows is not yet supported.** The repository contains development source; there is no packaged application or installer.
 
@@ -12,6 +12,7 @@ This is a personal project, kept lean for individual use. **macOS is the current
 
 - [Install and run on a Mac](docs/SETUP.md): repository access, prerequisites, executable paths, first launch, and safe updates.
 - [User guide and shortcuts](docs/USER_GUIDE.md): review a paper, accept or discuss suggestions, follow comments in the PDF, and compare versions.
+- [Import comments from Astra Pro or another reviewer](docs/USER_GUIDE.md#import-prepared-comments): prepare JSON, load it locally, and review each suggestion. Includes a [ready-to-use prompt](docs/USER_GUIDE.md#generate-comment-json).
 - [FAQ and troubleshooting](docs/FAQ.md): saved files, recovery, Codex connection problems, compilation, and current limitations.
 - [Privacy and local data](PRIVACY.md) · [Developer tests](TESTING.md).
 
@@ -19,9 +20,9 @@ These Markdown guides can be read locally without an account or internet connect
 
 ## Overview
 
-Open a `.tex` or `.txt` file, review a selection or document, discuss comments, and inspect proposed replacements before applying them. Text and LaTeX fragments open with a live text diff; complete LaTeX papers can show a compiled PDF. **Preview** displays a tentative change without accepting it. **Changes PDF** uses GPT-6 Sol when requested to arrange revisions as struck-through/underlined markup or a clean paper with change markers and expandable explanations. The editor can also compile before acceptance, keep the result open for inspection, preserve the last successful PDF after a failed build, compare saved versions, and export source recovery. Discussion replies show their proposed source changes beside the explanation. The **Codex Side Chat** drawer answers editor and paper questions with optional screenshots and inspectable context. Scroll continuously through the PDF or search its text. You can also convert outside feedback into comments and attach reference files, folders or large pasted text. Paper instructions and minimal-edit preferences are shared across reviews and discussions. **Classic view** offers a cream writing surface with bottom suggestions; **Files** gathers saved state, context and PDF export.
+Open a `.tex` or `.txt` file, review a selection or document, discuss comments, and inspect proposed replacements before applying them. Text and LaTeX fragments open with a live text diff; complete LaTeX papers can show a compiled PDF. **Preview** displays a tentative change without accepting it. **Changes PDF** uses GPT-6 Sol when requested to arrange revisions as struck-through/underlined markup or a clean paper with change markers and expandable explanations. The editor can also compile before acceptance, keep the result open for inspection, preserve the last successful PDF after a failed build, compare saved versions, and export source recovery. Discussion replies show their proposed source changes beside the explanation. The **Codex Side Chat** drawer answers editor and paper questions with optional screenshots and inspectable context. Scroll continuously through the PDF or search its text. Prepared comment JSON can be imported directly without another model call. You can also convert unstructured outside feedback with Codex and attach reference files, folders or large pasted text. Paper instructions and minimal-edit preferences are shared across reviews and discussions. **View → Classic view** offers a cream writing surface with bottom suggestions; **Actions → Files & history…** gathers saved state, context and PDF export.
 
-[Watch the 55-second overview](demo/2026-09-27/modern-editor-overview-55s.mp4) · [Three-minute walkthrough, downloads and credits](demo/README.md).
+[Watch the 55-second overview](demo/2026-09-28/modern-editor-overview-55s.mp4) · [Three-minute walkthrough, downloads and credits](demo/README.md).
 
 ## Install and run on Mac
 

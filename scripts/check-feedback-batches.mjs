@@ -101,7 +101,7 @@ try {
  receipt.checks.push('Automatic feedback arrival preserves selected old comment and source; Undo reverses the last acceptance while keeping the new comment');
 
  receipt.checks.push('Import is one undoable review action; repeating it adds no duplicates; switching to another context exposes its preparation instead of the previous report');
- await button('Classic view').click();await screenshot('04-classic-review');await button('Workspace view').click();
+ await button('View ▾').click();await button('Classic view').click();await screenshot('04-classic-review');await actions('Workspace view');
  assert.equal((await read()).text,source);
  await button('Accept').click();await poll(async()=>(await read()).text!==source,'ordinary accept');
  assert.equal((await probe()).builds,0);await button('Undo').click();assert.equal((await read()).text,source);
@@ -123,10 +123,10 @@ try {
  await changes.getByLabel('Viewer format',{exact:true}).selectOption('changes-clean');
  await poll(async()=>await changes.getAttribute('aria-busy')==='false','clean Changes PDF',90000);await screenshot('07-changes-clean');
  await application.evaluate((_,out)=>globalThis.__feedbackProbe.save=out,path.join(evidence,'exported-comparison.pdf'));
- await button('Files').click();await button('Save displayed PDF…').click();
+ await actions('Files & history…');await button('Save displayed PDF…').click();
  await poll(async()=>{try{return(await fs.stat(path.join(evidence,'exported-comparison.pdf'))).size>0;}catch{return false;}},'PDF export');
  assert.equal(await fs.readFile(file,'utf8'),source);await button('Save').click();await poll(async()=>await fs.readFile(file,'utf8')===after,'Save');
- await button('Close project').click();await button('Open a LaTeX or text file').waitFor();await open();
+ await actions('Close project');await button('Open a LaTeX or text file').waitFor();await open();
  assert.equal((await read()).text,after);await actions('Import outside feedback…');await page.getByLabel('Saved outside feedback').selectOption(recordId);
  assert(await panel().getByText('All these comments are already in the queue. The original review remains here.',{exact:true}).count());
  receipt.checks.push('Classic/workspace preserve source; Accept skips compilation and Undo restores it; Accept & compile → inspect → Next; real markup/clean PDF/export/Save/reopen');

@@ -33,6 +33,7 @@
 !/scripts/check-discussion-proposals.mjs
 !/scripts/check-codex-isolation.mjs
 !/scripts/check-writing-conveniences.mjs
+!/scripts/check-contextual-comments.mjs
 !/scripts/check-feedback-batches.mjs
 !/scripts/check-saved-alternatives.mjs
 !/scripts/check-viewer.mjs
@@ -163,3 +164,25 @@
 !/demo/2026-09-27/overview-poster.png
 !/demo/2026-09-27/walkthrough-poster.png
 !/demo/2026-09-27/latexdiff-poster.png
+
+# Updated layout demonstrations, 28 September 2026.
+!/demo/2026-09-28/
+/demo/2026-09-28/*
+!/demo/2026-09-28/latexdiff-poster.png
+!/demo/2026-09-28/modern-editor-latexdiff-50s-small.mp4
+!/demo/2026-09-28/modern-editor-latexdiff-50s-transcript.md
+!/demo/2026-09-28/modern-editor-latexdiff-50s.mp4
+!/demo/2026-09-28/modern-editor-latexdiff-50s.srt
+!/demo/2026-09-28/modern-editor-latexdiff-50s.vtt
+!/demo/2026-09-28/modern-editor-overview-55s-small.mp4
+!/demo/2026-09-28/modern-editor-overview-55s-transcript.md
+!/demo/2026-09-28/modern-editor-overview-55s.mp4
+!/demo/2026-09-28/modern-editor-overview-55s.srt
+!/demo/2026-09-28/modern-editor-overview-55s.vtt
+!/demo/2026-09-28/modern-editor-walkthrough-3min-small.mp4
+!/demo/2026-09-28/modern-editor-walkthrough-3min-transcript.md
+!/demo/2026-09-28/modern-editor-walkthrough-3min.mp4
+!/demo/2026-09-28/modern-editor-walkthrough-3min.srt
+!/demo/2026-09-28/modern-editor-walkthrough-3min.vtt
+!/demo/2026-09-28/overview-poster.png
+!/demo/2026-09-28/walkthrough-poster.png
