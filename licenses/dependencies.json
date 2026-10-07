@@ -1,9 +1,9 @@
 {
-  "lockfileSha256": "3b59124042fcf410397ca2c2e5259429fa7185a355a7076ecd4fc7ab832ed7cd",
+  "lockfileSha256": "9dbf0408420e55bc28435a3a6e581de4f96c2802d6d6df5ba1737740cbd9b184",
   "packages": [
     {
       "name": "@codemirror/commands",
-      "version": "6.11.0",
+      "version": "6.11.1",
       "license": "MIT",
       "development": false,
       "optional": false,
@@ -58,7 +58,7 @@
     },
     {
       "name": "@codemirror/state",
-      "version": "6.7.4",
+      "version": "6.7.6",
       "license": "MIT",
       "development": false,
       "optional": false,
@@ -69,7 +69,7 @@
     },
     {
       "name": "@codemirror/view",
-      "version": "6.43.11",
+      "version": "6.43.13",
       "license": "MIT",
       "development": false,
       "optional": false,
@@ -378,7 +378,7 @@
     },
     {
       "name": "@napi-rs/canvas",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -389,7 +389,7 @@
     },
     {
       "name": "@napi-rs/canvas-android-arm64",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -398,7 +398,7 @@
     },
     {
       "name": "@napi-rs/canvas-darwin-arm64",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -407,7 +407,7 @@
     },
     {
       "name": "@napi-rs/canvas-darwin-x64",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -416,7 +416,7 @@
     },
     {
       "name": "@napi-rs/canvas-linux-arm-gnueabihf",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -425,7 +425,7 @@
     },
     {
       "name": "@napi-rs/canvas-linux-arm64-gnu",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -434,7 +434,7 @@
     },
     {
       "name": "@napi-rs/canvas-linux-arm64-musl",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -443,7 +443,7 @@
     },
     {
       "name": "@napi-rs/canvas-linux-riscv64-gnu",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -452,7 +452,7 @@
     },
     {
       "name": "@napi-rs/canvas-linux-x64-gnu",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -461,7 +461,7 @@
     },
     {
       "name": "@napi-rs/canvas-linux-x64-musl",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -470,7 +470,7 @@
     },
     {
       "name": "@napi-rs/canvas-win32-arm64-msvc",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -479,7 +479,7 @@
     },
     {
       "name": "@napi-rs/canvas-win32-x64-msvc",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "license": "MIT",
       "development": false,
       "optional": true,
@@ -497,7 +497,7 @@
     },
     {
       "name": "@openai/codex",
-      "version": "0.155.0-alpha.9.2",
+      "version": "0.160.1",
       "license": "Apache-2.0",
       "development": false,
       "optional": false,
@@ -507,7 +507,7 @@
     {
       "name": "@openai/codex-darwin-arm64",
       "declaredName": "@openai/codex",
-      "version": "0.155.0-alpha.9.2-darwin-arm64",
+      "version": "0.160.1-darwin-arm64",
       "license": "Apache-2.0",
       "development": false,
       "optional": true,
@@ -516,7 +516,7 @@
     },
     {
       "name": "@openai/codex-darwin-x64",
-      "version": "0.155.0-alpha.9.2-darwin-x64",
+      "version": "0.160.1-darwin-x64",
       "license": "Apache-2.0",
       "development": false,
       "optional": true,
@@ -525,7 +525,7 @@
     },
     {
       "name": "@openai/codex-linux-arm64",
-      "version": "0.155.0-alpha.9.2-linux-arm64",
+      "version": "0.160.1-linux-arm64",
       "license": "Apache-2.0",
       "development": false,
       "optional": true,
@@ -534,7 +534,7 @@
     },
     {
       "name": "@openai/codex-linux-x64",
-      "version": "0.155.0-alpha.9.2-linux-x64",
+      "version": "0.160.1-linux-x64",
       "license": "Apache-2.0",
       "development": false,
       "optional": true,
@@ -543,7 +543,7 @@
     },
     {
       "name": "@openai/codex-win32-arm64",
-      "version": "0.155.0-alpha.9.2-win32-arm64",
+      "version": "0.160.1-win32-arm64",
       "license": "Apache-2.0",
       "development": false,
       "optional": true,
@@ -552,7 +552,7 @@
     },
     {
       "name": "@openai/codex-win32-x64",
-      "version": "0.155.0-alpha.9.2-win32-x64",
+      "version": "0.160.1-win32-x64",
       "license": "Apache-2.0",
       "development": false,
       "optional": true,
@@ -874,7 +874,7 @@
     },
     {
       "name": "electron",
-      "version": "42.11.2",
+      "version": "44.5.1",
       "license": "MIT",
       "development": true,
       "optional": false,
@@ -984,7 +984,7 @@
     },
     {
       "name": "pdfjs-dist",
-      "version": "6.3.289",
+      "version": "6.4.299",
       "license": "Apache-2.0",
       "development": false,
       "optional": false,
@@ -1104,7 +1104,7 @@
     },
     {
       "name": "source-map-js",
-      "version": "1.2.1",
+      "version": "1.2.2",
       "license": "BSD-3-Clause",
       "development": true,
       "optional": false,

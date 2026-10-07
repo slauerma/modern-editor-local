@@ -18,6 +18,7 @@ await fs.cp(path.join(appRoot, 'dist'), path.join(copy, 'dist'), { recursive: tr
 await fs.symlink(path.join(appRoot, 'node_modules'), path.join(copy, 'node_modules'), 'dir');
 await fs.writeFile(path.join(copy, 'package.json'), JSON.stringify({ name:'writing-check', version:'1.2.1', main:'dist/main.cjs', private:true }));
 const injection = `
+ipcMain.removeHandler('setup:models');ipcMain.handle('setup:models',()=>[{id:'test-smart',name:'Test Smart',efforts:['low','medium','high','max'],images:true,fast:true,isDefault:true}]);
 const probe={file:null,save:null,builds:0,modelCalls:0,pdfReads:0,pdfIds:[],completedBuilds:[],dialogs:0,artifacts:[]};
 dialog.showOpenDialog=async()=>({canceled:false,filePaths:[probe.file]});
 dialog.showSaveDialog=async(_,options)=>{probe.dialogs++;probe.dialog=options;return {canceled:!probe.save,filePath:probe.save};};
@@ -75,6 +76,19 @@ const ready = async () => {
   assert.equal(await page.locator('.pdf-review-status[role=alert]').count(), 0);
 };
 const pairGeometry = () => page.locator('.pdf-review-papers').evaluate(e => [...e.children].map(n => ({rect:n.getBoundingClientRect().toJSON(), scrollTop:n.querySelector('.pdf-scroll').scrollTop, scrollLeft:n.querySelector('.pdf-scroll').scrollLeft})));
+async function checkChatRole(label) {
+  await button('Codex Side Chat').click();
+  const chat=page.getByRole('complementary',{name:'Codex Side Chat'});
+  await chat.getByLabel('Message to Codex Side Chat',{exact:true}).fill('Explain the displayed PDF and supplied source.');
+  if(!await chat.locator('.chat-context-options').evaluate(e=>e.open))await chat.locator('.chat-context-options > summary').click();
+  await chat.getByRole('button',{name:'Preview what is sent',exact:true}).click();
+  // An earlier preview stays mounted while the next snapshot is prepared.
+  // Wait for this request to finish before reading its context.
+  await poll(async()=>await chat.getByRole('button',{name:'Preview what is sent',exact:true}).isEnabled(),'chat preview prepared');
+  const prepared=chat.locator('.chat-prepared pre');await prepared.waitFor();
+  const context=JSON.parse(await prepared.innerText());assert.match(context.editorState.visiblePdf,label);assert.equal(context.source.text,source);assert.match(context.editorState.suppliedSource,/current draft/i);
+  await chat.getByRole('button',{name:'Close Codex Side Chat',exact:true}).click();
+}
 async function saveComparison(menuLabel, label) {
   const captured = await probe(), artifact = captured.artifacts.at(-1);
   assert(artifact.build?.success);
@@ -118,7 +132,7 @@ try {
   application=await _electron.launch({executablePath:require('electron'),args:[copy],cwd:appRoot,env:{...process.env,MODERN_EDITOR_RUNTIME_DIR:path.join(root,'runtime')},chromiumSandbox:true,timeout:25000});
   const child=application.process();receipt.processes.push({pid:child.pid,exited:false});console.log('Owned Electron PID',child.pid);
   page=await application.firstWindow();page.setDefaultTimeout(20000);page.on('pageerror',e=>receipt.rendererErrors.push(String(e)));
-  await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1600,1000));
+  await application.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setContentSize(1600,1000);w.webContents.setBackgroundThrottling(false);});
   await open();
   await button('Compile').click();
   await poll(async () => (await probe()).completedBuilds.some(b => b.success), 'workspace PDF');
@@ -180,8 +194,31 @@ try {
 
   await page.locator('.pdf-review-left .pdf-scroll').evaluate(e => e.scrollTop = 50);
   await page.locator('.pdf-review-right .pdf-scroll').evaluate(e => e.scrollTop = 100);
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   await page.waitForTimeout(200);
   const geometryBefore=await pairGeometry();
+  const beforeChat=await probe();
+  await button('Codex Side Chat').click();
+  const chat=page.getByRole('complementary',{name:'Codex Side Chat'});
+  await page.getByLabel('Message to Codex Side Chat',{exact:true}).fill('Keep this draft while reading the two PDFs.');
+  // Pointer gestures are covered in check-help-chat; use the same placement
+  // controls via keyboard here so desktop pointer activity cannot disturb PDFs.
+  await chat.getByRole('button',{name:'Move Side Chat',exact:true}).focus();
+  for(let i=0;i<10;i++)await page.keyboard.press('Shift+ArrowLeft');
+  await page.keyboard.press('Shift+ArrowDown');
+  await chat.getByRole('button',{name:'Resize Side Chat',exact:true}).focus();
+  await page.keyboard.press('Shift+ArrowRight');await page.keyboard.press('Shift+ArrowUp');
+  assert.deepEqual(await pairGeometry(),geometryBefore);
+  await screenshot('10-floating-chat-over-pdfs');
+  await chat.getByRole('button',{name:'Collapse Side Chat',exact:true}).click();
+  assert.deepEqual(await pairGeometry(),geometryBefore);
+  await screenshot('11-collapsed-chat-over-pdfs');
+  await chat.getByRole('button',{name:'Expand Side Chat',exact:true}).click();
+  assert.equal(await page.getByLabel('Message to Codex Side Chat',{exact:true}).inputValue(),'Keep this draft while reading the two PDFs.');
+  await chat.getByRole('button',{name:'Close Codex Side Chat',exact:true}).click();
+  assert.deepEqual(await pairGeometry(),geometryBefore);
+  const afterChat=await probe();assert.equal(afterChat.builds,beforeChat.builds);assert.equal(afterChat.pdfReads,beforeChat.pdfReads);assert.equal(afterChat.modelCalls,beforeChat.modelCalls);
+  receipt.checks.push('Floating Side Chat moves, resizes and collapses over real PDFs without changing either geometry, reading scroll, PDF reads, builds or model requests; the unsent draft is retained.');
   await page.locator('.pdf-review-region.tentative').first().click();
   await popup().waitFor();
   assert.match(await popup().innerText(),/Only weak monotonicity/);
@@ -240,7 +277,9 @@ try {
   receipt.checks.push('Edit updates the whole proposal after leaving the text field, without keystroke builds or source mutation; discussion drafts persist in the ordinary comment.');
 
   await page.getByLabel('Review scope',{exact:true}).selectOption({label:'↳ Details'});
-  await choose('third'); await popup().getByRole('button', {name:'Edit',exact:true}).click();
+  assert.equal(await page.getByLabel('PDF review comment',{exact:true}).locator('option').count(),2);
+  await button('Inspect').click();assert.match(await popup().innerText(),/Clarify timing/);assert(await button('Previous review suggestion').isDisabled());assert(await button('Next review suggestion').isDisabled());
+  await popup().getByRole('button', {name:'Edit',exact:true}).click();
   await edit.fill('trade at \\undefinedReleaseTestCommand{meetings}');
   await popup().getByRole('button', {name:'Clean',exact:true}).click();
   await page.locator('.pdf-review-status[role=alert]').filter({hasText:'Preview not possible'}).waitFor({timeout:60000});
@@ -254,7 +293,9 @@ try {
   assert.equal(await fs.readFile(file, 'utf8'), source);
   await screenshot('10-failed-single-bulk');
   await button('Dismiss error').click();
-  await choose('third'); await popup().getByRole('button', {name:'Edit',exact:true}).click();
+  assert.equal(await page.getByLabel('PDF review comment',{exact:true}).locator('option').count(),2);
+  await button('Inspect').click();assert.match(await popup().innerText(),/Clarify timing/);assert(await button('Previous review suggestion').isDisabled());assert(await button('Next review suggestion').isDisabled());
+  await popup().getByRole('button', {name:'Edit',exact:true}).click();
   await edit.fill('trade at meetings');
   await popup().getByRole('button', {name:'Clean',exact:true}).click(); await page.waitForTimeout(500); await ready();
   await button('Back to PDFs').click();
@@ -279,7 +320,10 @@ try {
   const readsBeforeToggle=(await probe()).pdfReads;
   await page.getByLabel('Right PDF',{exact:true}).selectOption('original');
   await poll(async()=>await page.locator('.pdf-review-right .textLayer').allTextContents().then(x=>x.join(' ').includes('allocation is increasing')),'original PDF');
+  await checkChatRole(/Original at session start/);
   await page.getByLabel('Right PDF',{exact:true}).selectOption('proposed');await ready();
+  await checkChatRole(/Proposed revision including tentative/);
+  receipt.checks.push('Prepared chat context names the visible Original/Proposed snapshot while identifying its supplied source as the current draft; preview sends no model request.');
   assert.equal((await read()).text,source);
   await page.locator('.pdf-review-right .pdf-scroll').click({position:{x:10,y:10}});
   await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.send('menu:command','find'));

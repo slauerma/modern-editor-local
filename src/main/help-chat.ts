@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { CHAT_LIMITS, chatInputSchema, chatRecordSchema, chatTurnSchema, chatAnswerSchema, chatOutputSchema, chatContext, type ChatRecord, type ChatInput, type ChatHelp, type ChatScope, type ChatState, type ChatPreview, type ChatTurn } from '../shared/help-chat.ts';
-import { commentSchema } from '../shared/contracts.ts';
+import { commentSchema, type Comment } from '../shared/contracts.ts';
 import { adoptComment, captureContext } from '../shared/review.ts';
 import { serializeJSON } from '../shared/persistence.ts';
 import { digest, privateDirectory, readJSON, writeJSON } from './files.ts';
@@ -119,21 +119,29 @@ export class HelpChat {
       let prompt = turn.context;
       if (session) { prompt = JSON.stringify({ ...JSON.parse(prompt), availableReferences: session.context() }, null, 2); const updated = chatTurnSchema.parse({ ...turn, context: prompt }); Object.assign(turn, updated); await this.write(file, chatRecordSchema.parse(next), CHAT_LIMITS.recordBytes); savedStamp = digest(serializeJSON(next)); }
       stopped();
-      const response = chatAnswerSchema.parse(await this.client.run(prompt, chatOutputSchema, progress, input.effort, input.fastMode, session, { purpose: 'help', images: turn.images.map(i => i.dataUrl) }));
+      const response = chatAnswerSchema.parse(await this.client.run(prompt, chatOutputSchema, progress, input.effort, input.fastMode, session, { purpose: 'help', ...(input.model ? { model: input.model } : {}), images: turn.images.map(i => i.dataUrl) }));
       stopped();
-      let comment;
+      const comments: Comment[] = [];
+      let unverified = 0;
       if (input.projectId && input.paper !== 'none') {
-        const suggestion = response.suggestion;
-        if (suggestion && prepared.passage.includes(suggestion.original)) {
-          const local = adoptComment(prepared.passage, commentSchema.parse({ ...suggestion, id: turn.id, category: 'Chat', decision: 'open', validity: 'missing', reviewedSourceHash: turn.sourceHash, reviewedAt: turn.createdAt }));
+        for (const [index, suggestion] of response.suggestions.entries()) {
+          const candidate = commentSchema.parse({ ...suggestion, id: index === 0 ? turn.id : `${turn.id}:${index + 1}`, category: 'Chat', decision: 'open', validity: 'missing', reviewedSourceHash: turn.sourceHash, reviewedAt: turn.createdAt });
+          if (!prepared.passage.includes(suggestion.original)) {
+            // Keep the wording and reason for inspection, but never guess an anchor.
+            comments.push(candidate); unverified++; continue;
+          }
+          const local = adoptComment(prepared.passage, candidate);
           const offset = input.paper === 'passage' ? input.from : 0;
           const placed = { ...local, from: local.from + offset, to: local.to + offset };
-          comment = placed.validity === 'current' ? captureContext(input.source, placed) : placed;
-        } else if (!suggestion && input.to > input.from && input.to - input.from <= 100000) {
-          comment = captureContext(input.source, commentSchema.parse({ id: turn.id, category: 'Chat', title: input.message.slice(0, 200), explanation: response.reply.slice(0, 10000), original: input.source.slice(input.from, input.to), replacement: null, from: input.from, to: input.to, validity: 'current', reviewedSourceHash: turn.sourceHash, reviewedAt: turn.createdAt }));
+          comments.push(placed.validity === 'current' ? captureContext(input.source, placed) : placed);
+        }
+        if (!response.suggestions.length && input.to > input.from && input.to - input.from <= 100000) {
+          comments.push(captureContext(input.source, commentSchema.parse({ id: turn.id, category: 'Chat', title: input.message.slice(0, 200), explanation: response.reply.slice(0, 10000), original: input.source.slice(input.from, input.to), replacement: null, from: input.from, to: input.to, validity: 'current', reviewedSourceHash: turn.sourceHash, reviewedAt: turn.createdAt })));
         }
       }
-      const answer = chatTurnSchema.parse({ ...turn, status: 'complete', reply: response.reply, ...(comment ? { comment } : {}), ...(response.suggestion && !comment ? { error: 'The proposed quotation could not be verified in the included source. It was not made an applicable revision. Ask for an exact quotation or select a passage.' } : {}) });
+      const answer = chatTurnSchema.parse({ ...turn, status: 'complete', reply: response.reply,
+        ...(comments.length === 1 ? { comment: comments[0] } : comments.length ? { comments } : {}),
+        ...(unverified ? { error: `${unverified} proposed quotation${unverified === 1 ? '' : 's'} could not be verified in the included source. The comments are retained, but their passages must be confirmed before edits can be accepted.` } : {}) });
       next.turns[next.turns.length - 1] = answer;
       try { await this.write(file, chatRecordSchema.parse(next), CHAT_LIMITS.recordBytes); }
       catch { this.unsaved.set(owner, { record: next, previous: savedStamp }); }

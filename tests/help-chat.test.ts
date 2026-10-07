@@ -7,11 +7,12 @@ import { HelpChat } from '../src/main/help-chat.ts';
 import { CodexClient } from '../src/main/codex-client.ts';
 import { ProjectService } from '../src/main/project-service.ts';
 import { digest, writeJSON } from '../src/main/files.ts';
-import { CHAT_LIMITS, chatInputSchema, chatContext, chatHistory, chatTurnSchema, chatCommentForDraft, type ChatInput } from '../src/shared/help-chat.ts';
+import { CHAT_LIMITS, chatComments, newChatComments, chatAnswerSchema, chatInputSchema, chatContext, chatHistory, chatTurnSchema, chatCommentForDraft, type ChatInput } from '../src/shared/help-chat.ts';
 import { proposalChanges } from '../src/shared/review.ts';
 import { initialState, alterComments, commentsField } from '../src/renderer/editor-state.ts';
 import { undo } from '@codemirror/commands';
 import { chatImageDimensions } from '../src/shared/chat-images.ts';
+import { commentSchema } from '../src/shared/contracts.ts';
 import type { ReferenceService } from '../src/main/reference-service.ts';
 
 const source = 'The allocation are monotone.\nThe feasible set is compact.';
@@ -90,7 +91,7 @@ test('preview is bound to conversation, consumed once and invalidated by a chang
 
 test('invented and repeated quotations cannot become directly applicable revisions', async () => {
   const f = await fixture(); f.client.run = async () => ({ ...answer(), suggestion: { ...answer().suggestion, original: 'Invented source.' } });
-  const invalid = await ask(f); assert(!invalid.comment); assert.match(invalid.error!, /could not be verified/);
+  const invalid = await ask(f); assert.equal(invalid.comment?.validity, 'missing'); assert.throws(() => proposalChanges(source, invalid.comment!), /passage changed/); assert.match(invalid.error!, /could not be verified/);
   f.client.run = async () => answer();
   const repeated = await ask(f, { ...f.input, source: source + '\n' + source });
   assert.equal(repeated.comment?.validity, 'ambiguous');
@@ -227,4 +228,93 @@ test('pending replies remain discoverable and recoverable after switching papers
     assert.equal((await f.service.state({ projectId: other.id })).turns.at(-1)?.reply, second.reply);
     assert.equal(await fs.readFile(f.file, 'utf8'), source);
   } finally { await fs.rm(f.root, { recursive: true, force: true }); }
+});
+
+
+test('a reply keeps multiple independent comments, question-only items and unmatched quotations across reopen', async () => {
+  const f = await fixture();
+  f.client.run = async () => ({ reply: 'Three comments for inspection.', suggestions: [
+    answer().suggestion,
+    { ...answer().suggestion, title: 'Explain compactness', explanation: 'State the needed condition.', original: 'The feasible set is compact.', replacement: null },
+    { ...answer().suggestion, title: 'Check quotation', original: 'This quotation does not occur.' }
+  ] });
+  const result = await ask(f), comments = chatComments(result);
+  assert.equal(comments.length, 3); assert.equal(new Set(comments.map(c => c.id)).size, 3);
+  assert.equal(comments[0].validity, 'current'); assert.equal(comments[1].validity, 'current');
+  assert.equal(comments[1].replacement, null); assert.equal(comments[2].validity, 'missing');
+  assert.match(result.error!, /1 proposed quotation/);
+  assert.equal(await fs.readFile(f.file, 'utf8'), source);
+  const reopened = new HelpChat(f.projects, f.client, f.directory, help);
+  assert.deepEqual(chatComments((await reopened.state({ projectId: f.paper.id })).turns[0]), comments);
+  const history = chatHistory([result]); assert.equal(history.exchanges[0].comments[1].number, 2);
+  assert.equal(history.exchanges[0].comments[1].explanation, 'State the needed condition.');
+  const stale = comments.map(c => chatCommentForDraft(c, false));
+  assert(stale.every(c => c.validity === 'unconfirmed'));
+});
+
+test('individual then batch chat import skips existing and rejected comments; the batch has one Undo and leaves source intact', async () => {
+  const f = await fixture(); f.client.run = async () => ({ reply: 'Two proposals.', suggestions: [
+    answer().suggestion, { ...answer().suggestion, original: 'The feasible set is compact.', replacement: 'The feasible set is closed and bounded.' }
+  ] });
+  const result = await ask(f), comments = chatComments(result);
+  const rejected = { ...comments[0], decision: 'dismissed' as const };
+  let state = initialState(source, [rejected]);
+  assert.equal(newChatComments(result, state.field(commentsField), rejected.id).length, 0);
+  const remaining = newChatComments(result, state.field(commentsField));
+  assert.deepEqual(remaining.map(c => c.id), [comments[1].id]);
+  state = state.update({ effects: alterComments.of({ add: remaining, remove: [] }) }).state;
+  assert.equal(state.doc.toString(), source); assert.equal(newChatComments(result, state.field(commentsField)).length, 0);
+  assert(undo({ state, dispatch: tr => { state = tr.state; } }));
+  assert.deepEqual(state.field(commentsField), [rejected]);
+  state = initialState(source, []);
+  state = state.update({ effects: alterComments.of({ add: comments, remove: [] }) }).state;
+  assert(undo({ state, dispatch: tr => { state = tr.state; } }));
+  assert.equal(state.field(commentsField).length, 0); assert.equal(state.doc.toString(), source);
+});
+
+test('Side Chat supports more than thirty short comments and keeps output/storage limits explicit', async () => {
+  const f = await fixture(), passages = Array.from({ length: 40 }, (_, i) => `Sentence ${i + 1} are short.`);
+  f.client.run = async () => ({ reply: 'Forty local edits.', suggestions: passages.map(original => ({ ...answer().suggestion, original, replacement: original.replace(' are ', ' is ') })) });
+  const result = await ask(f, { ...f.input, source: passages.join('\n') });
+  assert.equal(chatComments(result).length, 40); assert(chatComments(result).every(c => c.validity === 'current'));
+  assert.throws(() => chatAnswerSchema.parse({ reply: 'Too many', suggestions: Array(101).fill(answer().suggestion) }));
+  assert.throws(() => chatAnswerSchema.parse({ reply: 'Too large', suggestions: Array(3).fill({ ...answer().suggestion, replacement: 'x'.repeat(90000) }) }), /smaller batch/);
+  assert.equal(chatComments(chatTurnSchema.parse({ ...result, comments: undefined, comment: chatComments(result)[0] })).length, 1);
+});
+
+
+test('Side Chat model, effort and speed travel with its frozen request without changing paper preferences', async () => {
+  const f = await fixture(), paper = f.projects.get(f.paper.id);
+  const before = { effort: paper.effort, fastMode: paper.fastMode };
+  f.client.setModel = () => { throw new Error('Chat must not change the shared client model'); };
+  let calls = 0;
+  f.client.run = async (prompt, schema, progress, effort, fast, reader, options) => {
+    assert.equal(options?.model, 'test-chat-model'); assert.equal(effort, 'low'); assert.equal(fast, true);
+    assert.deepEqual(JSON.parse(prompt).requestSettings, { model: 'test-chat-model', effort: 'low', speed: 'Fast' });
+    calls++; return answer();
+  };
+  await ask(f, { ...f.input, model: 'test-chat-model', effort: 'low', fastMode: true });
+  assert.equal(calls, 1); assert.deepEqual({ effort: paper.effort, fastMode: paper.fastMode }, before);
+  assert.equal(chatInputSchema.parse({ ...f.input, model: undefined }).model, null);
+});
+
+test('large batches retain the latest reply, numbered index and explicitly chosen exact wording', () => {
+  const comments = Array.from({ length: 20 }, (_, i) => commentSchema.parse({ id: 'item-' + i, title: 'Suggestion ' + (i + 1), explanation: 'Reason.', original: 'a'.repeat(1300), replacement: 'b'.repeat(1300) }));
+  const turn = chatTurnSchema.parse({ id: randomUUID(), createdAt: new Date().toISOString(), message: 'Review this passage.', context: '{}', labels: [], images: [], status: 'complete', reply: 'Twenty suggestions.', comments });
+  const history = chatHistory([turn]);
+  assert.equal(history.exchanges.length, 1); assert.equal(history.exchanges[0].answer, turn.reply);
+  assert.equal(history.exchanges[0].comments.length, 20); assert(history.exchanges[0].wordingOmitted);
+  const chosen = chatHistory([turn], { turnId: turn.id, commentId: comments[6].id });
+  assert.equal(chosen.selectedSuggestion?.number, 7); assert.equal(chosen.selectedSuggestion?.original, comments[6].original);
+  assert.equal(chosen.selectedSuggestion?.replacement, comments[6].replacement); assert(JSON.stringify(chosen).length <= CHAT_LIMITS.historyChars);
+  assert.throws(() => chatHistory([turn], { turnId: randomUUID(), commentId: comments[6].id }), /no longer/);
+});
+
+test('chat history stays bounded with escaped text, long replies and a selected older proposal', () => {
+  const comments = Array.from({ length: 100 }, (_, i) => commentSchema.parse({ id: 'item-' + i, title: '\u0001'.repeat(300), explanation: 'Reason.', original: 'a'.repeat(1300), replacement: 'b'.repeat(1300) }));
+  const make = () => chatTurnSchema.parse({ id: randomUUID(), createdAt: new Date().toISOString(), message: 'q'.repeat(10000), context: '{}', labels: [], images: [], status: 'complete', reply: 'r'.repeat(20000), comments });
+  const old = make(), latest = make(), history = chatHistory([old, latest], { turnId: old.id, commentId: 'item-6' });
+  assert.equal(history.exchanges.at(-1)?.turnId, latest.id); assert.equal(history.selectedSuggestion?.turnId, old.id);
+  assert.equal(history.exchanges.at(-1)?.comments.length, 100); assert(JSON.stringify(history).length <= CHAT_LIMITS.historyChars);
+  assert.throws(() => chatHistory([{ ...old, comments: [{ ...comments[0], original: 'a'.repeat(40000) }] }], { turnId: old.id, commentId: comments[0].id }), /too large/);
 });

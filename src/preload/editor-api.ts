@@ -82,6 +82,7 @@ const api: EditorAPI = {
   validateBuild: input => ipcRenderer.invoke('build:validate', input),
   getPdf: id => ipcRenderer.invoke('build:pdf', id),
   locatePdf: input => ipcRenderer.invoke('build:locate', input),
+  locateSource: input => ipcRenderer.invoke('build:locate-source', input),
   cancelBuild: () => ipcRenderer.invoke('build:cancel'),
   clearOldBuilds: ids => ipcRenderer.invoke('build:clear-old', ids),
   requestReview: input => ipcRenderer.invoke('codex:review', input),

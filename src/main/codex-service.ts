@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { arrangementOutputSchema } from '../shared/changes-pdf.ts';
 import { changesAgentModel, changesAgentOutputSchema, visualCheckOutputSchema } from '../shared/changes-agent.ts';
+import { editorialModel, reconsiderEffort } from '../shared/codex-options.ts';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { commentSchema, codexReplySchema, preambleProposalSchema, type PreambleRequest, type PreambleProposal, type Comment, type ReviewRequest, type ReplyRequest, type CodexReply } from '../shared/contracts.ts';
@@ -197,9 +198,9 @@ export class CodexService {
     const { paperInstructions, editPreferences } = p;
     const action = request.action ?? (request.deeper ? 'reconsider' : 'standard'), quickAlternative = action === 'quick-alternative', quick = action === 'quick' || quickAlternative, alternatives = action === 'alternatives' || quickAlternative;
     const prompt = JSON.stringify(replyContext({ ...request, action }, paperInstructions, quick ? undefined : await this.references(p.id, request.attachmentPreviewId), editPreferences));
-    const effort = quick ? 'low' : alternatives ? 'medium' : action === 'reconsider' ? (p.effort === 'max' ? 'max' : 'high') : undefined;
+    const effort = quick ? 'low' : alternatives ? 'medium' : action === 'reconsider' ? reconsiderEffort(p.effort) : undefined;
     const response = await this.run(p.id, prompt, quickAlternative ? quickAlternativeOutputSchema : quick ? quickReplyOutputSchema : alternatives ? alternativesOutputSchema : replyOutputSchema, progress, effort, generation,
-      quick ? undefined : { text: request.text, kind: 'reply' }, { purpose: 'discussion', ...(quick || alternatives ? { model: 'gpt-6-sol', fastMode: false } : {}) });
+      quick ? undefined : { text: request.text, kind: 'reply' }, { purpose: 'discussion', ...(quick || alternatives ? { model: editorialModel, fastMode: false } : {}) });
     // Retain the answer even if its schema or the current discussion limit rejects it.
     const home = await this.projects.stateDirectory(p.id), reviews = await privateDirectory(home, 'reviews');
     await writeJSON(path.join(reviews, `reply-${randomUUID()}.json`), { rootFile: p.name, sourceHash: digest(request.text), commentId: c.id, response, createdAt: new Date().toISOString() });

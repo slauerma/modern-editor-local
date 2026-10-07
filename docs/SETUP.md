@@ -37,7 +37,7 @@ Check the main compiler command:
 
 ## 3. Configure Codex if you want AI review
 
-The source download pins **Codex CLI 0.155.0-alpha.9.2** in `package.json` and `package-lock.json`. Step 4 installs this editor-owned copy under `node_modules`, including the native binary for your Mac. No global Codex installation or desktop app is required. Desktop app updates do not change this copy; CLI upgrades come through a tested editor dependency update.
+The source download pins **Codex CLI 0.160.1** in `package.json` and `package-lock.json`. Step 4 installs this editor-owned copy under `node_modules`, including the native binary for your Mac. No global Codex installation or desktop app is required. Desktop app updates do not change this copy; CLI upgrades come through a tested editor dependency update.
 
 After installing dependencies in step 4, check the pinned CLI and, if needed, sign in:
 
@@ -51,13 +51,13 @@ Complete the browser sign-in using your own account. The CLI uses your normal Co
 
 **Settings → Codex installation → Editor-managed CLI** is the default. There is no executable path to paste. Its location follows the current checkout, so a new ZIP folder uses its own locked installation. The former automatic desktop-app path switches to this default when upgrading; explicitly selected custom paths are preserved.
 
-To use another installation, select **Custom executable**, choose its absolute path, then **Check setup → Save settings**. Custom versions must be one of the tested versions: **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6** or **0.155.0-alpha.9.2**. An unsupported version stops before paper text is sent. Editing and compilation remain available. Do not remove the version guard to bypass an error.
+To use another installation, select **Custom executable**, choose its absolute path, then **Check setup → Save settings**. Custom versions must be one of the tested versions: **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6**, **0.155.0-alpha.9.2** or **0.160.1**. An unsupported version stops before paper text is sent. Editing and compilation remain available. Do not remove the version guard to bypass an error.
 
 You can configure Codex and TeX independently. Leave the other path unchanged if that tool is not installed; saving validates the paths you changed. **Check setup** still reports unavailable tools: Codex is needed for AI requests, and TeX for compilation.
 
 Settings also lets you choose a nonstandard **latexmk** path. The compiler expects the TeX engines, `kpsewhich`, and `synctex` beside it. Standard MacTeX supplies these. Check setup reads local executable versions; it does not authenticate or make an AI request. The stricter review checks still run before paper text is sent; do not remove the supported-version guard to bypass an error.
 
-To choose a model, use **Settings → Load models**, select **GPT‑6 Sol**, **GPT‑6 Luna** or another model offered by your CLI, then **Save settings**. Availability depends on your CLI and account. **Use Codex default** keeps the CLI’s configured choice. The editor’s choice applies to future reviews, discussions and Side Chat; it does not change your general Codex settings. Loading the catalog sends no paper text and starts no AI response.
+To choose a model, use **Settings → Load models**, select **GPT‑6.1 Sol**, **GPT‑6 Luna** or another model offered by your CLI, then **Save settings**. Availability depends on your CLI and account. **Use Codex default** keeps the CLI’s configured choice. The editor’s choice applies to future reviews, discussions and Side Chat when its Model is **Editor default**; it does not change your general Codex settings. Loading the catalog sends no paper text and starts no AI response.
 
 ## 4. Install, build, and launch
 
@@ -73,7 +73,7 @@ These commands install the locked dependencies (including the pinned Codex CLI),
 
 For AI features, complete the sign-in commands in step 3. Open **Settings**, keep **Editor-managed CLI**, choose a nonstandard TeX path if needed, and run **Check setup**. Then choose **Try the working sample**. Compile it with **Command+T** or **Command+B**, inspect a comment, accept a suggestion, and Undo. Prepared comments and compilation need no Codex account. To check the AI connection, choose **Review** and request a short language review of the sample; this uses your account.
 
-Help, Settings and **Modern Codex Editor → About** show the editor version, **1.5.0** for this release. For setup troubleshooting, **Settings → Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It makes no AI request and excludes paper text, file paths and account details. The **Changelog** tab in Help summarizes the release.
+Help, Settings and **Modern Codex Editor → About** show the editor version, **1.6.0** for this release. For setup troubleshooting, **Settings → Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It makes no AI request and excludes paper text, file paths and account details. The **Changelog** tab in Help summarizes the release.
 
 Keep real papers in their own folders with their bibliography, figures, and local styles. Start with a copy while learning the editor. **Use this wording** changes a proposal; **Accept** changes the draft; **Save** writes the `.tex` file. The [user guide](USER_GUIDE.md) covers the next steps, and the [FAQ](FAQ.md) covers setup errors and recovery.
 

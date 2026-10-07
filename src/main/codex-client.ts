@@ -1,3 +1,4 @@
+import { effortOptions } from '../shared/codex-options.ts';
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import * as fs from 'node:fs/promises';
@@ -251,7 +252,7 @@ export class CodexClient extends EventEmitter {
       if (images.length && !model?.images) throw new Error('The selected Codex model does not accept images. Remove the screenshots or select an image-capable model in Settings.');
       if (!supported.includes(effort)) throw new Error(`${started.model} does not support ${effort} effort. Supported efforts: ${supported.join(', ')}. Choose another Codex effort.`);
       if (fastMode && (!model?.fast || !['fast', 'priority'].includes(started.serviceTier))) throw new Error(`Fast mode was not enabled for ${started.model}. Turn Fast mode off or check this model's access; no review was started.`);
-      const label = { low: 'Quick', medium: 'Standard', high: 'Deep', max: 'Max' }[effort];
+      const label = effortOptions[effort].label;
       progress(`Codex is reading the passage · ${label}${fastMode ? ' · Fast' : ''} · ${started.model}…`);
       if (this.abort) throw new Error('Codex review cancelled.');
       if (reader) this.reading = { reader, child: this.child!, seen: new Set(), queue: Promise.resolve(), pending: 0, calls: 0 };
@@ -261,7 +262,7 @@ export class CodexClient extends EventEmitter {
       const result = await new Promise<unknown>((resolve, reject) => {
         let finalText = '', settled = false;
         const finish = (error?: Error, value?: unknown) => { if (settled) return; settled = true; clearTimeout(timer); this.removeListener('notification', listener); this.activeReject = null; error ? reject(error) : resolve(value); };
-        const minutes = effort === 'max' ? 20 : effort === 'high' ? 10 : 3;
+        const minutes = effortOptions[effort].minutes;
         const timer = setTimeout(() => { finish(new Error(`Codex review exceeded ${minutes} minutes. Try a smaller selection.`)); void this.cancel(); }, minutes * 60000);
         const listener = (event: Envelope) => {
           if (settled) return;

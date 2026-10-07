@@ -136,7 +136,7 @@ if (process.argv[2] === '--worker') {
       event({ type: 'response.completed', sequence_number: 3, response }); res.end();
     } catch { failure = 'Synthetic provider assertion failed'; if (!res.headersSent) res.writeHead(500); res.end(failure); }
   });
-  let result = { passed: false }, stage = 'local listener';
+  let result = { passed: false }, stage = 'local listener', skillProbe;
   try {
     await new Promise((resolve, reject) => { service.once('error', reject); service.listen(0, '127.0.0.1', resolve); });
     const config = `model = "gpt-5.6-sol"\nmodel_provider = "synthetic_protocol_probe"\n[model_providers.synthetic_protocol_probe]\nname = "Synthetic local protocol fixture"\nbase_url = "http://127.0.0.1:${service.address().port}/v1"\nwire_api = "responses"\nrequires_openai_auth = false\nsupports_websockets = false\nrequest_max_retries = 0\nstream_max_retries = 0\nstream_idle_timeout_ms = 10000\n[mcp_servers.synthetic_probe]\ncommand = ${JSON.stringify(process.execPath)}\nargs = [${JSON.stringify(fixture)}, ${JSON.stringify(marker)}]\ndefault_tools_approval_mode = "auto"\n`;
@@ -168,11 +168,16 @@ if (process.argv[2] === '--worker') {
       if (mode === 'references') {
         stage = 'reference skill outputs';
         const skillsOutput = output('scope_skills'), skills = JSON.parse(skillsOutput.find(item => item.text?.startsWith('{')).text);
-        assert.deepEqual(skills.executor.skills, []); assert.deepEqual(skills.orchestrator.skills, []);
+        skillProbe = skills;
+        const modern = outcome.version === '0.160.1';
+        if (modern) {
+          for (const kind of ['executor', 'orchestrator']) assert.equal(skills[kind], 'TypeError: tools.skills__list is not a function');
+        } else { assert.deepEqual(skills.executor.skills, []); assert.deepEqual(skills.orchestrator.skills, []); }
+        receipts.at(-1).skillToolSurface = modern ? 'not-exposed' : 'empty-inventory';
         stage = 'reference tool inventory';
-        assert.deepEqual(skills.toolNames.sort(), [...referenceNames, 'skills__list', 'skills__read'].sort());
+        assert.deepEqual(skills.toolNames.sort(), (modern ? [...referenceNames] : [...referenceNames, 'skills__list', 'skills__read']).sort());
         stage = 'ungranted skill read';
-        assert(JSON.stringify(output('scope_read')).includes('skill package is not available'));
+        assert(JSON.stringify(output('scope_read')).includes(modern ? 'TypeError: tools.skills__read is not a function' : 'skill package is not available'));
         stage = 'blocked agent calls';
         for (const id of ['scope_agent_3', 'scope_agent_4']) assert.match(String(output(id)), /unsupported call/);
       } else {
@@ -185,7 +190,7 @@ if (process.argv[2] === '--worker') {
     const files = ['package.json', 'src/main/codex-client.ts', 'src/main/codex-policy.ts', 'src/main/reference-service.ts', 'src/shared/references.ts', 'scripts/check-reference-protocol.mjs'];
     result = { passed: true, node: process.version, checks: receipts, requests, inheritedMcpNeverStarted: true, syntheticConfigPreserved: true, sourceHashes: Object.fromEntries(await Promise.all(files.map(async name => [name, hash(await fs.readFile(path.join(repo, name)))]))) };
     console.log('PASS: exact advertised tool surface verified; reference tools round-trip; no-reader execution, host skills and agents are blocked. Synthetic localhost provider only.');
-  } catch (error) { result = { passed: false, checks: receipts, requests, failedStage: failure ?? stage, errorCode: typeof error.code === 'string' ? error.code : undefined }; process.exitCode = 1; console.error('FAIL: inspect the sanitized result and verify the supported Codex version.'); }
+  } catch (error) { result = { passed: false, checks: receipts, requests, failedStage: failure ?? stage, syntheticSkillProbe: skillProbe, errorCode: typeof error.code === 'string' ? error.code : undefined }; process.exitCode = 1; console.error('FAIL: inspect the sanitized result and verify the supported Codex version.'); }
   finally {
     service.closeAllConnections(); await new Promise(resolve => service.close(resolve));
     result.listenerClosed = !service.listening;

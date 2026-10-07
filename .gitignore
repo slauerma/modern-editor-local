@@ -38,6 +38,7 @@
 !/scripts/check-feedback-batches.mjs
 !/scripts/check-saved-alternatives.mjs
 !/scripts/check-viewer.mjs
+!/scripts/check-source-navigation.mjs
 !/scripts/check-changes-pdf.mjs
 !/scripts/check-changes-local-first.mjs
 !/scripts/check-help-chat.mjs

@@ -29,7 +29,7 @@ input.on('line', line => {
   }
   if (!method && referenceMode && id === 'ref-read') setTimeout(referenceFinal, 10);
   if (method && has('pause-' + method.replaceAll('/', '-'))) { notification('fixture/paused', { method }); return; }
-  if (method === 'initialize') send({ id, result: { userAgent: `${process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? params.clientInfo.name}/${has('unknown-version') ? '0.999.0' : has('new-version') ? '0.155.0-alpha.9.2' : has('prerelease-version') ? '0.154.0-alpha.6.2' : '0.153.4'} (fixture)` } });
+  if (method === 'initialize') send({ id, result: { userAgent: `${process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? params.clientInfo.name}/${has('unknown-version') ? '0.999.0' : has('new-version') ? '0.160.1' : has('prerelease-version') ? '0.154.0-alpha.6.2' : '0.153.4'} (fixture)` } });
   if (method === 'config/read') {
     if (has('config-unavailable')) send({id,error:{code:-32601,message:'Unsupported config/read'}});
     else send({id,result:{config:{features:{...features,...(has('unsafe-feature')?{plugins:true}:{}),...(has('unsafe-code-host')?{code_mode_host:!features.code_mode_host}:{}),...(has('unsafe-skill-discovery')?{skip_host_skill_discovery:false}:{})},...(has('agents-unavailable')?{}:{agents:{enabled:has('agents-enabled')||!flags.includes('agents.enabled=false')}}),web_search:'disabled',project_doc_max_bytes:0,mcp_servers:{'probe.with.dots':{command:'unused',enabled:true},'probe-two':{command:'unused',enabled:true}}}}});
@@ -58,8 +58,8 @@ input.on('line', line => {
     send({id,result:{data,nextCursor:null}});
   }
   if (method === 'model/list') {
-    const names = has('gpt6-models') ? ['gpt-6-sol','gpt-6-luna','fixture-model'] : ['fixture-model'];
-    let data = names.map(model => ({ id: model, model, displayName: model, hidden: false, inputModalities: has('text-only') ? ['text'] : ['text', 'image'], supportedReasoningEfforts: (has('only-medium') ? ['medium'] : ['low', 'medium', 'high', 'max']).map(reasoningEffort => ({ reasoningEffort })), serviceTiers: has('no-fast') ? [] : [{ id: 'priority' }] }));
+    const names = has('gpt6-models') ? ['gpt-6.1-sol','gpt-6-sol','gpt-6-luna','fixture-model'] : ['fixture-model'];
+    let data = names.map(model => ({ id: model, model, displayName: model, hidden: false, inputModalities: has('text-only') ? ['text'] : ['text', 'image'], supportedReasoningEfforts: (has('only-medium') ? ['medium'] : ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']).map(reasoningEffort => ({ reasoningEffort })), serviceTiers: has('no-fast') ? [] : [{ id: 'priority' }] }));
     if(has('malformed-models')) data[0].supportedReasoningEfforts = null;
     if(has('duplicate-models')) data.push(data[0]);
     if(has('model-pagination')) data=params.cursor ? data.slice(1) : data.slice(0,1);

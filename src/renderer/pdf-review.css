@@ -18,7 +18,7 @@
 .pdf-review-status details { margin-left: auto; max-height: 30vh; overflow: auto; }
 .pdf-review-status details[open] > button { display: block; margin-top: 4px; }
 .pdf-review-inspector { position: fixed; z-index: 50; right: 36px; top: 140px; width: min(560px, calc(100vw - 48px)); max-height: min(640px, calc(100vh - 180px)); display: flex; flex-direction: column; background: #fff; box-shadow: 0 12px 42px #0003; border: 1px solid #d9e1d6; border-radius: 10px; overflow: hidden; outline: none; }
-.pdf-review-inspector.expanded { top: 88px; right: 6vw; width: 88vw; max-height: calc(100vh - 120px); }
+.pdf-review-inspector.expanded { top: 88px; right: max(24px, calc((100vw - 860px) / 2)); width: min(860px, calc(100vw - 48px)); max-height: calc(100vh - 120px); }
 .pdf-review-inspector-heading { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 12px; border-bottom: 1px solid #e4e9e2; cursor: move; touch-action: none; font-size: 13px; }
 .pdf-review-inspector-heading span { margin-right: auto; }
 .pdf-review-inspector-heading button { min-height: 30px; }
@@ -40,4 +40,16 @@
   .pdf-review-commandbar select { max-width: 150px; }
   .pdf-review-heading { padding-inline: 6px; gap: 4px; }
   .pdf-review-heading select { max-width: 155px; }
+}
+
+.pdf-review-queue { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pdf-review-heading { flex-wrap: wrap; }
+.pdf-review-heading > select { max-width: 170px; }
+.pdf-review-options > div > button { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
+.pdf-review-options > div > details { margin-top: 10px; }
+.pdf-review-options > div > details > summary { padding: 4px 0; }
+
+@media(max-width: 1100px) {
+  .pdf-review-heading { display: grid; grid-template-columns: auto 1fr; }
+  .pdf-review-heading .pdf-toolbar-slot { grid-column: 1 / -1; margin-left: 0; }
 }

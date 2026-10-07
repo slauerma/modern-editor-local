@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
-import type { ChatState, ChatTurn } from '../src/shared/help-chat.ts';
+import { chatComments, type ChatState, type ChatTurn } from '../src/shared/help-chat.ts';
 
 type Element = { type: unknown; props: Record<string, any>; children: unknown[] };
 type Host = { tree: Element | null; render(): Element; unmount(): void };
@@ -90,8 +90,8 @@ test('chat recovery synchronizes both surfaces, rejects stale reads and detaches
     };
     const component = new Function(
       'useState', 'useRef', 'useEffect', 'React', 'window', 'useDialogFocus',
-      'MarkdownText', 'ReadableArea', 'CHAT_LIMITS', 'messageOf', js + ';return ' + name
-    )(useState, useRef, useEffect, React, win, () => {}, 'MarkdownText', 'ReadableArea', { images: 3 }, String);
+      'MarkdownText', 'ReadableArea', 'CHAT_LIMITS', 'messageOf', 'chatComments', js + ';return ' + name
+    )(useState, useRef, useEffect, React, win, () => {}, 'MarkdownText', 'ReadableArea', { images: 3 }, String, chatComments);
     host.render(); return host;
   }
 
@@ -104,10 +104,12 @@ test('chat recovery synchronizes both surfaces, rejects stale reads and detaches
   const hasAnswer = (host: Host, text: string) => nodes(host.tree).some(n => n.type === 'MarkdownText' && n.props.text === text);
   const tick = () => new Promise<void>(resolve => setImmediate(resolve));
   saved = [turn('old', 'Saved answer')]; unsaved = [...saved, turn('new', 'Unsaved answer')];
-  const drawer = mount('src/renderer/HelpChatDrawer.tsx', 'Conversation', {
-    paper: false, projectId: null, open: false, blocked: false, capture: () => ({}), status: '',
+  const drawerProps = {
+    paper: false, addedCommentIds: [], projectId: null, open: false, blocked: false, capture: () => ({}), status: '',
+    settingsKey: 'initial', saveDraft: () => {},
     send: async () => { unsaved = [...saved, turn('new', 'Generated answer')]; return unsaved.at(-1)!; }
-  });
+  };
+  const drawer = mount('src/renderer/HelpChatDrawer.tsx', 'Conversation', drawerProps);
   const pending = mount('src/renderer/PendingChats.tsx', 'PendingChats', { projectId: null, status: '' });
   const settle = async () => { for (let i = 0; i < 3; i++) { await tick(); drawer.render(); pending.render(); } };
   const click = async (host: Host, label: string) => {
@@ -156,6 +158,12 @@ test('chat recovery synchronizes both surfaces, rejects stale reads and detaches
     composer.props.onChange({ target: { value: 'Continue after the successful refresh' } }); await settle();
     assert(!nodes(drawer.tree).some(n => n.props.role === 'alert' && n.children.includes('Obsolete chat read failed')));
     assert.equal(button(drawer, 'Ask Codex')?.props.disabled, false);
+
+    await click(drawer, 'Preview what is sent'); assert(button(drawer, 'Hide preview'));
+    drawerProps.settingsKey = 'changed model, effort or speed'; await settle();
+    assert(!button(drawer, 'Hide preview'), 'changing chat settings removes the obsolete request preview');
+    assert.equal(nodes(drawer.tree).find(n => n.type === 'textarea')?.props.value, 'Continue after the successful refresh');
+    await click(drawer, 'Preview what is sent'); assert(button(drawer, 'Hide preview'));
 
     const baselineReads = reads, baselineNotifications = notifications;
     await settle(); assert.equal(reads, baselineReads); assert.equal(notifications, baselineNotifications);

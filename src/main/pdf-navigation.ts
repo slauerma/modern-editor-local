@@ -1,7 +1,7 @@
 // Personal editor: conservative source-to-PDF navigation; no source rewriting.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { PdfLocation } from '../shared/contracts.ts';
+import type { PdfLocation, SourceLocation } from '../shared/contracts.ts';
 import { controls } from '../shared/tex-structure.ts';
 const execute = promisify(execFile);
 
@@ -66,4 +66,37 @@ export async function syncTexLocation(executable: string, input: string, pdf: st
     cwd, env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' }, signal, timeout: 5000, maxBuffer: 256000
   });
   return parseSyncTex(stdout);
+}
+
+// SyncTeX's column is frequently -1 or 0. Select its source line rather than
+// implying a character-accurate reverse mapping.
+export function currentSourceLine(current: string, compiled: string, line: number): Omit<Extract<SourceLocation, { kind: 'mapped' }>, 'kind' | 'buildId'> | Exclude<SourceLocation, { kind: 'mapped' }> {
+  const lines = compiled.split('\n');
+  if (!Number.isInteger(line) || line < 1 || line > lines.length)
+    return { kind: 'unavailable', reason: 'LaTeX returned no source line for this position. Try nearby typeset text.' };
+  const from = lines.slice(0, line - 1).reduce((sum, value) => sum + value.length + 1, 0), to = from + lines[line - 1].length;
+  // Use the same exact, unique, whole-line policy in both directions.
+  const mapped = compiledPosition(compiled, current, from, to);
+  if ('kind' in mapped) return mapped.kind === 'compile'
+    ? { kind: 'compile', reason: 'This PDF passage changed in the draft. Compile the current draft before jumping to its source.' }
+    : mapped;
+  const currentLines = current.split('\n'), start = currentLines.slice(0, mapped.line - 1).reduce((sum, value) => sum + value.length + 1, 0);
+  return { from: start, to: start + currentLines[mapped.line - 1].length, line: mapped.line };
+}
+
+export function parseSyncTexSource(output: string): { input: string; line: number } | null {
+  for (const block of output.split(/(?=^Input:)/m).slice(1)) {
+    const input = /^Input:(.+)\r?$/m.exec(block)?.[1].trim();
+    const line = Number(/^Line:(\d+)\s*$/m.exec(block)?.[1]);
+    if (input && !input.includes('\0') && Number.isSafeInteger(line) && line > 0 && line <= 2000000) return { input, line };
+  }
+  return null;
+}
+
+export async function syncTexSource(executable: string, pdf: string, point: { page: number; x: number; y: number }, cwd: string, signal?: AbortSignal) {
+  // Never inherit SYNCTEX_EDITOR, which can launch an arbitrary editor command.
+  const { stdout } = await execute(executable, ['edit', '-o', `${point.page}:${point.x}:${point.y}:${pdf}`], {
+    cwd, env: { PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' }, signal, timeout: 5000, maxBuffer: 256000
+  });
+  return parseSyncTexSource(stdout);
 }

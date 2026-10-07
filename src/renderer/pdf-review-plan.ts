@@ -46,7 +46,7 @@ export function pdfReviewRegion(change: ComparisonChange, index: number): Compar
 }
 export function pdfReviewTentative(changes: ComparisonChange[], session: PdfReviewSession, plan: PdfReviewPlan) {
   return changes.flatMap(c => (inlineEdits(c.oldText, c.newText) ?? []).flatMap((_, i) =>
-    pdfReviewOwners(pdfReviewRegion(c, i), session, plan).some(id => plan.members.some(c => c.id === id && c.decision === 'open')) ? [c.id + ':' + i] : []));
+    pdfReviewChangeState(pdfReviewRegion(c, i), session, plan) === 'Tentative' ? [c.id + ':' + i] : []));
 }
 export function pdfReviewScopeIds(session: PdfReviewSession, scope: ReviewScope) {
   return session.comments.filter(c => c.from >= scope.from && c.to <= scope.to).map(c => c.id);
@@ -60,4 +60,21 @@ export function pdfReviewOwners(change: ComparisonChange, session: PdfReviewSess
     const after = plan.comments.find(item => item.id === c.id);
     return overlaps(c.from, c.to, change.fromA, change.toA) || !!after && overlaps(after.from, after.to, change.fromB, change.toB);
   }).map(c => c.id);
+}
+
+// Passage overlap is useful for finding a related comment, but is not proof
+// that it caused a manual edit. State cues require matching exact edit ranges.
+export function pdfReviewChangeState(change: ComparisonChange, session: PdfReviewSession, plan: PdfReviewPlan) {
+  const related = pdfReviewOwners(change, session, plan);
+  const exact = related.filter(id => {
+    const before = session.comments.find(c => c.id === id)!, after = plan.comments.find(c => c.id === id);
+    if (!after || after.appliedText === undefined || session.original.slice(before.from, before.to) !== before.original ||
+      plan.text.slice(after.from, after.to) !== after.appliedText) return false;
+    return (inlineEdits(before.original, after.appliedText) ?? []).some(edit =>
+      change.fromA === before.from + edit.fromA && change.toA === before.from + edit.toA &&
+      change.fromB === after.from + edit.fromB && change.toB === after.from + edit.toB);
+  });
+  if (!exact.length) return related.length ? 'Related suggestion' : 'Manual/unlinked change';
+  const pending = exact.filter(id => plan.members.find(c => c.id === id)?.decision === 'open').length;
+  return !pending ? 'Accepted' : pending === exact.length ? 'Tentative' : 'Mixed';
 }

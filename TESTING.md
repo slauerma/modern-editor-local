@@ -12,6 +12,8 @@ npm run build
 
 The unit suite covers source and review state, save/recovery behavior, proposal diffs, version history, PDF navigation decisions, and Codex request handling with a local fake server. Review-action tests cover bulk dismissal with one Undo/Redo, preserved Later/history/discussion and later arrivals, and question relinking that retains earlier wording without weakening replacement matching. Setup tests check that copied version summaries exclude private data; Help tests check release-version consistency and searchable release notes. The suite does not call an account or model service. Tests create disposable `.test-runs/` folders, and some also write `test-evidence/`.
 
+PDF-review lifecycle regressions cover Stop during cached validation, hide/return retry, final revalidation of a Sol-refined set, and late reverse lookups after leaving or replacing a snapshot. Chat tests cover large batches within the 48,000-character history budget, retained numbered indexes and exact selected wording. Ownership tests distinguish an accepted edit from later manual rewriting inside its broader passage.
+
 Reference tests cover remembered native-picker grants, current unsaved text, bounded PDF/text search, path replacement, revocation, cancellation and source-use records. Build-input tests distinguish the **50 MB / 500-file** discovery threshold from the **200 MB / 2,000-file** required-input cap. They cover deterministic narrowing, a required 60 MB resource, reported size totals, explicit Codex-request preparation, and rejected paths, omissions and excessive limits. Mocked model answers test the control flow, not suggestion quality.
 
 ## Real TeX integration
@@ -38,6 +40,22 @@ Large-folder cases include an unrelated 60 MB file, computed inputs requiring an
 
 Compile tests run serially and may take several minutes. They write logs, temporary paper copies, and compiled output under `.test-runs/` and `test-evidence/`. These directories and the generated fixture graphics are ignored. A missing TeX package or binary should be fixed in the local installation before retrying the relevant test.
 
+## Source/PDF navigation
+
+The unit tests cover reverse SyncTeX output, valid point requests, unchanged/changed source mapping, searchable LaTeX structure and navigation bookmarks following edits. The real SyncTeX integration checks both directions, paths with spaces, changed snapshots, included-file rejection and comparison-source separation:
+
+```sh
+node --experimental-strip-types --test tests/pdf-navigation.integration.ts
+```
+
+The isolated native check uses real TeX and a synthetic manuscript, disables model calls, and checks mouse jumps, right-click navigation, Back, searchable outline with keyboard focus, obsolete requests, quiet stale-PDF notices and source popups over stationary PDF-mode panes. Use an existing Playwright installation:
+
+```sh
+node scripts/check-source-navigation.mjs --playwright-package /path/to/playwright/package.json
+```
+
+Set `ME_TEST_EVIDENCE` to choose the screenshot/receipt directory; otherwise it stays in the disposable run directory. Native Electron launch may need macOS access outside a restricted shell sandbox. The current editor and its manuscript are not used by this check.
+
 ## Desktop smoke check
 
 The focused native discussion regression uses Playwright as an optional test tool. It is separate from `npm test`. Use an already installed copy with the `--playwright-package` option, or install it locally without changing the checked-in dependency lockfile:
@@ -63,7 +81,7 @@ After `npm run build` and `npm start`, choose **Try the working sample**. It has
 5. Click ordinary **Accept** and confirm that the PDF is marked older and no build starts. Undo, then choose **Accept & compile** on a clean suggestion: it should compile once, apply and retain the accepted comment while you inspect the PDF highlight. Use Next comment to continue; the source remains unsaved until Save.
 6. Put one pending comment in Later. Use **Details → Reject all remaining (N)**, inspect History, and Undo once. Confirm the pending batch returns, Later remains set, and source text and discussions are unchanged.
 7. Add an author question to a source selection and rewrite that passage. Use **Link question to current selection** and verify that the card retains Earlier wording beside the Linked current passage. Undo the link and confirm the source stays unchanged by linking. Replacement suggestions must still require exact original text for reattachment.
-8. Open Help and Settings, verify version **1.5.0**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
+8. Open Help and Settings, verify version **1.6.0**, inspect the Changelog, and use **Copy setup details**. Inspect the copied summary for editor/OS/Codex/TeX versions and check status, with no paper text, paths or account data.
 9. Save, compare with the retained original, and reopen the sample to check saved comments and source. Test Undo before quitting; its history is session-only.
 10. At 1000 × 740, switch Source/PDF tabs; at a larger size, test all View arrangements. Verify source Undo, replacement edits, PDF reading position and zoom survive. Check long contextual diffs, Clean/Edit switching, visible package additions, search/copy, and manual scrolling during a pending PDF jump.
 11. Make an unsaved edit, then **Close project**. Confirm Home has no paper panes or old chat/error context, and restarting stays at Home. Reopen the same paper and check recovered source, comments and reading position. Try closing during a review/build; late results must not reappear on Home. A failed recovery write must keep the project open.
@@ -72,17 +90,17 @@ This check needs the local TeX toolchain but no model/account call. Source remai
 
 ### Codex Side Chat checks
 
-After building, `node scripts/check-help-chat.mjs` runs an isolated Electron check with synthetic papers, screenshots and controlled replies. If Playwright is installed elsewhere, pass `--playwright-package /absolute/path/to/playwright/package.json`. It checks context/version, image attachment and normalization, cancellation/retry, proposal conversion with Undo, changed-source guards, drawer layout, and conversation persistence. It uses a simulated paste event; physical operating-system clipboard delivery is a separate manual check. It makes no model request.
+After building, `node scripts/check-help-chat.mjs` runs an isolated Electron check with synthetic papers, screenshots and controlled replies. If Playwright is installed elsewhere, pass `--playwright-package /absolute/path/to/playwright/package.json`. It checks context/version, image attachment and normalization, cancellation/retry, individual and batch comment import with Undo, repeated additions after rejection, selected-suggestion follow-ups, changed-source guards, dragging/resizing/collapsing without losing drafts or pending replies, switching unsent conversation drafts, minimum-size composer and context-menu bounds, placement reset, separate chat model/effort/speed, supported model options and restart persistence. The PDF review regression also checks that moving and resizing chat leaves both actual PDFs and their scroll positions unchanged. It uses a simulated paste event; physical operating-system clipboard delivery is a separate manual check. It makes no model request.
 
 `node --experimental-strip-types scripts/check-chat-images-protocol.mjs /absolute/path/to/codex` uses the supported installed Codex runtime and a synthetic HTTP provider on localhost. It verifies that screenshot bytes reach the provider as an image input and that no account credentials accompany the request. The server replies with a fixed answer; this establishes transport, not visual understanding. Both checks put local results in ignored `.test-runs/` folders and may need permission to launch Electron or listen on localhost.
 
-For a manual chat smoke check, paste/drop an image, inspect its thumbnail and context, ask about a synthetic error, then request a revision to a selected passage. Verify that **Turn into comment** leaves the source unchanged and that closing/reopening the drawer preserves the conversation. Live answer quality requires an explicitly sent account request.
+For a manual chat smoke check, paste/drop an image, inspect its thumbnail and context, ask about a synthetic error, then request a revision to a selected passage. Request several comments, add one and then **Add all and review**, and verify that both actions leave the source unchanged. Individual addition should keep chat open; **Discuss this** should put the chosen wording in the next request preview. Verify that closing/reopening the drawer preserves the conversation. Live answer quality requires an explicitly sent account request.
 
 ### Optional live Codex check — uses your account
 
 On a synthetic paper, request a short language review. Ask one resulting comment, “Make the suggested change more compact.” Check that the reply's exact **Suggested wording** is readable separately from the explanation. **Use this wording** should update the proposal only; inspect it, accept it, then Save. Also check cancellation and any reported unsupported effort/Fast setting as needed.
 
-In Settings, load the model catalog, choose an available GPT‑6 Sol or GPT‑6 Luna, save, and verify the choice survives restart. Test each model you intend to use; catalog availability alone does not prove a completed live request. Returning to **Use Codex default** should remove the editor’s explicit choice.
+In Settings, load the model catalog, choose an available GPT‑6.1 Sol or GPT‑6 Luna, save, and verify the choice survives restart. Test each model you intend to use; catalog availability alone does not prove a completed live request. Returning to **Use Codex default** should remove the editor’s explicit choice.
 
 Live requests use your separately configured CLI and account and may consume service usage. They are not part of the automatic test commands above. Do not treat controlled model replies as evidence of live connection or model quality.
 
@@ -92,7 +110,7 @@ Live requests use your separately configured CLI and account and may consume ser
 node --experimental-strip-types scripts/check-codex-isolation.mjs
 ```
 
-The probe defaults to the editor-managed CLI installed by `npm ci --ignore-scripts`. Use `--codex /absolute/path/to/codex` for another executable location. The currently supported runtimes are **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6** and **0.155.0-alpha.9.2**; an unknown version must fail closed. The script uses a disposable Codex home and synthetic trusted project under `.test-runs/`, without copying credentials or changing your normal configuration. It never starts a model turn.
+The probe defaults to the editor-managed CLI installed by `npm ci --ignore-scripts`. Use `--codex /absolute/path/to/codex` for another executable location. The currently supported runtimes are **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6**, **0.155.0-alpha.9.2** and **0.160.1**; an unknown version must fail closed. The script uses a disposable Codex home and synthetic trusted project under `.test-runs/`, without copying credentials or changing your normal configuration. It never starts a model turn.
 
 The positive control demonstrates that the old empty-table override starts a harmless MCP server and exposes its tool. The corrected cases use the actual editor client, with inherited home configuration, home plus trusted-project configuration, and an inherited desktop-launcher identity. All must report every server disabled, expose no MCP tools/resources, and leave the startup markers absent. The probe uses automatic tool approval settings to ensure that rejecting approval callbacks is not mistaken for disabling a server. It records CLI version and tested source hashes in ignored `test-evidence/`.
 

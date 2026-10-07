@@ -3,8 +3,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Build, BuildValidation, Engine, PdfRequest, PdfLocation } from '../shared/contracts.ts';
-import { compiledPosition, syncTexLocation } from './pdf-navigation.ts';
+import type { Build, BuildValidation, Engine, PdfRequest, PdfLocation, SourceRequest, SourceLocation } from '../shared/contracts.ts';
+import { compiledPosition, syncTexLocation, syncTexSource, currentSourceLine } from './pdf-navigation.ts';
 import type { ProjectService } from './project-service.ts';
 import { digest, readRegularFile, readJSON, privateDirectory, writeJSON } from './files.ts';
 import { classifyBuildLog } from './diagnostics.ts';
@@ -22,7 +22,7 @@ export class CompileService {
   private stopped: (() => void)[] = [];
   private records = new Map<string, Record>();
   private validations = new Map<string, { controller: AbortController; task: Promise<BuildValidation> }>();
-  private navigation = new Map<AbortController, Promise<PdfLocation>>();
+  private navigation = new Map<AbortController, Promise<PdfLocation | SourceLocation>>();
   private preparation: AbortController | null = null;
   readonly projects: ProjectService;
   readonly cache: string;
@@ -258,6 +258,37 @@ export class CompileService {
     const controller = new AbortController(), task = this.locateSnapshot(input, controller.signal);
     this.navigation.set(controller, task);
     return task.finally(() => this.navigation.delete(controller));
+  }
+  locateSource(input: SourceRequest): Promise<SourceLocation> {
+    if (this.navigation.size >= 4) return Promise.resolve({ kind: 'unavailable', reason: 'A PDF position is still being located. Try again in a moment.' });
+    const controller = new AbortController(), task = this.locateSourceSnapshot(input, controller.signal);
+    this.navigation.set(controller, task);
+    return task.finally(() => this.navigation.delete(controller));
+  }
+  private async locateSourceSnapshot(input: SourceRequest, signal: AbortSignal): Promise<SourceLocation> {
+    const project = this.projects.get(input.projectId), record = this.records.get(input.buildId);
+    if (!record || record.projectId !== project.id || !record.build.success)
+      return { kind: 'compile', reason: 'Compile this draft to create a PDF with source positions.' };
+    if (record.build.purpose === 'comparison')
+      return { kind: 'unavailable', reason: 'Use a change marker to inspect comparison text. Source jumps use the ordinary PDF.' };
+    if (!record.build.dependenciesVerified)
+      return { kind: 'unavailable', reason: 'This PDF has unverified inputs. Resolve its build warnings before using source navigation.' };
+    try {
+      await this.pdf(input.buildId);
+      const source = path.join(record.directory, project.name), stem = project.name.replace(/\.(?:tex|txt)$/i, '');
+      if (digest(await readRegularFile(source, 8000000)) !== record.build.sourceHash) throw new Error('The compiled source snapshot changed.');
+      await readRegularFile(path.join(record.directory, stem + '.synctex.gz'), 32000000);
+      const hit = await syncTexSource(path.join(path.dirname(this.latexmk), 'synctex'), record.pdf, input, record.directory, signal);
+      if (!hit) return { kind: 'unavailable', reason: 'LaTeX provided no source position here. Try nearby typeset text.' };
+      // Only the open root document is editable. Do not open a path from SyncTeX
+      // or confuse an included file's line numbers with the current document.
+      if (await fs.realpath(path.resolve(record.directory, hit.input)) !== await fs.realpath(source))
+        return { kind: 'unavailable', reason: 'This passage belongs to an included file. Open that file separately; navigation currently covers the open root source.' };
+      const position = currentSourceLine(input.text, record.text, hit.line);
+      return 'kind' in position ? position : { kind: 'mapped', buildId: input.buildId, ...position };
+    } catch (error) {
+      return { kind: 'unavailable', reason: 'The source position could not be read. Recompile, or check the local SyncTeX utility. ' + String(error).slice(0, 300) };
+    }
   }
   private async locateSnapshot(input: PdfRequest, signal: AbortSignal): Promise<PdfLocation> {
     const project = this.projects.get(input.projectId), record = this.records.get(input.buildId);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { setupOperatingSystem, type SetupCheck, type ToolSettings, type ToolSettingsState } from '../shared/tool-settings.ts';
 import { useDialogFocus } from './use-dialog-focus.ts';
+import { editorialModelName } from '../shared/codex-options.ts';
 import type { CodexModel } from '../shared/codex-models.ts';
 import './settings-panel.css';
 import { DebugPanel } from './DebugPanel.tsx';
@@ -96,7 +97,7 @@ export function SettingsPanel({ onClose, disabled = false, paper }: Props) {
           if (live.current) { setModels(available); setStatus(available.length ? 'Model catalog loaded. Choose a model and save settings.' : 'No models were returned. Check your Codex sign-in and access.'); }
         })}>{models ? 'Refresh models' : 'Load models'}</button>
       </div>
-      <p className="settings-hint">Applies to new reviews, discussions and Side Chat requests in this editor. Changes PDF uses GPT-6 Sol separately. Your general Codex settings stay unchanged. Load models checks the selected CLI's catalog without sending paper text or starting an AI response.</p>
+      <p className="settings-hint">Applies to new reviews and discussions. Side Chat follows this only when its Model is Editor default; it has separate model, effort and speed controls. Changes PDF and quick editorial actions use {editorialModelName} separately. Your general Codex settings stay unchanged. Load models checks the selected CLI's catalog without sending paper text or starting an AI response.</p>
       {selectedModel && <p className="settings-hint">Supported effort: {selectedModel.efforts.join(', ')}. {selectedModel.fast ? 'Fast mode available.' : 'Standard speed only.'} {selectedModel.images ? 'Screenshots supported.' : 'Text only.'} Access is checked again when you send a request.</p>}
       {models && draft.codexModel && !selectedModel && <p className="settings-hint">The saved model is not in this catalog. Choose an available model or use the Codex default before reviewing.</p>}
     </div>

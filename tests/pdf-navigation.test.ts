@@ -1,7 +1,27 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compiledPosition, parseSyncTex } from '../src/main/pdf-navigation.ts';
+import { compiledPosition, parseSyncTex, currentSourceLine, parseSyncTexSource } from '../src/main/pdf-navigation.ts';
+import { sourceRequestSchema } from '../src/shared/contracts.ts';
 const original='\\documentclass{article}\n\\begin{document}\nUnique opening paragraph.\nSame words.\nSame words.\n\\end{document}\n';
+test('reverse navigation maps unchanged shifted lines and refuses changed or ambiguous source', () => {
+  const at = original.indexOf('Unique'), changed = original.replace('Unique', 'Rewritten');
+  assert.deepEqual(currentSourceLine(original, original, 3), { from: at, to: at + 'Unique opening paragraph.'.length, line: 3 });
+  const shifted = original.replace('Unique', 'New paragraph.\nUnique');
+  const hit = currentSourceLine(shifted, original, 3);
+  assert(!('kind' in hit)); assert.equal(hit.line, 4); assert.equal(shifted.slice(hit.from, hit.to), 'Unique opening paragraph.');
+  assert.equal((currentSourceLine(changed, original, 3) as any).kind, 'compile');
+  assert.equal((currentSourceLine(shifted, original, 4) as any).kind, 'compile');
+  assert.equal((currentSourceLine(original, original, 0) as any).kind, 'unavailable');
+  assert.equal((currentSourceLine(original, original, 99) as any).kind, 'unavailable');
+  assert.equal((currentSourceLine(original, original, 1) as any).kind, 'unavailable');
+});
+test('reverse parser preserves paths with spaces and ignores invalid records; IPC rejects invalid geometry', () => {
+  assert.deepEqual(parseSyncTexSource('SyncTeX result begin\nInput:/a paper/main.tex\nLine:17\nColumn:-1\nSyncTeX result end'), { input: '/a paper/main.tex', line: 17 });
+  for (const bad of ['Input:a\nLine:-1', 'Input:a\nLine:Infinity', 'Input:a\nLine:999999999999', 'Input:a\0b\nLine:1', 'No result']) assert.equal(parseSyncTexSource(bad), null);
+  const request = { projectId: 'p', buildId: 'b', text: original, page: 1, x: 120, y: 240 };
+  assert(sourceRequestSchema.safeParse(request).success);
+  for (const values of [{page:0}, {page:1.5}, {x:-2}, {x:Infinity}, {y:NaN}]) assert(!sourceRequestSchema.safeParse({ ...request, ...values }).success);
+});
 test('source positions use the displayed snapshot: current repeats work, unchanged shifted lines map, changed or ambiguous passages require compilation',()=>{
   const at=original.indexOf('Unique');assert.deepEqual(compiledPosition(original,original,at,at+6),{line:3,column:1});
   const shifted=original.replace('Unique','Inserted elsewhere.\nUnique'), after=shifted.indexOf('Unique');

@@ -1,7 +1,7 @@
 {
   "name": "modern-codex-editor",
   "productName": "Modern Codex Editor",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -19,15 +19,15 @@
     "test:compile": "node --experimental-strip-types --test --test-concurrency=1 tests/compile.integration.ts tests/compile.audit.ts tests/texpile.integration.ts tests/compile-review.integration.ts tests/fragment-preamble.integration.ts tests/stabilization.integration.ts tests/pdf-navigation.integration.ts tests/build-input-plan.integration.ts tests/viewer.integration.ts tests/changes-pdf.integration.ts"
   },
   "dependencies": {
-    "@codemirror/commands": "6.11.0",
+    "@codemirror/commands": "6.11.1",
     "@codemirror/language": "6.12.4",
     "@codemirror/legacy-modes": "6.5.4",
     "@codemirror/merge": "6.12.2",
     "@codemirror/search": "6.7.2",
-    "@codemirror/state": "6.7.4",
-    "@codemirror/view": "6.43.11",
-    "@openai/codex": "0.155.0-alpha.9.2",
-    "pdfjs-dist": "6.3.289",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.13",
+    "@openai/codex": "0.160.1",
+    "pdfjs-dist": "6.4.299",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "zod": "3.25.76"
@@ -36,7 +36,7 @@
     "@types/node": "24.12.4",
     "@types/react": "18.3.28",
     "@types/react-dom": "18.3.7",
-    "electron": "42.11.2",
+    "electron": "44.5.1",
     "esbuild": "0.28.2",
     "typescript": "5.9.3",
     "vite": "7.3.6"

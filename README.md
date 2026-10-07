@@ -4,7 +4,7 @@ A local desktop editor for LaTeX source, compiled PDF reading, and Codex-assiste
 
 [Watch the quick overview or the 50-second Changes PDF demonstration](demo/README.md).
 
-**Version 1.5.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
+**Version 1.6.0.** Help, Settings and the native About window show the editor version. See the [changelog](CHANGELOG.md) for this release's features.
 
 This is a personal project, kept lean for individual use. **macOS is the currently validated platform. Windows is not yet supported.** The repository contains development source; there is no packaged application or installer.
 
@@ -24,18 +24,18 @@ These Markdown guides can be read locally without an account or internet connect
 Open a `.tex` or `.txt` file, import prepared comments or request a review, then inspect each suggestion before applying it. **Accept** changes the working draft; **Save** writes the source file. Previewing or exporting a proposal does not accept it.
 
 - **Source and comments:** read a contextual inline diff, switch to clean wording, edit or discuss a suggestion, and choose among saved alternatives. Text fragments have a live text diff; complete LaTeX papers also have a compiled PDF.
-- **Changes PDF:** compare the draft with a fixed baseline using struck deletions and underlined additions, or a clean paper with change markers. The workspace comparison prepares a local PDF, then requests GPT-6 Sol explanations. A local-only option is available.
+- **Changes PDF:** compare the draft with a fixed baseline using struck deletions and underlined additions, or a clean paper with change markers. The workspace comparison prepares a local PDF, then requests GPT-6.1 Sol explanations. A local-only option is available.
 - **PDF mode:** choose **View → PDF mode** to preview the whole proposed revision, with Changes on the left and Proposed or Original on the right. Click a change to inspect, edit, accept or reject it in a popup. Bulk acceptance checks compilation, including a batch of one. Routine preview updates are local; Sol refinement is optional.
-- **Context and guidance:** import [comment JSON](docs/USER_GUIDE.md#import-prepared-comments) directly, convert outside prose feedback with Codex, or attach references and large pasted text. Paper instructions and minimal-edit preferences are shared across reviews and discussions. Side Chat offers optional screenshots and inspectable context.
-- **Reading and recovery:** scroll or search PDFs, preserve the last successful PDF after a failed build, compare saved versions, and export source recovery. **View → Classic view** offers a cream writing surface with bottom suggestions. **Actions → Files & history…** gathers saved state, context and named PDF exports.
+- **Context and guidance:** import [comment JSON](docs/USER_GUIDE.md#import-prepared-comments) directly, convert outside prose feedback with Codex, or attach references and large pasted text. Paper instructions and minimal-edit preferences are shared across reviews and discussions. Side Chat is a movable, resizable panel with its own Model, Effort and Speed controls, optional screenshots, inspectable context and batches of comments. Add individually without closing chat, or add all and review. **Discuss this** carries a chosen suggestion into a follow-up even when a large batch needs a compact history index.
+- **Reading and recovery:** jump between LaTeX and PDF with Command-click, return with Back, search headings and labels in Outline, scroll or search PDFs, preserve the last successful PDF after a failed build, compare saved versions, and export source recovery. **View → Classic view** offers a cream writing surface with bottom suggestions. **Actions → Files & history…** gathers saved state, context and named PDF exports.
 
 PDF mode shares the workspace's source, comments, Save and Undo. Its Original snapshot lasts for the open paper session. Exports can contain tentative or removed text; live comment controls and tentative gray shading remain in the editor. See the [PDF mode guide](docs/USER_GUIDE.md#pdf-review-mode) for session behavior and limitations.
 
-[Watch the 55-second overview](demo/2026-09-28/modern-editor-overview-55s.mp4) · [Three-minute walkthrough, downloads and credits](demo/README.md). These recordings show the three-column workspace; the new two-PDF mode is described in the guide.
+[Watch the 55-second overview](demo/2026-09-28/modern-editor-overview-55s.mp4) · [Three-minute walkthrough, downloads and credits](demo/README.md). These 28 September recordings show the three-column workspace. The current guide covers later additions, including two-PDF review, floating Side Chat and two-way PDF/source navigation.
 
 ## Install and run on Mac
 
-Use Node.js 24 LTS with npm, full MacTeX, and your own Codex account for AI features. The locked dependencies install a separate **Codex CLI 0.155.0-alpha.9.2** for the editor; no Codex desktop app or global CLI is required. The minimum Node version is 22.18. Follow the [setup guide](docs/SETUP.md) before building. **Actions → Settings and Check setup** lets you choose the installed executables and check their versions.
+Use Node.js 24 LTS with npm, full MacTeX, and your own Codex account for AI features. The locked dependencies install a separate **Codex CLI 0.160.1** for the editor; no Codex desktop app or global CLI is required. The minimum Node version is 22.18. Follow the [setup guide](docs/SETUP.md) before building. **Actions → Settings and Check setup** lets you choose the installed executables and check their versions.
 
 From the repository folder containing `package.json`:
 

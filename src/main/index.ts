@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ProjectService } from './project-service.ts';
+import { sourceRequestSchema } from '../shared/contracts.ts';
 import { ProjectFilesService } from './project-files.ts';
 import { CompileService } from './compile-service.ts';
 import { reviewSchema, replyActionSchema, commentSchema, engineSchema, effortSchema, fastModeSchema, historyBudgetSchema, preambleRequestSchema, paperInstructionsSchema, pdfRequestSchema, workspaceSchema, type Project } from '../shared/contracts.ts';
@@ -271,6 +272,7 @@ handle('build:export-pdf', async raw => {
   return { path: result.filePath, purpose: snapshot.purpose, sourceHash: snapshot.sourceHash };
 });
 handle('build:locate', input => compiler.locatePdf(pdfRequestSchema.parse(input)));
+handle('build:locate-source', input => compiler.locateSource(sourceRequestSchema.parse(input)));
 handle('build:export-changes-source', async raw => {
   const p = z.object({ projectId: z.string(), artifactId: z.string().uuid() }).strict().parse(raw);
   const snapshot = changesPdf.exportSource(p.projectId, p.artifactId);
@@ -389,7 +391,7 @@ if (primaryInstance) app.whenReady().then(async () => {
       { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('undo') },
       { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: () => send('redo') },
       { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'pasteAndMatchStyle' }, { role: 'delete' }, { type: 'separator' }, { role: 'selectAll' }
-    ] }, { label: 'Find', submenu: [{ label: 'Find in focused pane…', accelerator: 'CmdOrCtrl+F', click: () => send('find') }] }, { label: 'View', submenu: [{ label: 'Toggle PDF', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('pdf') }, { label: 'Show/hide toolbar', accelerator: 'CmdOrCtrl+Shift+M', click: () => send('toolbar') }, { label: 'Focus source', accelerator: 'CmdOrCtrl+1', click: () => send('focus-source') }, { label: 'Focus comments', accelerator: 'CmdOrCtrl+2', click: () => send('focus-comments') }, { label: 'Show/hide comments', click: () => send('comments') }, { label: 'Codex Side Chat…', accelerator: 'CmdOrCtrl+Shift+H', click: () => send('help-chat') }, { label: 'Help and shortcuts…', click: () => send('help') }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' }] }
+    ] }, { label: 'Find', submenu: [{ label: 'Find in focused pane…', accelerator: 'CmdOrCtrl+F', click: () => send('find') }] }, { label: 'Navigate', submenu: [{ label: 'Back to previous position', accelerator: 'CmdOrCtrl+Alt+Left', click: () => send('navigation-back') }, { label: 'Outline…', accelerator: 'CmdOrCtrl+Shift+O', click: () => send('outline') }, { label: 'Show in PDF', accelerator: 'CmdOrCtrl+Shift+J', click: () => send('show-in-pdf') }] }, { label: 'View', submenu: [{ label: 'Toggle PDF', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('pdf') }, { label: 'Show/hide toolbar', accelerator: 'CmdOrCtrl+Shift+M', click: () => send('toolbar') }, { label: 'Focus source', accelerator: 'CmdOrCtrl+1', click: () => send('focus-source') }, { label: 'Focus comments', accelerator: 'CmdOrCtrl+2', click: () => send('focus-comments') }, { label: 'Show/hide comments', click: () => send('comments') }, { label: 'Codex Side Chat…', accelerator: 'CmdOrCtrl+Shift+H', click: () => send('help-chat') }, { label: 'Help and shortcuts…', click: () => send('help') }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' }] }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
   await debug.state();

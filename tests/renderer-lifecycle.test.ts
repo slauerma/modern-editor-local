@@ -13,6 +13,7 @@ import * as reviewTools from '../src/shared/review.ts';
 import * as stateTools from '../src/renderer/editor-state.ts';
 import { RecoveryWriter } from '../src/renderer/recovery-writer.ts';
 import { WorkGate } from '../src/renderer/work-gate.ts';
+import { NavigationHistory } from '../src/renderer/navigation-history.ts';
 import { LatestTask } from '../src/renderer/workspace-state.ts';
 import { SectionReview } from '../src/shared/section-review.ts';
 import * as contextTools from '../src/shared/codex-context.ts';
@@ -25,7 +26,7 @@ import { pdfReviewPlan } from '../src/renderer/pdf-review-plan.ts';
 // real CodeMirror/Zod, replacing only DOM painting and the narrow IPC boundary.
 const source = await fs.readFile('src/renderer/App.tsx', 'utf8');
 const syntax = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['previewSuggestion', 'leavePreview', 'input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf', 'clearBuilds', 'decidePdfReview', 'savePdfSnapshot'];
+const names = ['previewSuggestion', 'leavePreview', 'input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf', 'clearBuilds', 'decidePdfReview', 'savePdfSnapshot', 'openWorkspacePdf', 'showLatexFromPdf'];
 const extracted: string[] = []; let filter = '', bindings = '';
 function visit(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? '')) extracted.push(node.getText(syntax));
@@ -65,6 +66,8 @@ function fixture(text = quote) {
     document: { body: {}, activeElement: {} }, requestAnimationFrame: (callback: () => void) => { states.frame = callback; }, setCompareOpen: () => {},
     lastSource: { current: null }, lastReviewTop: { current: 0 }, revealPdf: () => {}, revealSource: () => {}, workspaceValues: { current: defaultWorkspace() }, restoredSource: { current: null }, laterRef: { current: false }, discussionLock: { current: false }, autoAddRef: { current: true }, followPending: { current: null }, followTasks: { current: new LatestTask() },
     sourcePosition: () => defaultWorkspace().source,
+    snapshotView: { current: 'review-session-original' },
+    navigationHistory: { current: new NavigationHistory() }, navigationBookmark: () => null, rememberNavigation: () => {}, setCanGoBack: () => {}, setOutlineOpen: () => {}, setSourcePeek: () => {},
     previewJob: { current: null }, previewCache: { current: null }, representation: 'pdf', pdfPosition: {page:1,zoom:1.25}, docMode: 'latex', build: null, candidateBuild: null, preambleRun: { current: null }, buildRun: { current: null }, sectionRun: { current: null }, comparisonPosition: { current: {} },
     warningAcceptance: null, laterOnly: false, pdfReviewBuilds: [], pdfReview: false, pdfReviewPlan,
     pdfSession: { id: 'pdf-session', original: text, comments: [c] },
@@ -688,4 +691,21 @@ test('acceptance and Save counters schedule comparisons without counting typing,
   await f.scope.save(); assert.equal(f.states.changeEvents.saved, 1);
   f.api.save = async () => { throw new Error('Write refused'); };
   await f.scope.save(); assert.equal(f.states.changeEvents.saved, 1);
+});
+
+test('workspace PDF routes leave review and select the intended draft or candidate build', () => {
+  const f = fixture(); f.scope.pdfReview = true; f.scope.build = { id: 'draft' }; f.scope.candidateBuild = { id: 'candidate' };
+  f.scope.openWorkspacePdf('candidate');
+  assert.equal(f.states.PdfReview, false); assert.equal(f.states.CompareOpen, false);
+  assert.equal(f.states.ViewCandidate, true); assert.equal(f.scope.displayedBuild.current.id, 'candidate');
+  f.scope.openWorkspacePdf('draft'); assert.equal(f.states.ViewCandidate, false); assert.equal(f.scope.displayedBuild.current.id, 'draft');
+});
+
+test('late reverse snapshot lookup cannot open a popup after leaving or replacing its view', async () => {
+  const f = fixture(), wait = deferred<any>(); let popups = 0;
+  f.scope.pdfReview = true; f.scope.setSourcePeek = () => popups++;
+  f.api.locateSource = () => wait.promise;
+  const pending = f.scope.showLatexFromPdf({ buildId: 'original', page: 1, x: 50, y: 50 }, { text: quote, title: 'Original source' });
+  f.scope.snapshotView.current = 'workspace'; wait.resolve({ kind: 'mapped', from: 0, to: 3, line: 1 }); await pending;
+  assert.equal(popups, 0);
 });

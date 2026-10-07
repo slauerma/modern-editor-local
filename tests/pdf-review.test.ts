@@ -4,10 +4,10 @@ import { undo } from '@codemirror/commands';
 import type { Transaction } from '@codemirror/state';
 import { commentSchema } from '../src/shared/contracts.ts';
 import { adoptComment } from '../src/shared/review.ts';
-import { comparisonPlan } from '../src/shared/changes-pdf.ts';
+import { comparisonPlan, inlineEdits } from '../src/shared/changes-pdf.ts';
 import { useDiscussionWording } from '../src/shared/alternatives.ts';
 import { applyProposals, initialState, commentsField, patchComments } from '../src/renderer/editor-state.ts';
-import { pdfReviewPlan, pdfReviewScopes, pdfReviewScopeIds, pdfReviewOwners, pdfReviewTentative, type PdfReviewSession } from '../src/renderer/pdf-review-plan.ts';
+import { pdfReviewChangeState, pdfReviewRegion, pdfReviewPlan, pdfReviewScopes, pdfReviewScopeIds, pdfReviewOwners, pdfReviewTentative, type PdfReviewSession } from '../src/renderer/pdf-review-plan.ts';
 
 const source = '\\documentclass{article}\n\\begin{document}\n\\section{Setup}\nAlpha. Beta.\n\n\\subsection{Details}\nGamma.\n\n\\section{Result}\nDelta.\n\\end{document}\n';
 const comment = (id: string, original: string, replacement: string | null) => adoptComment(source, commentSchema.parse({ id, title: id, explanation: 'Synthetic reason.', original, replacement }));
@@ -82,4 +82,14 @@ test('a question converted to a proposal keeps its owner and tentative state, th
   assert.equal(next.text, plan.text);
   assert.deepEqual(changes.flatMap(c => pdfReviewOwners(c, captured, next)), ['question']);
   assert.deepEqual(pdfReviewTentative(changes, captured, next), []);
+});
+
+test('manual edits within an accepted passage are related, not labelled as accepted edits', () => {
+  const c = comment('wide', 'Alpha. Beta.', 'A. Beta.'), snapshot = { ...session, comments: [c] };
+  let state = initialState(source, [c]); state = state.update(applyProposals(state, [c.id])).state;
+  const from = state.doc.toString().indexOf('Beta');
+  state = state.update({ changes: { from, to: from + 4, insert: 'BETA' } }).state;
+  const plan = pdfReviewPlan(snapshot, state.doc.toString(), state.field(commentsField));
+  const states = comparisonPlan(source, plan.text).changes.flatMap(change => (inlineEdits(change.oldText, change.newText) ?? []).map((_, i) => pdfReviewChangeState(pdfReviewRegion(change, i), snapshot, plan)));
+  assert(states.length); assert(!states.includes('Accepted')); assert(states.includes('Related suggestion'));
 });

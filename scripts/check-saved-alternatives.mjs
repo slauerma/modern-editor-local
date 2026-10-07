@@ -80,7 +80,7 @@ try {
   await poll(async()=>await wording.locator('option').count()===4,'one new saved choice');
   assert.equal(await draft.inputValue(),'My shorter wording.');
   const calls=await application.evaluate(()=>globalThis.__choiceProbe.calls);
-  assert.equal(calls[0].config.model,'gpt-6-sol'); assert.equal(calls[0].effort,'low'); assert.equal(calls[0].reader,false);
+  assert.equal(calls[0].config.model,'gpt-6.1-sol'); assert.equal(calls[0].effort,'low'); assert.equal(calls[0].reader,false);
   await snapshot('01-saved-wordings');
   await button('Undo').click(); assert.equal(await draft.inputValue(),'My starting wording.'); assert.equal(await wording.locator('option').count(),4);
   await wording.selectOption({label:'2. Concise · edited'});

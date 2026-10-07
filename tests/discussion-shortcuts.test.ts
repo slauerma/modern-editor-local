@@ -37,7 +37,7 @@ test('Quick explanation uses Sol Low without reference reads or edits and preser
   const c = comment(); c.messages = Array.from({ length: 10 }, (_, i) => ({ role: 'user', text: `Question ${i}`, createdAt: '2026-09-26' }));
   await f.service.reply({ projectId: f.p.id, text, comment: c, message: quickQuestion, action: 'quick', attachmentPreviewId: 'not-a-reference' }, () => {});
   const run = calls[0]; assert.equal(run.effort, 'low'); assert.equal(run.fast, false); assert.equal(run.reader, undefined);
-  assert.deepEqual(run.config, { purpose: 'discussion', model: 'gpt-6-sol', fastMode: false });
+  assert.deepEqual(run.config, { purpose: 'discussion', model: 'gpt-6.1-sol', fastMode: false });
   assert.deepEqual(run.schema, quickReplyOutputSchema); assert.equal(run.schema.properties.replacement.type, 'null');
   assert.equal(run.prompt.references, undefined); assert.equal(run.prompt.conversation.length, 6); assert.equal(run.prompt.paperInstructions, 'Keep my voice.');
   assert.match(run.prompt.task, /context is insufficient/); assert.equal(f.projects.get(f.p.id).effort, 'max'); assert.equal(f.projects.get(f.p.id).fastMode, true);
@@ -63,12 +63,28 @@ test('alternatives survive retention/reopen without changing the draft; Think ag
   await f.service.reply({ projectId: f.p.id, text, comment: comment(), message: alternativesQuestion, action: 'alternatives' }, () => {});
   const [item] = (await f.service.results.list(f.p.id)).items;
   const restored = resultSchema.parse(JSON.parse(JSON.stringify(item))); assert.equal(restored.kind, 'reply'); if (restored.kind !== 'reply') return;
-  assert.deepEqual(restored.answer.alternatives, options); assert.equal(calls[0].effort, 'medium'); assert.equal(calls[0].fast, false); assert.equal(calls[0].config.model, 'gpt-6-sol');
+  assert.deepEqual(restored.answer.alternatives, options); assert.equal(calls[0].effort, 'medium'); assert.equal(calls[0].fast, false); assert.equal(calls[0].config.model, 'gpt-6.1-sol');
   const fields = replyFields(comment(), restored.answer); assert.equal(fields.messages.length, 4);
   assert(fields.messages.slice(1).every(m => m.proposalOriginal === original));
   const updated = commentSchema.parse({ ...comment(), ...fields }); assert.equal(updated.draft, 'My own draft.'); assert.equal(updated.replyDraft, 'Unsent question'); assert.equal(updated.replacement, fixed);
   await f.service.reply({ projectId: f.p.id, text, comment: comment(), message: deeperQuestion, action: 'reconsider' }, () => {});
   assert.equal(calls[1].effort, 'max'); assert.equal(calls[1].fast, true); assert.equal(calls[1].config.model, undefined); assert.match(calls[1].prompt.authorReply, /withdraw or narrow/);
+  assert.equal(await fs.readFile(f.file, 'utf8'), text);
+});
+
+test('Think again preserves extended paper effort across persistence and leaves source and speed unchanged', async t => {
+  const f = await fixture(t), efforts: unknown[] = [];
+  f.service.client.run = async (_prompt, _schema, _progress, effort, fast, _reader, config) => {
+    efforts.push(effort); assert.equal(fast, true); assert.equal(config?.model, undefined);
+    return { reply: 'The original concern was overstated.', replacement: null, packages: [] };
+  };
+  for (const effort of ['xhigh', 'ultra'] as const) {
+    await f.projects.setEffort(f.p.id, effort);
+    await f.service.reply({ projectId: f.p.id, text, comment: comment(), message: deeperQuestion, action: 'reconsider' }, () => {});
+    const reopened = new ProjectService(path.join(f.root, 'runtime'));
+    assert.equal((await reopened.open(f.file)).effort, effort);
+  }
+  assert.deepEqual(efforts, ['xhigh', 'ultra']);
   assert.equal(await fs.readFile(f.file, 'utf8'), text);
 });
 

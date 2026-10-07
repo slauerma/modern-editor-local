@@ -29,7 +29,7 @@ test('the model catalog exposes Sol and Luna without creating a thread or sendin
   await fs.mkdir(directory, { recursive: true });
   for (const flag of ['gpt6-models', 'model-pagination', 'new-version']) await fs.writeFile(path.join(directory, flag), '');
   const models = await client.listModels();
-  assert.deepEqual(models.map(m => m.id), ['gpt-6-sol', 'gpt-6-luna', 'fixture-model']);
+  assert.deepEqual(models.map(m => m.id), ['gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-luna', 'fixture-model']);
   assert(models.every(m => m.images && m.fast && m.efforts.includes('max')));
   const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
   assert.equal(requests.filter((r: any) => r.method === 'model/list').length, 2);
@@ -37,7 +37,7 @@ test('the model catalog exposes Sol and Luna without creating a thread or sendin
   await assertExited(directory);
 });
 
-for (const selected of ['gpt-6-sol', 'gpt-6-luna']) test(`explicit ${selected} is used for review and Side Chat and remains independent of the Codex default`, async () => {
+for (const selected of ['gpt-6.1-sol', 'gpt-6-sol', 'gpt-6-luna']) test(`explicit ${selected} is used for review and Side Chat and remains independent of the Codex default`, async () => {
   const { client, directory } = await fixture();
   await fs.mkdir(directory, { recursive: true });
   for (const flag of ['gpt6-models', 'new-version']) await fs.writeFile(path.join(directory, flag), '');
@@ -388,7 +388,7 @@ test('cancelling before connection finishes prevents a late child from starting'
 });
 test('the chosen effort reaches the turn; unsupported effort stops before generation and leaves no server', async () => {
   const { directory, client } = await fixture();
-  for (const effort of ['low', 'medium', 'high', 'max'] as const) {
+  for (const effort of ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const) {
     await client.run('normal', replyOutputSchema, () => {}, effort);
     const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
     assert.equal(requests.find((r: any) => r.method === 'turn/start').params.effort, effort);
@@ -427,10 +427,10 @@ test('Changes PDF overrides the model with Sol per request and transmits visual 
   client.setModel('gpt-6-luna');
   const records: any[] = []; client.debugRecord = record => records.push(record);
   const image = 'data:image/png;base64,iVBORw0KGgo=';
-  await client.run('normal', replyOutputSchema, () => {}, 'medium', false, undefined, { purpose: 'changes', model: 'gpt-6-sol', images: [image] });
+  await client.run('normal', replyOutputSchema, () => {}, 'medium', false, undefined, { purpose: 'changes', model: 'gpt-6.1-sol', images: [image] });
   let requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
   const thread = requests.find((r: any) => r.method === 'thread/start').params;
-  assert.equal(thread.model, 'gpt-6-sol'); assert.match(thread.baseInstructions, /arrange exact LaTeX/); assert(!thread.developerInstructions.includes('Most comments'));
+  assert.equal(thread.model, 'gpt-6.1-sol'); assert.match(thread.baseInstructions, /arrange exact LaTeX/); assert(!thread.developerInstructions.includes('Most comments'));
   assert.deepEqual(requests.find((r: any) => r.method === 'turn/start').params.input[1], { type: 'image', url: image });
   assert.deepEqual(records.map(r => r.kind), ['prompt', 'screenshot', 'reply', 'event']);
   // Debug hooks cannot make a successful request fail or supply any context.
@@ -445,12 +445,12 @@ test('discussion instructions do not force edits and timing events distinguish s
   const { directory, client } = await fixture(); await fs.mkdir(directory, { recursive: true });
   for (const flag of ['gpt6-models', 'new-version']) await fs.writeFile(path.join(directory, flag), '');
   const records: any[] = []; client.debugRecord = r => records.push(r);
-  await client.run('normal', replyOutputSchema, () => {}, 'low', false, undefined, { purpose: 'discussion', model: 'gpt-6-sol' });
+  await client.run('normal', replyOutputSchema, () => {}, 'low', false, undefined, { purpose: 'discussion', model: 'gpt-6.1-sol' });
   const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
   const start = requests.find((r: any) => r.method === 'thread/start').params;
   assert.match(start.baseInstructions, /one existing editorial comment/); assert.match(start.developerInstructions, /ENTIRE supplied original/); assert(!start.developerInstructions.includes('Most comments'));
   const event = records.find(r => r.kind === 'event').data;
-  assert.equal(event.outcome, 'complete'); assert.equal(event.purpose, 'discussion'); assert.equal(event.model, 'gpt-6-sol');
+  assert.equal(event.outcome, 'complete'); assert.equal(event.purpose, 'discussion'); assert.equal(event.model, 'gpt-6.1-sol');
   assert.equal(event.id, records.find(r => r.kind === 'prompt').data.id);
   for (const key of ['elapsedMs', 'connectMs', 'setupMs', 'modelMs']) assert(event[key] >= 0 && event[key] <= event.elapsedMs, key);
   await assertExited(directory); records.length = 0;

@@ -5,6 +5,7 @@ import type { ToolSettings, ToolSettingsState, SetupCheck, CopiedSetupDetails } 
 import { editPreferencesSchema } from './paper-guidance.ts';
 import type { ReferenceState, SourcesHistory } from './references.ts';
 import { z } from 'zod';
+import { codexEfforts } from './codex-options.ts';
 import { assertRecoveryFits, serializeJSON } from './persistence.ts';
 
 function boundedJSON(value: unknown, ctx: z.RefinementCtx) {
@@ -76,7 +77,7 @@ export type WorkspaceState = z.infer<typeof workspaceSchema>;
 export function defaultWorkspace(): WorkspaceState {
   return { schemaVersion: 1, autoAddComments: true, classic: false, classicSurface: 'source', source: { anchor: 0, head: 0, topLine: 1, offset: 0 }, pdf: { page: 1, zoom: 1, scrollX: 0, scrollY: 0 }, pdfBuildId: null, pdfOpen: false, commentsHidden: false, paneSizes: [.28, .33, .39], layout: 'auto', compactTab: 'source', displayName: '', changesOpen: true, toolbarCollapsed: false, followComments: true, reviewView: 'pending' };
 }
-export const effortSchema = z.enum(['low', 'medium', 'high', 'max']);
+export const effortSchema = z.enum(codexEfforts);
 export type Effort = z.infer<typeof effortSchema>;
 export const fastModeSchema = z.boolean();
 export const paperReviewSettingsSchema = z.object({
@@ -103,6 +104,10 @@ export type BuildInputSelection = { mode: 'folder' | 'dependencies' | 'explicit'
 export type Build = { purpose?: 'paper' | 'proposal' | 'comparison'; id: string; engine: Engine; success: boolean; clean: boolean; dependenciesVerified?: boolean; sourceHash: string; diagnostics: Diagnostic[]; log: string; elapsedMs: number; inputPreparation?: BuildInputPreparation; inputSelection?: BuildInputSelection };
 export const pdfRequestSchema = z.object({ projectId: z.string(), buildId: z.string(), text: z.string().max(2000000), from: z.number().int().nonnegative(), to: z.number().int().nonnegative() });
 export type PdfRequest = z.infer<typeof pdfRequestSchema>;
+export const sourceRequestSchema = z.object({ projectId: z.string(), buildId: z.string(), text: z.string().max(2000000),
+  page: z.number().int().min(1).max(100000), x: z.number().finite().min(0).max(100000), y: z.number().finite().min(0).max(100000) });
+export type SourceRequest = z.infer<typeof sourceRequestSchema>;
+export type SourceLocation = { kind: 'mapped'; buildId: string; from: number; to: number; line: number } | { kind: 'compile' | 'unavailable'; reason: string };
 export type BuildValidation = { status: 'valid' | 'changed' | 'deferred' | 'unavailable' };
 export type PdfLocation = { kind: 'mapped'; buildId: string; page: number; x: number; y: number; width: number; height: number } | { kind: 'compile' | 'unavailable'; reason: string };
 export type ReviewRequest = { projectId: string; text: string; from: number; to: number; instructions: string; localEditsOnly?: boolean; autoAddComments?: boolean; attachmentPreviewId?: string; requestId?: string };
@@ -198,6 +203,7 @@ export type EditorAPI = {
   validateBuild(input: { projectId: string; buildId: string; text: string }): Promise<boolean>;
   getPdf(buildId: string): Promise<Uint8Array>;
   locatePdf(input: PdfRequest): Promise<PdfLocation>;
+  locateSource(input: SourceRequest): Promise<SourceLocation>;
   cancelBuild(): Promise<void>;
   clearOldBuilds(keepIds: string[]): Promise<{ removed: number; retained: number }>;
   requestReview(input: ReviewRequest): Promise<Comment[]>;

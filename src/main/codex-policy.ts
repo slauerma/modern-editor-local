@@ -2,7 +2,7 @@ import path from 'node:path';
 import { codexVersion } from '../shared/codex-version.ts';
 
 // Personal editor: keep this policy small and verify it with the real CLI probe before adding versions.
-export const verifiedCodexVersions = ['0.153.4', '0.154.0-alpha.6.2', '0.155.0-alpha.2.6', '0.155.0-alpha.9.2'] as const;
+export const verifiedCodexVersions = ['0.153.4', '0.154.0-alpha.6.2', '0.155.0-alpha.2.6', '0.155.0-alpha.9.2', '0.160.1'] as const;
 export const disabledCodexFeatures = ['apps', 'plugins', 'remote_plugin', 'enable_mcp_apps', 'shell_tool', 'unified_exec', 'multi_agent', 'multi_agent_v2', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'hooks', 'code_mode', 'skill_mcp_dependency_install', 'skill_search', 'tool_suggest', 'workspace_dependencies'];
 
 export class CodexPolicyError extends Error {
@@ -19,7 +19,7 @@ export function reviewThreadConfig(result: unknown, fastMode: boolean, withRefer
   const config = result.config;
   // Goal tools became enabled by default in the newer desktop CLI. Older tested
   // versions can omit this field; the new version must confirm it is disabled.
-  if ((version === '0.155.0-alpha.9.2' || config.features?.goals !== undefined) && config.features?.goals !== false) throw new CodexPolicyError('Goal tools could not be disabled.');
+  if ((version === '0.155.0-alpha.9.2' || version === '0.160.1' || config.features?.goals !== undefined) && config.features?.goals !== false) throw new CodexPolicyError('Goal tools could not be disabled.');
   if (!object(config.features) || disabledCodexFeatures.some(name => config.features[name] !== false) || config.features.code_mode_host !== withReferences || config.features.skip_host_skill_discovery !== true || !object(config.agents) || config.agents.enabled !== false || config.web_search !== 'disabled' || config.project_doc_max_bytes !== 0) throw new CodexPolicyError('A required tool restriction is unavailable.');
   const servers = config.mcp_servers === undefined ? {} : config.mcp_servers;
   if (!object(servers) || Object.keys(servers).length > 1000 || Object.values(servers).some(server => !object(server))) throw new CodexPolicyError('The MCP configuration cannot be checked.');

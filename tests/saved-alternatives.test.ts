@@ -125,7 +125,7 @@ test('Quick alternative uses Sol Low and one-option output without reference too
   const request = { projectId: f.p.id, text: source, comment: c(), message: quickAlternativeQuestion, action: 'quick-alternative' as const, attachmentPreviewId: 'must-not-be-read' };
   await f.service.reply(request, () => {});
   assert.equal(call.effort, 'low'); assert.equal(call.fast, false); assert.equal(call.reader, undefined);
-  assert.equal(call.config.model, 'gpt-6-sol'); assert.deepEqual(call.schema, quickAlternativeOutputSchema);
+  assert.equal(call.config.model, 'gpt-6.1-sol'); assert.deepEqual(call.schema, quickAlternativeOutputSchema);
   assert.equal(call.schema.properties.alternatives.maxItems, 1); assert.equal(call.prompt.references, undefined);
   assert.match(call.prompt.task, /at most ONE/); assert.match(call.prompt.task, /ENTIRE original/);
   assert.equal(f.projects.get(f.p.id).effort, 'max'); assert.equal(f.projects.get(f.p.id).fastMode, true);

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.6.0 — Current Codex runtime and review refinements
+
+- Update the managed Codex CLI to stable 0.160.1, with verified restrictions and no automatic switch of saved model choices.
+- Use GPT-6.1 Sol for Changes PDF and quick editorial actions. Offer catalog-supported Extra deep/xhigh and Ultra effort, with suitable time limits; Think again preserves higher effort.
+- Update Electron, PDF.js and CodeMirror, and patch the source-map build dependency. Align Help, setup and privacy guidance with the current runtime, Side Chat settings and PDF/source navigation. Keep earlier demonstration recordings labelled by date.
+
+- Route draft/candidate PDF commands to their visible workspace reader; distinguish PDF-review snapshot roles and freshness in status and chat context.
+- Keep large chat batches available as numbered history indexes, with exact selected wording through Discuss this. Preserve unsent conversation drafts within the window and keep chat open after adding an individual comment.
+- Protect the chat composer with expandable settings/context, expose PDF page and zoom controls, constrain the expanded inspector, and keep suggestion navigation within the selected section.
+- Guard stopped and obsolete PDF work after asynchronous checks; revalidate retained snapshots before publishing Sol refinement. Label uncertain edit ownership as Related suggestion or Manual/unlinked change.
+- Keep Outline keyboard focus aligned with the selected entry.
+
+- Jump both ways between LaTeX and its compiled PDF with Command-click; right-click a PDF passage for Show in LaTeX. Back restores reading positions separately from Undo. Search source headings and labels in Outline. PDF mode opens an expandable source popup without moving either PDF. Older or included-file passages are checked before navigation.
+
+- Choose Model, Effort and Speed directly in Side Chat, independently of paper review settings. Remember choices locally and use the installed CLI’s catalog for supported options.
+
+- Side Chat can return multiple numbered comments with separate reasons and source quotations. Add them individually or together with Undo; repeated additions preserve existing and rejected comments. Follow-ups include the proposed wording.
+
+- Move Side Chat by its title and resize it from any edge or corner without shifting the workspace or PDFs. Remember placement locally, collapse to a title strip, and reset position and size from its ⋯ menu. Keep drafts, attachments and pending replies when moving or collapsing.
+
 ## 1.5.0 — PDF review mode
 
 - Preview the whole proposed revision in two PDFs: Changes beside Proposed or Original. Open a movable, expandable comment inspector directly from measured change regions without shifting the pages.
