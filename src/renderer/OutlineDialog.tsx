@@ -21,7 +21,7 @@ export function OutlineDialog({ text, onChoose, onClose }: { text: string; onCho
   }}>
     <header><span>Outline</span><button aria-label="Close outline" onClick={onClose}>×</button></header>
     <form onSubmit={e => { e.preventDefault(); if (shown[selected]) onChoose(shown[selected]); }}>
-      <input ref={input} aria-label="Search outline" placeholder="Sections, titles or labels…" value={query} onChange={e => { setQuery(e.target.value); setSelected(0); }} />
+      <input ref={input} aria-label="Search outline" placeholder="Sections, slides or labels…" value={query} onChange={e => { setQuery(e.target.value); setSelected(0); }} />
     </form>
     <nav aria-label="Outline entries">
       {shown.map((entry, i) => <button key={entry.from} className={'outline-entry' + (selected === i ? ' selected' : '')}

@@ -17,6 +17,10 @@ const commonPreamble = String.raw`
 % draws the numbered buttons only while the author opens Why?.
 \newcommand{\MECompareMark}[1]{\marginpar{\raggedright\footnotesize\hypertarget{MECompare-#1}{\href{https://modern-editor.invalid/changes/#1}{\phantom{\textbf{[#1]}}}}}}
 `;
+const beamerPreamble = String.raw`
+% Zero-width anchors belong inside the frame; Beamer cannot use marginpar.
+\newcommand{\MECompareMark}[1]{\leavevmode\hbox to 0pt{\hypertarget{MECompare-#1}{\href{https://modern-editor.invalid/changes/#1}{\phantom{\rule{0.8em}{1ex}}}}\hss}}
+`;
 const markupPreamble = String.raw`
 \usepackage{xcolor}
 % Do not reload ulem with conflicting options or change existing emphasis.
@@ -44,10 +48,12 @@ function formulaChange(c: ComparisonChange) {
 function presentationPlan(plan: ComparisonPlan, presentation: ChangesPresentation): ComparisonPlan {
   const result = structuredClone(plan);
   if (presentation === 'markup') for (const c of result.changes) {
-    if (c.layout !== 'omitted' && !inlineEdits(c.oldText, c.newText) && !formulaChange(c)) {
+    if (c.layout !== 'omitted' && !inlineEdits(c.oldText, c.newText) && (plan.documentKind === 'beamer' || !formulaChange(c))) {
       c.layout = 'omitted';
       c.omissionKind = 'unsupported';
-      c.omission = 'This change cannot safely use strike-through or underline markup. Clean paper shows the revised passage with a marker; Text diff shows the exact change.';
+      c.omission = plan.documentKind === 'beamer'
+        ? 'This slide change cannot use inline revision markup. Clean paper shows the revised passage with a marker; Text diff shows the exact change.'
+        : 'This change cannot safely use strike-through or underline markup. Clean paper shows the revised passage with a marker; Text diff shows the exact change.';
     }
   }
   return result;
@@ -65,7 +71,8 @@ export function renderComparison(before: string, after: string, sourcePlan: Comp
   const body = documentBody(after);
   if (!body || /MECompare/.test(before + after)) throw new Error('Preview not possible: unsupported document wrapper or comparison macro conflict.');
   const ranges: Record<string, { from: number; to: number }> = {};
-  const preamble = commonPreamble + (presentation === 'markup' ? markupPreamble : '');
+  const slides = plan.documentKind === 'beamer';
+  const preamble = (slides ? beamerPreamble : commonPreamble) + (presentation === 'markup' ? markupPreamble : '');
   let text = after.slice(0, body.from), at = body.from;
   text = text.replace(/\\begin\s*\{document\}\s*$/, match => preamble + '\n' + match);
   // documentBody's position comes from the structural scanner, not a regex
@@ -115,7 +122,19 @@ export function renderComparison(before: string, after: string, sourcePlan: Comp
   }
   text += after.slice(at, body.to);
   const omitted = plan.changes.filter(c => c.layout === 'omitted');
-  if (omitted.length) {
+  if (omitted.length && slides) {
+    // An omission is explicit and navigable, on its own notes slide. Never
+    // inject article paragraphs between frames or guess the changed location.
+    for (const c of omitted) {
+      const number = c.id.replace('change-', '');
+      text += '\n\\begin{frame}[t,noframenumbering]{Change ' + number + (c.omissionKind === 'source-only' ? ': source note' : ' not shown') + '}\n\\small\\MECompareMark{' + number + '}\n';
+      const start = text.length;
+      text += texText(c.omission ?? 'See Text diff for the exact source change.') + '\\par\\medskip\n';
+      text += 'Old source line ' + before.slice(0, c.fromA).split('\n').length + ', new source line ' + after.slice(0, c.fromB).split('\n').length + '.\\par\n';
+      ranges[c.id] = { from: start, to: text.length };
+      text += '\\end{frame}\n';
+    }
+  } else if (omitted.length) {
     const notes = omitted.some(c => c.omissionKind === 'source-only');
     text += '\n\\par\\bigskip\\noindent\\textbf{' + (notes ? 'Source notes and changes not shown' : 'Changes not shown') + '}\\par\n';
     text += '{\\small Source notes do not appear in the paper. Other differences listed here could not be marked. See Text diff for every exact source change.}\\par\n';
@@ -234,7 +253,9 @@ export class ChangesPdfService {
       if (!build.success || build.dependenciesVerified !== true) throw new Error('Preview not possible. ' + (build.inputPreparation?.reason ?? (build.diagnostics.slice(0, 3).map(d => d.message).join(' ') || 'The marked document did not produce a PDF with verified inputs.')) + ' Use Text diff; the ordinary PDF is preserved.');
       if ((await this.compiler.inspect(input.projectId, build.id, generated.text)).status !== 'valid') throw new Error('Preview not possible: comparison inputs changed during compilation. Refresh when they are stable.');
       this.check(input.projectId, generation);
-      const artifact: ChangesArtifact = { id: randomUUID(), presentation, build, changes: generated.changes, notice: plan.notice, reused };
+      const overflow = plan.documentKind === 'beamer' && (build.diagnostics.some(d => /Overfull \\[hv]box/.test(d.message)) || /Overfull \\[hv]box/.test(build.log));
+      const notice = [plan.notice, overflow ? 'Slide layout warning: TeX reports overflowing content. Inspect the marked slides; use Clean paper or the original/proposed PDFs if the markup is crowded.' : undefined].filter(Boolean).join(' ') || undefined;
+      const artifact: ChangesArtifact = { id: randomUUID(), presentation, build, changes: generated.changes, notice, reused };
       // Keep a bounded set of immutable comparisons; PDFs retain normal cache policy.
       this.remember({ projectId: input.projectId, text: generated.text, ranges: generated.ranges, artifact, input: structuredClone(input), plan, inspectionIds, compilerPath: this.compiler.latexmk });
       if (inspectionIds) {
@@ -297,6 +318,7 @@ export class ChangesPdfService {
     const plan = this.plan({ ...input, arrangementId: undefined });
     const prompt = JSON.stringify({
       task: arrangementInstructions + '\nThis request only arranges groups; do not return an inspect field.',
+      documentKind: plan.documentKind ?? 'article',
       presentation: input.presentation ?? 'markup',
       changes: plan.changes
     });
@@ -310,7 +332,7 @@ export class ChangesPdfService {
       const presentation = input.presentation ?? 'markup', shown = presentationPlan(plan, presentation);
       if (!shown.changes.some(c => c.layout !== 'omitted')) return { id: undefined };
       const markup = presentationPlan(plan, 'markup'), clean = presentationPlan(plan, 'clean');
-      const prompt = JSON.stringify({ task: arrangementInstructions, presentation, changes: plan.changes.map((c, i) => ({ ...c,
+      const prompt = JSON.stringify({ task: arrangementInstructions, documentKind: plan.documentKind ?? 'article', presentation, changes: plan.changes.map((c, i) => ({ ...c,
         shownIn: { markup: markup.changes[i].layout !== 'omitted', clean: clean.changes[i].layout !== 'omitted' },
         presentationOmission: shown.changes[i].omission })) });
       if (prompt.length > 100000) throw new Error('Preview not possible: the changes exceed the Sol request limit. Choose a closer baseline or Text diff.');
@@ -334,6 +356,7 @@ export class ChangesPdfService {
       // Consume once; a cancelled or failed check is never reported as checked.
       visual.status = 'unavailable'; visual.issues = ['Visual inspection did not complete.'];
       const result = visualCheckSchema.parse(await this.codex.checkChanges(projectId, JSON.stringify({ task: visualInstructions,
+        documentKind: record.plan.documentKind ?? 'article',
         presentation: record.artifact.presentation, pages: visual.pages,
         changes: record.artifact.changes.filter(c => record.inspectionIds?.includes(c.id))
           .map(c => ({ id: c.id, layout: c.layout, oldText: c.oldText, newText: c.newText })) }), screenshots.map(s => s.dataUrl), progress));

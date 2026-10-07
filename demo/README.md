@@ -1,5 +1,17 @@
 # Modern Editor demonstrations
 
+## Beamer slides and LaTeXdiff · 45 seconds
+
+The 7 October recording shows the current slide-review workflow: preview and accept two wording edits, inspect inline strikeouts and underlining, open **Why?**, read **Clean paper**, and save. Source, Comments and PDF keep the same three-column layout throughout.
+
+[![Beamer Changes PDF](2026-10-07/beamer-poster.png)](2026-10-07/modern-editor-beamer-45s.mp4)
+
+[Watch · 3.9 MB](2026-10-07/modern-editor-beamer-45s.mp4) · [Smaller · 1.9 MB](2026-10-07/modern-editor-beamer-45s-small.mp4) · [Transcript](2026-10-07/modern-editor-beamer-45s-transcript.md) · [SRT](2026-10-07/modern-editor-beamer-45s.srt) · [VTT](2026-10-07/modern-editor-beamer-45s.vtt)
+
+The rational-preferences slides and suggestions are synthetic and prepared. Editing, saving, compilation, Sol arrangement and its requested image check are real; generation waits are shortened, as noted on screen. The clip includes narration and captions, without background music. Both downloads use H.264 video and AAC audio. See [slide support and limits](../docs/USER_GUIDE.md#beamer-slides).
+
+## Writing and review demonstrations · 28 September
+
 These three narrated demonstrations show the updated 28 September writing and review layout. Each has a smaller download, English captions, a transcript and background music. The recordings are unchanged historical demonstrations. Later additions—including two-PDF review, comparison exports, JSON import, settings resets, floating Side Chat with separate model controls and multiple suggestions, and two-way PDF/source navigation—are described in the [current guide](../docs/USER_GUIDE.md).
 
 | Video | Length | Large · 1600×1000 | Small · 1280×800 |

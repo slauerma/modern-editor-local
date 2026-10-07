@@ -38,6 +38,7 @@ export function controls(text: string, includeNested = false): Control[] {
     if (name === 'begin' && literals.has(argument)) {
       const end = text.indexOf(`\\end{${argument}}`, argumentStart + group![0].length);
       i = end < 0 ? text.length : end + argument.length + 6;
+      if (end >= 0 && (includeNested || depth === 0)) result.push({ name: 'end', argument, from: end, to: i });
     }
   }
   return result;

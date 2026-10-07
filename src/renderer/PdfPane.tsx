@@ -14,9 +14,9 @@ GlobalWorkerOptions.workerSrc = workerURL;
 export type PdfChangeTarget = { buildId: string; id: string; requestId: number };
 export type PdfSourcePoint = { buildId: string; page: number; x: number; y: number };
 export type PdfPaneHandle = { find: () => void; position: () => PdfPosition };
-type Props = { onSource?: (point: PdfSourcePoint) => void; changeStates?: Record<string, string>; regionStates?: Record<string, string>; tentativeRegions?: string[]; onChangeRegion?: (id: string, index: number) => void; toolbarHost?: RefObject<HTMLDivElement>; compactControls?: boolean; onExport?: () => void; findHandle?: Ref<PdfPaneHandle>; bottomOverlay?: RefObject<HTMLElement>; bottomControls?: boolean; hideState?: boolean; onFind?: () => void; changeTarget?: PdfChangeTarget | null; hideClose?: boolean; hideFollow?: boolean; showChangeNotes?: boolean; changeIds?: string[]; onChangeNote?: (id: string) => void; build: Build | null; freshness: string; position: PdfPosition; visible?: boolean; followComments: boolean; onFollowChange: (value: boolean) => void; jump?: PdfJump | null; onPositionChange: (position: Partial<PdfPosition>) => void; onUserNavigate: () => void; onClose: () => void };
+type Props = { emptyMessage?: string; onSource?: (point: PdfSourcePoint) => void; changeStates?: Record<string, string>; regionStates?: Record<string, string>; tentativeRegions?: string[]; onChangeRegion?: (id: string, index: number) => void; toolbarHost?: RefObject<HTMLDivElement>; compactControls?: boolean; onExport?: () => void; findHandle?: Ref<PdfPaneHandle>; bottomOverlay?: RefObject<HTMLElement>; bottomControls?: boolean; hideState?: boolean; onFind?: () => void; changeTarget?: PdfChangeTarget | null; hideClose?: boolean; hideFollow?: boolean; showChangeNotes?: boolean; changeIds?: string[]; onChangeNote?: (id: string) => void; build: Build | null; freshness: string; position: PdfPosition; visible?: boolean; followComments: boolean; onFollowChange: (value: boolean) => void; jump?: PdfJump | null; onPositionChange: (position: Partial<PdfPosition>) => void; onUserNavigate: () => void; onClose: () => void };
 type Loaded = { id: string; document: PDFDocumentProxy; sizes: PdfPageSize[] };
-const positionKey = (position: PdfPosition) => [position.page, position.zoom, position.scrollX ?? 0, position.scrollY ?? 0, !!position.flow].join(':');
+const positionKey = (position: PdfPosition) => [position.page, position.zoom, position.fit ?? '', position.scrollX ?? 0, position.scrollY ?? 0, !!position.flow].join(':');
 const noMatches: PdfSearchMatch[] = [];
 
 function highlightText(layer: TextLayer, matches: PdfSearchMatch[], active: PdfSearchMatch | undefined) {
@@ -98,7 +98,7 @@ function RenderedPage({ changeStates, regionStates, tentativeRegions, onChangeRe
   </>;
 }
 
-export function PdfPane({ onSource, changeStates, regionStates, tentativeRegions, onChangeRegion, toolbarHost, compactControls = false, onExport, findHandle, bottomOverlay, bottomControls = false, hideState = false, onFind, changeTarget, hideClose = false, hideFollow = false, changeIds, showChangeNotes = false, onChangeNote, build, freshness, position, visible = true, followComments, onFollowChange, jump, onPositionChange, onUserNavigate, onClose }: Props) {
+export function PdfPane({ emptyMessage = "Compile the paper to see its actual PDF here.", onSource, changeStates, regionStates, tentativeRegions, onChangeRegion, toolbarHost, compactControls = false, onExport, findHandle, bottomOverlay, bottomControls = false, hideState = false, onFind, changeTarget, hideClose = false, hideFollow = false, changeIds, showChangeNotes = false, onChangeNote, build, freshness, position, visible = true, followComments, onFollowChange, jump, onPositionChange, onUserNavigate, onClose }: Props) {
   const sourceBuild = useRef(build?.id); sourceBuild.current = build?.id;
   const [sourceMenu, setSourceMenu] = useState<{ page: number; x: number; y: number; left: number; top: number } | null>(null);
   const sourceMenuRef = useRef<HTMLDivElement>(null), [sourceNotice, setSourceNotice] = useState('');
@@ -122,7 +122,8 @@ export function PdfPane({ onSource, changeStates, regionStates, tentativeRegions
   const layoutRef = useRef<PdfPageLayout[]>([]), lastPublished = useRef(''), appliedLayout = useRef<PdfPageLayout[] | null>(null);
   const publishedBuild = useRef<string | null>(null), scrollFrame = useRef(0);
   const current = loaded?.id === build?.id ? loaded : null, pdf = current?.document ?? null;
-  const layouts = useMemo(() => layoutPdfPages(current?.sizes ?? [], view.width, position.zoom), [current, view.width, position.zoom]); layoutRef.current = layouts;
+  const fitHeight = position.fit === 'page' ? Math.max(1, view.height - 40) : undefined;
+  const layouts = useMemo(() => layoutPdfPages(current?.sizes ?? [], view.width, position.zoom, fitHeight), [current, view.width, position.zoom, fitHeight]); layoutRef.current = layouts;
   const page = pdfPage(position.page, pdf?.numPages ?? 1);
   const [findOpen, setFindOpen] = useState(false), [query, setQuery] = useState(''), [debouncedQuery, setDebouncedQuery] = useState('');
   const [findFocusRequest, setFindFocusRequest] = useState(0);
@@ -178,7 +179,7 @@ export function PdfPane({ onSource, changeStates, regionStates, tentativeRegions
     if (!node || !pages.length || !visibleRef.current || !node.clientHeight) return;
     setView(previous => previous.top === node.scrollTop && previous.height === node.clientHeight ? previous : { ...previous, top: node.scrollTop, height: node.clientHeight });
     if (publish) {
-      const next = pdfPositionAtScroll(pages, node.scrollTop, node.scrollLeft, node.scrollWidth - node.clientWidth, positionRef.current.zoom);
+      const next = pdfPositionAtScroll(pages, node.scrollTop, node.scrollLeft, node.scrollWidth - node.clientWidth, positionRef.current.zoom, positionRef.current.fit);
       const key = positionKey(next);
       if (lastPublished.current !== key) { lastPublished.current = key; positionRef.current = next; callbacks.current.onPositionChange(next); }
     }
@@ -307,7 +308,7 @@ export function PdfPane({ onSource, changeStates, regionStates, tentativeRegions
   }
   useImperativeHandle(findHandle, () => ({ find: openFind, position: () => {
     const node = scroll.current;
-    return node && layouts.length ? pdfPositionAtScroll(layouts, node.scrollTop, node.scrollLeft, node.scrollWidth - node.clientWidth, positionRef.current.zoom) : positionRef.current;
+    return node && layouts.length ? pdfPositionAtScroll(layouts, node.scrollTop, node.scrollLeft, node.scrollWidth - node.clientWidth, positionRef.current.zoom, positionRef.current.fit) : positionRef.current;
   } }));
   async function showSource(point: { page: number; x: number; y: number }) {
     setSourceMenu(null); setSourceNotice('');
@@ -326,7 +327,7 @@ export function PdfPane({ onSource, changeStates, regionStates, tentativeRegions
   const totalHeight = layouts.length ? layouts.at(-1)!.top + layouts.at(-1)!.height : 0;
   const stateLabel = !build ? 'No PDF yet' : build.purpose === 'comparison' || build.purpose === 'proposal' ? freshness : freshness.includes('Preview') ? 'Preview · not applied' : freshness.includes('Candidate') ? 'Candidate · not applied' : build.dependenciesVerified === false || freshness.includes('verification') ? 'Unverified inputs' : freshness.includes('matches') ? 'Current draft' : 'Earlier PDF';
   const pageControls = <div className="pdf-page-controls"><button type="button" disabled={!pdf || page <= 1} onClick={() => changePage(page - 1)} aria-label="Previous PDF page">‹</button><input aria-label="PDF page number" type="number" min={1} max={pdf?.numPages ?? 1} disabled={!pdf} value={pageDraft} onChange={event => { userNavigate(); setPageDraft(event.target.value); }} onBlur={goToPage} /><span>/ {pdf?.numPages ?? '–'}</span><button type="button" disabled={!pdf || page >= pdf.numPages} onClick={() => changePage(page + 1)} aria-label="Next PDF page">›</button></div>;
-  const zoomControl = <select aria-label="PDF zoom" value={position.zoom} onChange={event => { userNavigate(); callbacks.current.onPositionChange({ zoom: Number(event.target.value) }); }}><option value={1}>Fit width</option><option value={1.25}>1.25× fit</option><option value={1.5}>1.5× fit</option><option value={2}>2× fit</option></select>;
+  const zoomControl = <select aria-label="PDF zoom" value={position.fit ?? position.zoom} onChange={event => { userNavigate(); callbacks.current.onPositionChange(event.target.value === 'page' ? { zoom: 1, fit: 'page', scrollY: 0, scrollX: 0 } : { zoom: Number(event.target.value), fit: undefined }); }}><option value={1}>Fit width</option><option value="page">Fit page</option><option value={1.25}>1.25× fit</option><option value={1.5}>1.5× fit</option><option value={2}>2× fit</option></select>;
   const menuItems = <>
     {!hideFollow && <button type="button" className="pdf-follow" aria-label="PDF follows comments" aria-pressed={followComments} onClick={() => onFollowChange(!followComments)}>Follow selected comments</button>}
     <button type="button" disabled={!build?.success} onClick={() => onExport?.()}>Save displayed PDF…</button>
@@ -354,7 +355,7 @@ export function PdfPane({ onSource, changeStates, regionStates, tentativeRegions
     </div>}
     {noteError && <p className="changes-pdf-notice" role="status">{noteError}</p>}
     <div className="pdf-scroll" ref={scroll} tabIndex={0} onWheel={userNavigate} onPointerDown={userNavigate} onTouchStart={userNavigate} onKeyDown={event => { if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) userNavigate(); }} onScroll={() => { cancelAnimationFrame(scrollFrame.current); scrollFrame.current = requestAnimationFrame(() => readScroll()); }}>
-      {!build && <div className="empty-pdf">Compile the paper to see its actual PDF here.</div>}
+      {!build && <div className="empty-pdf">{emptyMessage}</div>}
       {error && <p role="alert">{error}</p>}
       {build && !pdf && !error && <div className="empty-pdf" role="status">{progress || 'Loading compiled PDF…'}</div>}
       {pdf && <div ref={paperList} className="pdf-pages" style={{ height: totalHeight, width: view.width * position.zoom }}>
@@ -373,7 +374,7 @@ export function PdfPane({ onSource, changeStates, regionStates, tentativeRegions
               event.preventDefault();
               const rect = event.currentTarget.getBoundingClientRect();
               setSourceMenu({ page: layout.page, x: event.clientX - rect.left, y: event.clientY - rect.top, left: event.clientX, top: event.clientY });
-            }} style={{ position: 'absolute', top: layout.top, width: layout.width, height: layout.height, '--scale-factor': layout.scale, '--total-scale-factor': layout.scale } as React.CSSProperties} aria-label={`PDF page ${layout.page}`}>
+            }} style={{ position: 'absolute', top: layout.top, left: position.fit === 'page' ? (view.width - layout.width) / 2 : 0, width: layout.width, height: layout.height, '--scale-factor': layout.scale, '--total-scale-factor': layout.scale } as React.CSSProperties} aria-label={`PDF page ${layout.page}`}>
             {renderedPages.has(layout.page) ? <RenderedPage changeStates={changeStates} regionStates={regionStates} tentativeRegions={tentativeRegions} onChangeRegion={onChangeRegion} activeNote={targetNote?.page === layout.page ? changeTarget?.id : undefined} changeIds={changeIds} showChangeNotes={showChangeNotes} onChangeNote={onChangeNote} pdf={pdf} layout={layout} matches={matchesByPage.get(layout.page) ?? noMatches} active={active?.page === layout.page ? active : undefined} onReady={pageReady} /> : <span className="pdf-page-placeholder">Page {layout.page}</span>}
             {marker && <div key={jumpKey} data-pdf-jump={layout.page} className={`pdf-passage-marker ${marker.persistent ? 'persistent' : ''} ${emphasis === jumpKey ? 'emphasize' : ''}`} style={{ left, top, width: Math.min(Math.max(8, marker.width * layout.scale), layout.width - left), height: Math.min(Math.max(8, marker.height * layout.scale), layout.height - top), '--passage-left': `${left}px`, '--cue-height': `${Math.min(28, Math.max(8, marker.height * layout.scale), layout.height - top)}px`, '--cue-pad': `${Math.min(2, Math.max(8, marker.height * layout.scale) * .12)}px` } as React.CSSProperties} role="img" aria-label="Approximate source passage in PDF" title="Nearby typeset line. Source-to-PDF mapping may identify a region rather than the exact quotation." />}
           </div>;

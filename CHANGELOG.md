@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.0 — Beamer slides and comparison
+
+- Mark ordinary Beamer frame, bullet, block and column wording changes inline, using in-frame comparison anchors. Preserve article rendering and exact source protections. List unsupported changes on separate comparison-notes slides and report TeX overflow.
+- Give Sol frame context and slide-specific visual inspection instructions.
+- Search frame titles in Outline; add a persistent Fit page zoom option. Clarify the empty Changes pane in PDF review mode.
+- Add a narrated 45-second slide demonstration with captions, showing the three-column review and Changes PDF workflow.
+
 ## 1.6.0 — Current Codex runtime and review refinements
 
 - Update the managed Codex CLI to stable 0.160.1, with verified restrictions and no automatic switch of saved model choices.

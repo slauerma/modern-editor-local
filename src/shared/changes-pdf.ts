@@ -2,6 +2,7 @@ import { diff } from '@codemirror/merge';
 import { z } from 'zod';
 import { documentBody } from './document-mode.ts';
 import { controls } from './tex-structure.ts';
+import { beamerBoundaryEnd, beamerFrames, beamerProseEnvironments, isBeamer } from './beamer.ts';
 import type { Build, Engine } from './contracts.ts';
 
 export type ChangeLayout = 'inline' | 'paired' | 'added' | 'removed' | 'omitted';
@@ -11,8 +12,9 @@ export type ComparisonChange = {
   oldText: string; newText: string; layout: ChangeLayout; inline: boolean; paired: boolean;
   omission?: string; omissionKind?: 'source-only' | 'unsupported'; reasons: ChangeReason[]; summary?: string; group?: string;
   editCount?: number; changedFraction?: number;
+  frame?: { number: number; title: string };
 };
-export type ComparisonPlan = { changes: ComparisonChange[]; notice?: string };
+export type ComparisonPlan = { changes: ComparisonChange[]; notice?: string; documentKind?: 'beamer' };
 export type ChangesPresentation = 'markup' | 'clean';
 export type ChangesInput = { projectId: string; before: string; after: string; name: string; engine: Engine;
   presentation?: ChangesPresentation; proposalId?: string; interactive?: boolean; layouts?: Record<string, 'inline' | 'paired'>; arrangementId?: string; selectedPaths?: string[] };
@@ -55,6 +57,7 @@ function argumentEnd(text: string, start: number, open = '{', close = '}') {
   return start;
 }
 function parts(text: string, body: { from: number; to: number }): Part[] {
+  const slides = isBeamer(text);
   const boundaries = new Set([body.from, body.to]);
   for (const match of text.slice(body.from, body.to).matchAll(/\n[ \t]*\n+/g)) {
     boundaries.add(body.from + match.index! + match[0].length);
@@ -62,7 +65,9 @@ function parts(text: string, body: { from: number; to: number }): Part[] {
   for (const t of controls(text)) {
     if (t.from < body.from || t.from >= body.to) continue;
     let end = t.to;
-    if (['begin', 'end'].includes(t.name)) {
+    const slideEnd = slides ? beamerBoundaryEnd(text, t) : undefined;
+    if (slideEnd !== undefined) end = slideEnd;
+    else if (['begin', 'end'].includes(t.name)) {
       if (mathEnvironments.has(t.argument)) continue;
       if (t.name === 'begin') end = argumentEnd(text, end, '[', ']');
     } else if (['part', 'chapter', 'section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'].includes(t.name)) {
@@ -141,7 +146,7 @@ const harmless = new Set(('emph textit textbf texttt textrm textsf textnormal un
   'quad qquad hspace vspace text tag nonumber notag').split(/\s+/));
 const noArgument = new Set(['noindent', 'indent', 'par', 'smallskip', 'medskip', 'bigskip', 'quad', 'qquad']);
 
-function contextSupported(source: string, from: number): string | undefined {
+function contextSupported(source: string, from: number, slides = false): string | undefined {
   // Paragraph boundaries are not TeX group boundaries: a later paragraph can
   // still belong to a footnote, caption or other multi-paragraph argument.
   let depth = 0;
@@ -157,10 +162,10 @@ function contextSupported(source: string, from: number): string | undefined {
     if (t.name === 'begin') stack.push(t.argument);
     if (t.name === 'end') stack.pop();
   }
-  if (stack.some(e => !proseEnvironments.has(e))) return 'The change is inside a structured environment.';
+  if (stack.some(e => !proseEnvironments.has(e) && !(slides && beamerProseEnvironments.has(e)))) return 'The change is inside a structured environment.';
 }
-function supported(text: string, source: string, from: number): string | undefined {
-  const context = contextSupported(source, from); if (context) return context;
+function supported(text: string, source: string, from: number, slides = false): string | undefined {
+  const context = contextSupported(source, from, slides); if (context) return context;
   if (scanProse(text).unbraced) return 'An unbraced command argument cannot safely receive comparison markup. See Text diff.';
   if (/\\\\|\\["'\x60^~=.]/.test(text)) return 'Accent and line-break commands cannot be repeated with revision markup. See Text diff.';
   if (/\\verb\*?[^a-zA-Z@]/.test(text)) return 'Literal source examples are shown in Text diff only.';
@@ -294,19 +299,25 @@ export function comparisonPlan(before: string, after: string): ComparisonPlan {
   const a = documentBody(before), b = documentBody(after);
   if (!a || !b) throw new Error('Preview not possible: both versions need an ordinary document wrapper. Use Text diff.');
   const merged = blockRanges(before, after, a, b);
+  const slides = isBeamer(before) && isBeamer(after), oldFrames = slides ? beamerFrames(before) : [], newFrames = slides ? beamerFrames(after) : [];
   let reconstructed = before;
   for (const c of [...merged].reverse()) reconstructed = reconstructed.slice(0, c.fromA) + after.slice(c.fromB, c.toB) + reconstructed.slice(c.toA);
   if (reconstructed !== after) throw new Error('Preview not possible: block boundaries could not represent the exact comparison. Use Text diff.');
   if (merged.length > 100) throw new Error('Preview not possible: more than 100 changed blocks. Choose a closer baseline or use Text diff.');
-  return { changes: merged.map(({ fragment, ...c }, i) => {
+  return { ...(slides ? { documentKind: 'beamer' as const } : {}), changes: merged.map(({ fragment, ...c }, i) => {
     const oldText = before.slice(c.fromA, c.toA), newText = after.slice(c.fromB, c.toB);
+    const oldFrame = oldFrames.find(f => c.fromA >= f.bodyFrom && c.toA <= f.endFrom), frame = newFrames.find(f => c.fromB >= f.bodyFrom && c.toB <= f.endFrom);
     const edits = inlineEdits(oldText, newText), changed = edits?.reduce((n, e) => n + e.toA - e.fromA + e.toB - e.fromB, 0) ?? Infinity;
-    const inline = !!oldText.trim() && !!newText.trim() && edits !== null && !contextSupported(before, c.fromA) && !contextSupported(after, c.fromB);
-    const repeated = supported(oldText, before, c.fromA) ?? supported(newText, after, c.fromB);
+    const inline = !!oldText.trim() && !!newText.trim() && edits !== null && !contextSupported(before, c.fromA, slides) && !contextSupported(after, c.fromB, slides);
+    const repeated = supported(oldText, before, c.fromA, slides) ?? supported(newText, after, c.fromB, slides);
     const omission = oldText.replace(/\s+/g, '') === newText.replace(/\s+/g, '') ? 'Whitespace-only source changes are shown in Text diff.' : c.fromA < a.from || c.toA > a.to || c.fromB < b.from || c.toB > b.to
       ? 'The change is outside the ordinary document body.'
+      : slides && oldFrames.length !== newFrames.length ? 'Slides were added or removed. Use the original/proposed PDFs and Text diff for this structural comparison.'
+      : slides && (!oldFrame || !frame || oldFrame.number !== frame.number) ? 'This change alters slide structure or crosses frames. See Text diff for the exact change.'
       : inline ? undefined : repeated;
-    const paired = !fragment && !repeated && !omission && !!oldText.trim() && !!newText.trim() && (!inline || !/[\\{}$%&#_^~]/.test(oldText + newText));
+    // Slides have fixed space: never duplicate whole paragraphs or equations.
+    // Local prose stays inline; unsupported math still has an exact Text diff.
+    const paired = !slides && !fragment && !repeated && !omission && !!oldText.trim() && !!newText.trim() && (!inline || !/[\\{}$%&#_^~]/.test(oldText + newText));
     const changedFraction = changed / Math.max(1, oldText.length + newText.length);
     // Plain, complete prose paragraphs only. Never turn a comment-joined
     // fragment or a passage containing math/commands into repeated paragraphs.
@@ -314,7 +325,7 @@ export function comparisonPlan(before: string, after: string): ComparisonPlan {
     const layout: ChangeLayout = omission ? 'omitted' : !oldText.trim() ? 'added' : !newText.trim() ? 'removed' : inline && !denseRewrite ? 'inline' : 'paired';
     const sourceNote = (s: string) => !s || /^%[^\r\n]*(?:\r?\n)?$/.test(s);
     const omissionKind = omission ? sourceNote(oldText) && sourceNote(newText) ? 'source-only' : 'unsupported' : undefined;
-    return { ...c, id: `change-${i + 1}`, oldText, newText, layout, inline: inline && !omission && !denseRewrite, paired, omission, omissionKind,
+    return { ...c, ...(frame ? { frame: { number: frame.number, title: frame.title } } : {}), id: `change-${i + 1}`, oldText, newText, layout, inline: inline && !omission && !denseRewrite, paired, omission, omissionKind,
       editCount: edits?.length, changedFraction: Number.isFinite(changedFraction) ? changedFraction : undefined, reasons: [] };
   }) };
 }

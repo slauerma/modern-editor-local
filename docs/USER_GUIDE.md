@@ -49,6 +49,16 @@ Sol receives the changed source blocks and recorded reasons. It groups adjacent 
 
 Changes PDF has its own pagination, zoom, search and position. Its artifacts cannot become the restored paper PDF or satisfy an acceptance compilation check. Source edits make the comparison visibly out of date; changed resources are checked when the pane is shown, periodically while visible, and before locating changes.
 
+## Beamer slides
+
+Open and compile a Beamer root file as usual. **Changes PDF** marks ordinary wording edits inside literal frames, bullets, blocks and columns. Existing frame options, overlay specifications, titles and unchanged mathematics stay in place. Changes use inline strike-through and underlining; slides never expand into paired Before/After paragraphs. The comparison uses anchors inside the frame, with the same **Why?** and clickable inspection controls.
+
+Fixed-size slides have less room for revision markup. A **Slide layout warning** reports TeX overflow; Sol may additionally identify crowding in the pages it checks. Neither compilation nor a visual check certifies the whole deck. Switch to **Clean paper** to read the revised slide without deleted wording, or inspect **Original** and **Proposed revision** in PDF mode. The editor does not shrink fonts, alter slide layout or try automatic repairs.
+
+Comparisons with added or removed frames use the original/proposed PDFs and Text diff; they do not guess which surviving frame should carry a deleted slide. Frame-title/structure changes, changed literal code, tables, overlay-command arguments and other unsupported edits remain explicit. Some mathematical edits are available only in the clean comparison. When a comparison also contains supported edits, separate, unnumbered comparison-notes slides list the omissions and exact source lines; these notes are not guessed locations in the lecture. **Text diff** contains every source difference. An entirely unsupported comparison offers Text diff instead of an unmarked Changes PDF. Macro-generated frames are not interpreted.
+
+**Outline** searches literal frame titles as well as sections and labels. **Fit page** in the PDF zoom menu fits both dimensions, useful for slides or a short window; **Fit width** remains the default. Source/PDF jumps use SyncTeX and may reach the slide header or frame boundary rather than an exact sentence.
+
 ## PDF review mode
 
 Choose **View → PDF mode** for a complete LaTeX document with imported or generated comments. It captures the current draft as the session's **Original**. The left pane shows **Changes**; the right switches between **Proposed revision** and **Original**. Proposed includes all applicable remaining suggestions, using their selected wording and edits. Preparing the PDFs takes local compilation time.
@@ -317,7 +327,7 @@ For papers named `main.tex`, an optional **Actions → Compile & layout → Pape
 
 ## Read the corresponding PDF passage
 
-The PDF scrolls continuously across pages. The page field and arrows still let you jump directly, and reopening restores your reading position and zoom. Zoom choices **1.25× fit**, **1.5× fit**, and **2× fit** are relative to **Fit width**, not an absolute printed scale.
+The PDF scrolls continuously across pages. The page field and arrows still let you jump directly, and reopening restores your reading position and zoom. **Fit page** fits the complete page within the reader and preserves that choice when reopening. Zoom choices **1.25× fit**, **1.5× fit**, and **2× fit** are relative to **Fit width**, not an absolute printed scale.
 
 Choose **Find** in the PDF toolbar to search its text. **Enter** or the down arrow advances to a highlighted match; **Shift+Enter** or the up arrow goes back. **Escape** closes search. Matches become available as indexing proceeds; the status shows incomplete or limited searches. Search uses the PDF currently displayed, including an older or candidate preview, and does not search images or change the source.
 
@@ -325,7 +335,7 @@ The comment's **Source · PDF** controls refer to that comment's passage. **Show
 
 Use the **← Back** button at the left of the main toolbar, **View → Back to previous position**, or **Command+Option+Left** to return. Navigation history is separate from Undo, keeps up to 50 jumps for the open paper, and follows source edits. It restores the PDF's reading position and zoom only while that compiled snapshot remains available in the viewer. Source/PDF jumps keep pane widths; a hidden source or PDF is revealed when needed.
 
-**Outline** above the source (also **View → Outline…**, **Command+Shift+O**, and the PDF-mode toolbar) searches headings, subsection titles and labels in the current root source. Click a result or use the arrow keys and Enter. Escape closes it. The outline reads ordinary LaTeX structure locally; it does not expand macros or scan included files.
+**Outline** above the source (also **View → Outline…**, **Command+Shift+O**, and the PDF-mode toolbar) searches headings, subsection titles, Beamer frame titles and labels in the current root source. Click a result or use the arrow keys and Enter. Escape closes it. The outline reads ordinary LaTeX structure locally; it does not expand macros or scan included files.
 
 In **PDF mode**, Command-click the right-hand Original or Proposed PDF to inspect its exact source snapshot in an expandable popup. Neither PDF moves. Outline shows the current draft in the same popup. **Open in source editor** is offered for the current draft; original or tentative source stays clearly labelled and read-only. Changes PDF retains its clickable change/comment inspector rather than treating generated comparison source as the current manuscript.
 
@@ -413,7 +423,7 @@ Open **Actions → Settings and Check setup…** or press **Command+,** to choos
 
 **Copy setup details** checks the selected executables and copies editor, operating system, Codex and TeX versions with check status. It excludes manuscript text, file paths and account details. Expand **Copied setup details** to inspect the copied summary.
 
-**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **1.6.0**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
+**Actions → Help and shortcuts…** opens searchable copies of this guide, Setup, the FAQ and the **Changelog** inside the editor. **Shortcuts** shows the current shortcut table. Help, Settings and **Modern Codex Editor → About** identify this release as **1.7.0**. Tab stays in an open Help or Settings panel; Escape closes it when no settings operation is running and returns keyboard focus.
 
 ## Changed settings and defaults
 

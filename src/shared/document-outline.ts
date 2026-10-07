@@ -1,4 +1,5 @@
 import { controls } from './tex-structure.ts';
+import { beamerFrames } from './beamer.ts';
 
 export type OutlineEntry = { from: number; to: number; line: number; title: string; label: string; kind: string; level: number };
 const levels: Record<string, number> = { part: 0, chapter: 0, section: 1, subsection: 2, subsubsection: 3, paragraph: 4, subparagraph: 5 };
@@ -62,7 +63,11 @@ export function documentOutline(text: string): OutlineEntry[] {
         label: label.value.trim(), kind: 'label', level: Math.min(5, (heading?.level ?? 0) + 1) });
     }
   }
-  return entries;
+  for (const frame of beamerFrames(text)) {
+    entries.push({ from: frame.from, to: frame.bodyFrom, line: text.slice(0, frame.from).split('\n').length,
+      title: readable(frame.title) || `Slide ${frame.number}`, label: '', kind: 'frame', level: 3 });
+  }
+  return entries.sort((a, b) => a.from - b.from);
 }
 
 export function filterOutline(entries: OutlineEntry[], query: string) {

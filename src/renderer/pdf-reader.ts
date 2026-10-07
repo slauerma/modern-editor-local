@@ -12,11 +12,11 @@ export const PDF_SEARCH_QUERY_LIMIT = 256;
 export type PdfPageSize = { width: number; height: number };
 export type PdfPageLayout = PdfPageSize & { page: number; top: number; scale: number };
 
-export function layoutPdfPages(sizes: readonly PdfPageSize[], width: number, zoom: number): PdfPageLayout[] {
+export function layoutPdfPages(sizes: readonly PdfPageSize[], width: number, zoom: number, fitHeight?: number): PdfPageLayout[] {
   let top = 0;
   return sizes.map((size, index) => {
     if (![size.width, size.height].every(value => Number.isFinite(value) && value > 0 && value <= 100_000)) throw new Error(`Unsupported PDF page dimensions on page ${index + 1}.`);
-    const scale = Math.max(1, width) / size.width * zoom;
+    const scale = Math.min(Math.max(1, width) / size.width * zoom, fitHeight === undefined ? Infinity : Math.max(1, fitHeight) / size.height);
     const page = { page: index + 1, top, width: size.width * scale, height: size.height * scale, scale };
     top += page.height + PDF_PAGE_GAP;
     return page;
@@ -64,9 +64,9 @@ export function pdfScrollPosition(pages: readonly PdfPageLayout[], position: Pdf
   return page.top + local;
 }
 
-export function pdfPositionAtScroll(pages: readonly PdfPageLayout[], top: number, left: number, horizontalOverflow: number, zoom: number): PdfPosition {
+export function pdfPositionAtScroll(pages: readonly PdfPageLayout[], top: number, left: number, horizontalOverflow: number, zoom: number, fit?: 'page'): PdfPosition {
   const page = pageAtScroll(pages, top), layout = pages[page - 1];
-  return { page, zoom, flow: true, scrollY: fraction(layout ? (top - layout.top) / layout.height : 0), scrollX: fraction(left / Math.max(1, horizontalOverflow)) };
+  return { page, zoom, ...(fit ? { fit } : {}), flow: true, scrollY: fraction(layout ? (top - layout.top) / layout.height : 0), scrollX: fraction(left / Math.max(1, horizontalOverflow)) };
 }
 
 export type PdfTextItem = { str: string; hasEOL?: boolean };

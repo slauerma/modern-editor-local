@@ -65,7 +65,7 @@ const fractionSchema = z.number().finite().min(0).max(1);
 export const workspaceSchema = z.object({
   schemaVersion: z.literal(1),
   source: z.object({ anchor: z.number().int().min(0).max(2000000), head: z.number().int().min(0).max(2000000), topLine: z.number().int().min(1).max(2000001), offset: z.number().finite().min(-2000).max(10000000) }),
-  pdf: z.object({ page: z.number().int().min(1).max(100000), zoom: z.union([z.literal(1), z.literal(1.25), z.literal(1.5), z.literal(2)]), scrollX: fractionSchema, scrollY: fractionSchema, flow: z.boolean().optional() }),
+  pdf: z.object({ page: z.number().int().min(1).max(100000), zoom: z.union([z.literal(1), z.literal(1.25), z.literal(1.5), z.literal(2)]), fit: z.literal('page').optional(), scrollX: fractionSchema, scrollY: fractionSchema, flow: z.boolean().optional() }),
   pdfBuildId: z.string().uuid().nullable(), pdfOpen: z.boolean(), commentsHidden: z.boolean().default(false),
   paneSizes: z.tuple([fractionSchema, fractionSchema, fractionSchema]).refine(v => v.every(n => n >= .05) && Math.abs(v.reduce((a, b) => a + b, 0) - 1) < .001, 'Invalid pane proportions'),
   layout: z.enum(['auto', 'three', 'source-comments', 'pdf-comments', 'writing', 'stacked']).default('auto'), compactTab: z.enum(['source', 'pdf']).default('source'), displayName: z.string().trim().max(80).default(''),
