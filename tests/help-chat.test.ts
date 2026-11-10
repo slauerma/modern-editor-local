@@ -7,7 +7,7 @@ import { HelpChat } from '../src/main/help-chat.ts';
 import { CodexClient } from '../src/main/codex-client.ts';
 import { ProjectService } from '../src/main/project-service.ts';
 import { digest, writeJSON } from '../src/main/files.ts';
-import { CHAT_LIMITS, chatComments, newChatComments, chatAnswerSchema, chatInputSchema, chatContext, chatHistory, chatTurnSchema, chatCommentForDraft, type ChatInput } from '../src/shared/help-chat.ts';
+import { CHAT_LIMITS, chatComments, newChatComments, chatAnswerSchema, chatInputSchema, chatContext, selectedChatSuggestion, chatTurnSchema, chatCommentForDraft, type ChatInput } from '../src/shared/help-chat.ts';
 import { proposalChanges } from '../src/shared/review.ts';
 import { initialState, alterComments, commentsField } from '../src/renderer/editor-state.ts';
 import { undo } from '@codemirror/commands';
@@ -33,11 +33,13 @@ async function ask(f: Awaited<ReturnType<typeof fixture>>, input = f.input) { co
 
 test('chat preserves its question before calling Codex, sends real image items separately, and never changes source/review', async () => {
   const f = await fixture(), screenshot = image(); let called = false;
-  f.client.run = async (prompt, _schema, _progress, _effort, _fast, _reader, options) => {
+  f.client.run = async (prompt, _schema, _progress, effort, fast, reader, options) => {
     const saved = await f.service.state({ projectId: f.paper.id });
     assert.equal(saved.turns[0].status, 'pending'); assert.equal(saved.turns[0].images[0].dataUrl, screenshot.dataUrl);
-    const payload = JSON.parse(prompt); assert.equal(payload.application.version, '0.3.0'); assert.equal(payload.source.text, source);
-    assert(!prompt.includes(screenshot.dataUrl)); assert.deepEqual(options, { purpose: 'help', images: [screenshot.dataUrl] }); called = true; return answer();
+    const payload = JSON.parse(prompt); assert.equal(payload.application.version, '0.3.0'); assert.equal(payload.source.text, undefined); assert(!prompt.includes(source)); assert(reader);
+    assert.equal((await reader.call('references_read', { fileId: 'current-draft' }) as any).excerpts[0].text, source);
+    assert.equal(effort, 'xhigh'); assert.equal(fast, true);
+    assert(!prompt.includes(screenshot.dataUrl)); assert.deepEqual(options, { purpose: 'help', model: 'gpt-6.1-sol', images: [screenshot.dataUrl] }); called = true; return answer();
   };
   const beforeReview = JSON.stringify(f.projects.get(f.paper.id).review);
   const reply = await ask(f, { ...f.input, images: [screenshot] });
@@ -52,7 +54,13 @@ test('editor help has no paper text, references or comment wording; toggles and 
   const input = chatInputSchema.parse({ ...f.input, projectId: null, source: '', from: 0, to: 0, paper: 'none', message: 'How do I compile?' });
   const preview = await f.service.preview(input), payload = JSON.parse(preview.context);
   assert(!('source' in payload)); assert(!('diagnostics' in payload)); assert(!('comment' in payload)); assert(!preview.context.includes(source));
-  f.client.run = async prompt => { assert.equal(prompt, preview.context); return { reply: 'Use Command+T.', suggestion: null }; };
+  f.client.run = async (prompt, _schema, _progress, _effort, _fast, reader) => {
+    const { availableReferences, ...context } = JSON.parse(prompt); assert.deepEqual(context, payload); assert(reader);
+    assert.equal(availableReferences.currentDraft, undefined);
+    await assert.rejects(reader.call('references_read', { fileId: 'current-draft' }), /file ID/);
+    assert.match((await reader.call('references_read', { fileId: 'editor-help' }) as any).excerpts[0].text, /Shift.A accepts/);
+    return { reply: 'Use Command+T.', suggestion: null };
+  };
   await f.service.send({ projectId: null }, preview.id, () => {});
   assert.equal((await f.service.state({ projectId: null })).turns.length, 1);
   assert.equal((await f.service.state({ projectId: f.paper.id })).turns.length, 0);
@@ -115,7 +123,7 @@ test('cancel and duplicate send retain the question and cannot deliver a late re
   const waiting = new Promise<void>(done => { started = done; });
   f.client.run = async () => { started(); return new Promise(done => { resolve = done; }); };
   const pending = ask(f); await waiting;
-  await assert.rejects(f.service.send({ projectId: f.paper.id }, randomUUID(), () => {}), /current Codex request/);
+  await assert.rejects(f.service.send({ projectId: f.paper.id }, randomUUID(), () => {}), /current Side Chat request/);
   await assert.rejects(f.service.clear({ projectId: f.paper.id }), /Stop the current/);
   await f.service.cancel(); resolve(answer()); await assert.rejects(pending, /cancelled/);
   const state = await f.service.state({ projectId: f.paper.id }); assert.equal(state.turns.length, 1); assert.equal(state.turns[0].status, 'failed'); assert(!state.turns[0].reply);
@@ -146,7 +154,7 @@ test('Stop during reference-context persistence never starts a model request', a
   let release!: () => void, paused!: () => void, writes = 0, calls = 0, finished = false;
   const waiting = new Promise<void>(resolve => { paused = resolve; });
   const f = await fixture(async (file, value, limit) => { await writeJSON(file, value, limit); if (++writes === 2) { paused(); await new Promise<void>(resolve => { release = resolve; }); } });
-  const references = { begin: async () => ({ context: () => ({ files: ['synthetic.txt'] }) }), finish: async () => { finished = true; } } as unknown as ReferenceService;
+  const references = { begin: async () => ({ addDocuments: () => {}, context: () => ({ files: ['synthetic.txt'] }) }), finish: async () => { finished = true; } } as unknown as ReferenceService;
   const service = new HelpChat(f.projects, f.client, f.directory, help, references, f.service.write);
   f.client.run = async () => { calls++; return answer(); };
   const preview = await service.preview({ ...f.input, includeReferences: true });
@@ -198,11 +206,14 @@ test('corrupt chat stays preserved and isolated from manuscript opening', async 
   assert.equal((await f.projects.open(f.file)).text, source); assert.equal(await fs.readFile(f.stored, 'utf8'), 'Malformed synthetic JSON');
 });
 
-test('history has explicit bounds and excludes old context/images; long source truncation is visible', async () => {
+test('history files include all saved exchanges without old prompts/images; long source scope is visible', async () => {
   const f = await fixture(), sample = await ask(f);
   const turns = Array.from({ length: 20 }, () => ({ ...sample, id: randomUUID(), images: [image()] }));
-  const history = chatHistory(turns); assert.equal(history.exchanges.length, 12); assert.equal(history.omittedExchanges, 8);
-  assert(!JSON.stringify(history).includes('data:image')); assert(!JSON.stringify(history).includes('application'));
+  const documents = chatContext(f.input, await help(), turns).documents;
+  const history = documents.find(d => d.id === 'chat-history')!.text;
+  assert(history.includes('Exchange 20')); assert(history.includes('Exchange 1'));
+  assert(!history.includes('data:image')); assert(!history.includes('application'));
+  assert(history.indexOf('Exchange 20') < history.indexOf('Exchange 1'));
   const built = chatContext({ ...f.input, source: 'x'.repeat(130000) }, await help(), turns);
   assert(built.labels.includes('Draft · truncated')); assert.match(built.context.source!.coverage, /120000 of 130000/);
   assert.throws(() => chatInputSchema.parse({ ...f.input, images: [{ ...image(), dataUrl: 'https://example.invalid/screen.png' }] }));
@@ -246,8 +257,8 @@ test('a reply keeps multiple independent comments, question-only items and unmat
   assert.equal(await fs.readFile(f.file, 'utf8'), source);
   const reopened = new HelpChat(f.projects, f.client, f.directory, help);
   assert.deepEqual(chatComments((await reopened.state({ projectId: f.paper.id })).turns[0]), comments);
-  const history = chatHistory([result]); assert.equal(history.exchanges[0].comments[1].number, 2);
-  assert.equal(history.exchanges[0].comments[1].explanation, 'State the needed condition.');
+  const history = selectedChatSuggestion([result], { turnId: result.id, commentId: comments[1].id }); assert.equal(history?.number, 2);
+  assert.equal(history?.explanation, 'State the needed condition.');
   const stale = comments.map(c => chatCommentForDraft(c, false));
   assert(stale.every(c => c.validity === 'unconfirmed'));
 });
@@ -295,26 +306,23 @@ test('Side Chat model, effort and speed travel with its frozen request without c
   };
   await ask(f, { ...f.input, model: 'test-chat-model', effort: 'low', fastMode: true });
   assert.equal(calls, 1); assert.deepEqual({ effort: paper.effort, fastMode: paper.fastMode }, before);
-  assert.equal(chatInputSchema.parse({ ...f.input, model: undefined }).model, null);
+  assert.equal(chatInputSchema.parse({ ...f.input, model: undefined }).model, 'gpt-6.1-sol');
+  assert.equal(chatInputSchema.parse({ ...f.input, model: null }).model, null);
 });
 
-test('large batches retain the latest reply, numbered index and explicitly chosen exact wording', () => {
+test('large batches and selected older wording remain readable without enlarging the prompt', async () => {
   const comments = Array.from({ length: 20 }, (_, i) => commentSchema.parse({ id: 'item-' + i, title: 'Suggestion ' + (i + 1), explanation: 'Reason.', original: 'a'.repeat(1300), replacement: 'b'.repeat(1300) }));
-  const turn = chatTurnSchema.parse({ id: randomUUID(), createdAt: new Date().toISOString(), message: 'Review this passage.', context: '{}', labels: [], images: [], status: 'complete', reply: 'Twenty suggestions.', comments });
-  const history = chatHistory([turn]);
-  assert.equal(history.exchanges.length, 1); assert.equal(history.exchanges[0].answer, turn.reply);
-  assert.equal(history.exchanges[0].comments.length, 20); assert(history.exchanges[0].wordingOmitted);
-  const chosen = chatHistory([turn], { turnId: turn.id, commentId: comments[6].id });
-  assert.equal(chosen.selectedSuggestion?.number, 7); assert.equal(chosen.selectedSuggestion?.original, comments[6].original);
-  assert.equal(chosen.selectedSuggestion?.replacement, comments[6].replacement); assert(JSON.stringify(chosen).length <= CHAT_LIMITS.historyChars);
-  assert.throws(() => chatHistory([turn], { turnId: randomUUID(), commentId: comments[6].id }), /no longer/);
-});
-
-test('chat history stays bounded with escaped text, long replies and a selected older proposal', () => {
-  const comments = Array.from({ length: 100 }, (_, i) => commentSchema.parse({ id: 'item-' + i, title: '\u0001'.repeat(300), explanation: 'Reason.', original: 'a'.repeat(1300), replacement: 'b'.repeat(1300) }));
-  const make = () => chatTurnSchema.parse({ id: randomUUID(), createdAt: new Date().toISOString(), message: 'q'.repeat(10000), context: '{}', labels: [], images: [], status: 'complete', reply: 'r'.repeat(20000), comments });
-  const old = make(), latest = make(), history = chatHistory([old, latest], { turnId: old.id, commentId: 'item-6' });
-  assert.equal(history.exchanges.at(-1)?.turnId, latest.id); assert.equal(history.selectedSuggestion?.turnId, old.id);
-  assert.equal(history.exchanges.at(-1)?.comments.length, 100); assert(JSON.stringify(history).length <= CHAT_LIMITS.historyChars);
-  assert.throws(() => chatHistory([{ ...old, comments: [{ ...comments[0], original: 'a'.repeat(40000) }] }], { turnId: old.id, commentId: comments[0].id }), /too large/);
+  const make = () => chatTurnSchema.parse({ id: randomUUID(), createdAt: new Date().toISOString(), message: 'Earlier request.', context: 'OLD PRIVATE DRAFT', labels: [], images: [], status: 'complete', reply: 'Twenty suggestions.', comments });
+  const old = make(), latest = make(), f = await fixture();
+  const discussion = { turnId: old.id, commentId: comments[6].id };
+  const chosen = selectedChatSuggestion([old, latest], discussion);
+  assert.equal(chosen?.number, 7); assert.equal(chosen?.original, comments[6].original); assert.equal(chosen?.replacement, comments[6].replacement);
+  const built = chatContext({ ...f.input, discussion }, await help(), [old, latest]);
+  assert(JSON.stringify(built.context).length < 4000); assert(!JSON.stringify(built.context).includes('Twenty suggestions.'));
+  const history = built.documents.find(d => d.id === 'chat-history')!.text;
+  assert(history.includes('Suggestion 20')); assert(history.includes(comments[6].replacement!)); assert(!history.includes('OLD PRIVATE DRAFT'));
+  assert.throws(() => selectedChatSuggestion([old], { ...discussion, turnId: randomUUID() }), /no longer/);
+  // File paging replaces the old 32K inline-history cut-off.
+  const large = { ...old, comments: [{ ...comments[0], original: 'a'.repeat(40000) }] };
+  assert.equal(selectedChatSuggestion([large], { turnId: old.id, commentId: comments[0].id })?.original.length, 40000);
 });

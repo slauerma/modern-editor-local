@@ -2,6 +2,14 @@
 
 [Setup](SETUP.md) · [User guide](USER_GUIDE.md) · [Privacy](../PRIVACY.md)
 
+## Can I open older text encodings?
+
+Yes. Open the `.txt` or `.tex` file normally. Supported non-UTF-8 text gets a warning and a preview with an encoding choice, followed by **Save UTF-8 copy and open…**. ME keeps the original intact and refuses existing destination filenames. Strict local decoding and a byte-for-byte reverse check prevent silent replacement. Ambiguous encodings still need your visual check. Word/RTF, UTF-32, malformed Unicode and LaTeX declaring legacy input encodings are explicit limitations. See [opening files](USER_GUIDE.md#first-session).
+
+## Where are my previous projects?
+
+Use **Continue a project…** on Home or the filename arrow in an open project. The list shows up to 30 locally recorded files with full locations and dates. Reopening restores the paper's saved records and any applicable unsaved recovery. Earlier files not yet recorded must be opened once; moved files can be located with **Open another file…**. This is separate from **Continue review**, which controls the paper's Codex conversation.
+
 ## Does it run on Windows?
 
 Windows is currently unsupported. The application and its save/compile tests need platform changes beyond executable paths. There is no Windows installer or validated WSL workaround. See [Windows status](SETUP.md#windows-status). The current Mac route is a source build, not a signed application download.
@@ -22,7 +30,7 @@ Run `node node_modules/electron/install.js` from the repository folder, then reb
 
 The editor normally uses its own pinned CLI, independently of Terminal or desktop-app versions. Open **Settings** with **Command+,**, select **Editor-managed CLI**, run **Check setup**, and **Save settings**. In the repository folder, `npm run codex:version` checks that copy and `npm run codex:login` signs in if needed. A successful version check does not establish account access. For a deliberate custom installation, select **Custom executable** and choose its path. See [Codex setup](SETUP.md#3-configure-codex-if-you-want-ai-review).
 
-If the error says **Codex review restrictions could not be verified**, no paper text was sent by that attempt. This build supports CLI **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6**, **0.155.0-alpha.9.2** and **0.160.1** and verifies that inherited MCP servers are disabled before sending the request. Check the executable version and report a synthetic reproduction if that supported version still fails. A maintainer must rerun the configuration probe and review compatibility before enabling another version; removing the guard is not a setup fix. The check does not change your saved Codex settings.
+If the error says **Codex review restrictions could not be verified**, no paper text was sent by that attempt. This build supports CLI **0.153.4**, **0.154.0-alpha.6.2**, **0.155.0-alpha.2.6**, **0.155.0-alpha.9.2**, **0.160.1** and **0.163.0** and verifies that inherited MCP servers are disabled before sending the request. Check the executable version and report a synthetic reproduction if that supported version still fails. A maintainer must rerun the configuration probe and review compatibility before enabling another version; removing the guard is not a setup fix. The check does not change your saved Codex settings.
 
 If the error names an unsupported effort, choose an effort listed as supported in that error. If Fast mode was refused, turn **Fast mode** off in Actions for paper requests, or choose **Standard** in Side Chat’s **Speed** control for chat requests. You can also check the model’s access before retrying. The app reports an unsupported setting instead of silently substituting one. Authentication details belong in your own CLI configuration, never in a paper or shared bug report.
 
@@ -38,23 +46,23 @@ If the managed binary is missing or its version mismatches, quit the editor and 
 
 ## Can I ask about an error or the paper with a screenshot?
 
-For questions about the editor, errors, or a paper, open **Codex Side Chat** (**Command+Shift+H**). It supports screenshots and optional error context. See the [chat guide](USER_GUIDE.md#ask-codex-side-chat-about-the-editor-or-paper). The ordinary searchable **Help** works offline; **Codex Side Chat** calls Codex when you send a question. Side Chat has its own Model, Effort and Speed settings, independent of the paper. Its initial effort is Medium with Standard speed.
+For questions about the editor, errors, or a paper, open **Codex Side Chat** (**Command+Shift+H**). It supports screenshots and optional error context. See the [chat guide](USER_GUIDE.md#ask-codex-side-chat-about-the-editor-or-paper). The ordinary searchable **Help** works offline; **Codex Side Chat** calls Codex when you send a question. Side Chat starts with **GPT-6.1 Sol · Extra high effort · Fast**, independently of the paper. Model, Effort and Speed choices you save in Side Chat are remembered across papers and restarts.
 
 ## What do effort, Fast mode, and answer length mean?
 
-Choose the model separately in **Settings → Load models → Save settings**. GPT‑6.1 Sol and GPT‑6 Luna appear when offered by the selected CLI. Its catalog also shows supported effort, Fast mode and screenshot input; access is checked again when you send. A saved model that is no longer available is reported rather than silently replaced. Select **Use Codex default** to return to the CLI’s configured model.
+New reviews default to **GPT-6.1 Sol · Extra high (`xhigh`) effort · Fast**. Saved model and paper preferences still take precedence. Expand **Model: …** in Review to choose model, effort and speed; each change saves immediately. The same model selector is under **Actions → Settings and Check setup… → Codex model**, where changes need **Save settings**. The catalog shows supported options, and access is checked again when you send. A saved model that is no longer available is reported rather than silently replaced. Select **Codex default** to follow the CLI’s configured model.
 
-**Actions → Codex effort** offers Quick (`low`), Standard (`medium`), Deep (`high`), Extra deep (`xhigh`), Max (`max`), and Ultra (`ultra`) when offered by the selected model. These request different reasoning efforts from the configured model; they do not promise a fixed thinking time or answer length. The choice is saved per paper. **Quick alternative** adds one saved wording using Sol at Quick effort and local context. In a comment discussion, **Quick explanation** uses Sol at Quick effort without reference tools; **Three alternatives** uses Sol at Standard effort. These shortcuts use GPT-6.1 Sol and the standard service tier and leave paper settings unchanged. **Think again** requests Deep/high effort, preserving a higher selected effort.
+**Actions → Codex effort** offers Low (`low`), Medium (`medium`), High (`high`), Extra high (`xhigh`), Max (`max`), and Ultra (`ultra`) when offered by the selected model. These request different reasoning efforts from the configured model; they do not promise a fixed thinking time or answer length. The choice is saved per paper. **Quick alternative** adds one saved wording using Sol at Low effort and local context. In a comment discussion, **Quick explanation** uses Sol at Low effort with local context reading, without access to other folders; **Three alternatives** uses Sol at Medium effort. These shortcuts use GPT-6.1 Sol and the standard service tier and leave paper settings unchanged. **Think again** requests High effort, preserving a higher selected effort.
 
 **Fast mode** separately requests faster service at increased usage, when the model/account supports it. It does not lower effort or change the selected model. Ask for “three concise comments” or “a shorter explanation” in your instructions when you want a shorter answer. Changing effort is not a verbosity control.
 
 ## Why did a whole-document review miss an included section?
 
-The editor reviews the opened root file or the selected passage. It does not expand `\input` or `\include` automatically. Open a separate source file to review it directly, or use **Attach context…** to include selected reference excerpts. Attached source is context; comments still target the opened source. Check the request heading and preview.
+The editor reviews the opened root file or the selected passage. It does not expand `\input` or `\include` automatically. Open a separate source file to review it directly, or use **Review → Paste material ▾ → Attach files…** to include selected reference excerpts. Attached source is context; comments still target the opened source. Check the request heading and preview.
 
 ## Can I import comments from elsewhere?
 
-Yes. **Review → Import comments…** (also **Actions → Import JSON…**) loads prepared JSON locally, without a Codex request. This is the direct route for comments generated in Astra Pro or another model. Use the [generation prompt and workflow](USER_GUIDE.md#generate-comment-json), based on the exact current source. More than 30 comments are supported, within the 2,000-comment review limit and 10 MB import-file limit.
+Yes. **Review → Paste material ▾ → Import comment JSON…** (also **Actions → Import JSON…**) loads prepared JSON locally, without a Codex request. This is the direct route for comments generated in Astra Pro or another model. Use the [generation prompt and workflow](USER_GUIDE.md#generate-comment-json), based on the exact current source. More than 30 comments are supported, within the 2,000-comment review limit and 10 MB import-file limit.
 
 For a prose report or a different JSON format, **Actions → Import outside feedback…** saves it verbatim and uses Codex to convert it in batches. You can preview each request, add results as they arrive or inspect them first, and resume later. General or unmatched advice stays available. See the [outside-feedback guide](USER_GUIDE.md#turn-outside-feedback-into-comments). Attaching a report as context does not itself add comments.
 
@@ -112,7 +120,7 @@ There is a limit of 30 saved choices per comment, including the original suggest
 
 ## How do local attachments work?
 
-Use **Attach context… → Add reference folder…** or **Add reference files…**. The locations are remembered per paper. During a review or discussion, Codex can search and read eligible references as needed. **Sources used…** shows returned excerpts and search coverage. You can disable or remove a reference without deleting its files. Attaching is local; relevant text is sent to the configured service when Codex reads it during your request.
+Use **Review → Paste material ▾ → Attach files…**, then **Add reference folder…** or **Add reference files…**. The locations are remembered per paper. During a review or discussion, Codex can search and read eligible references as needed. **Sources used…** shows returned excerpts and search coverage. You can disable or remove a reference without deleting its files. Attaching is local; relevant text is sent to the configured service when Codex reads it during your request.
 
 Up to 12 reference locations can be remembered. Reading uses at most 40 tool calls and 120,000 UTF-8 bytes of tool results per request. Folder inventory is limited to 100 eligible files, 500 entries and three nested levels; incomplete inventories are labelled. Hidden, linked, generated, sensitive-name and unsupported items are excluded. PDFs must be at most 20 MB and text files at most 2 MB. PDF searches cover 20 pages per call with a continuation; text extraction can miss scans or mathematical detail. There is no OCR or figure interpretation.
 
@@ -120,11 +128,13 @@ Up to 12 reference locations can be remembered. Reading uses at most 40 tool cal
 
 ## How do I return to the home screen?
 
-Choose **Actions → Close project** or use the File menu. It preserves the draft in recovery, comments and reading position, then clears the paper from the window and automatic reopening. Reopen the same `.tex` file to continue; unsaved source is recovered when the disk version still matches. Save writes the source separately. If closing cannot preserve recovery, it leaves the project open.
+Choose **Actions → Close project → Close and keep data**. It preserves the draft in recovery, comments and reading position, then returns home. Reopen the same `.tex` or `.txt` file to continue. Save writes the source separately. If closing cannot preserve recovery, it leaves the project open.
+
+To clear this paper’s editing records instead, save first and choose **Review files to clear…**. Review the full paths, contents, dates, sizes and recovery archive location, then explicitly confirm. ME verifies an archive before removing any listed files. Source documents and exported PDFs stay; shared or unverified files are listed as kept. If anything changes after the preview, refresh it before confirming.
 
 ## Why does compilation ask about the paper folder?
 
-Above **50 MB or 500 files**, a deterministic local dependency check identifies the required inputs so unrelated archives need not be copied. The actual input cap is **200 MB / 2,000 files**, including explicit selections. If filenames are computed or ambiguous, **Prepare Codex request…** shows a bounded request preview and **Ask Codex to help** explicitly sends it. Inspect the proposed list before **Compile selected files**. Unknown or unsafe paths are rejected, and unresolved dependency commands prevent checked acceptance even if a PDF is produced. If the required inputs exceed the cap, reduce those resources or use another compilation route. See [large-folder compilation](USER_GUIDE.md#compile-a-paper-in-a-larger-folder).
+Above **50 MB or 500 files**, a deterministic local dependency check identifies the required inputs so unrelated archives need not be copied. The actual input cap is **200 MB / 2,000 files**, including explicit selections. For computed filenames, **Prepare file-list request…** shows a bounded request preview and **Ask Codex for a file list** explicitly sends it. Missing files and unsupported paths get a direct error instead; file-list assistance cannot repair them. Inspect the proposed list before **Compile selected files**. Unknown or unsafe paths are rejected, and unresolved dependency commands prevent checked acceptance even if a PDF is produced. If the required inputs exceed the cap, reduce those resources or use another compilation route. See [large-folder compilation](USER_GUIDE.md#compile-a-paper-in-a-larger-folder).
 
 ## Can I accept several suggestions together?
 
@@ -132,7 +142,7 @@ Choose **Details → Accept all applicable (N)** in the Comments pane. The count
 
 ## What is the difference between Reject, Skip and Resolve?
 
-**Reject** or **Shift+R** moves the current comment into History without changing the source; Undo restores it. Later reviews include a bounded summary of rejected suggestions, and automatic review/feedback integration suppresses exact repeated proposals. Different advice on the same passage is allowed; paraphrased repeats are not guaranteed to be caught. Reopen a rejected comment in History to reconsider it. **Skip** or **Shift+S** advances while leaving the comment pending. **Resolve** separately records that you have addressed an author question. **Accept** or **Shift+A** applies without compiling and advances. **Accept & compile** checks compilation first. Hover over the buttons for these key hints; the shortcuts work from comment controls outside typing fields. **Option+Backspace** still rejects a suggestion or resolves an author question.
+**Reject** or **Shift+R** moves the current comment into History without changing the source; Undo restores it. Later reviews can read rejected suggestions and author reasons in `review-decisions.md`, and automatic review/feedback integration suppresses exact repeated proposals. Different advice on the same passage is allowed; paraphrased repeats are not guaranteed to be caught. Reopen a rejected comment in History to reconsider it. **Skip** or **Shift+S** advances while leaving the comment pending. **Resolve** separately records that you have addressed an author question. **Accept** or **Shift+A** applies without compiling and advances. **Accept → Accept & compile** checks compilation first. The Reject arrow records an optional preset or custom reason. Hover over the buttons for these key hints; the shortcuts work from comment controls outside typing fields. **Option+Backspace** still rejects a suggestion or resolves an author question.
 
 ## How do I reject all remaining comments together?
 
@@ -150,7 +160,9 @@ This action is available only for questions without a replacement. Replacement s
 
 ## Why is acceptance disabled, or why did its compile check fail?
 
-Acceptance is blocked if the original passage is missing, ambiguous, or needs confirmation. Select the exact original words in the intended place and choose **Attach to selected text**, or request a fresh review if you have rewritten them.
+Acceptance is blocked if the original passage is missing, ambiguous, or needs confirmation. **Repair anchors** beside the warning, or in **Comments → Details**, checks affected comments together using Sol with High effort and Fast mode. It matches unchanged original words to their intended context without editing the source, changing suggestions or accepting them. One **Undo** restores the batch. Anchor repair can run alongside a review or Side Chat. **Stop anchor repair** cancels only that repair. If the source changes while it runs, its old result is not applied.
+
+Uncertain matches stay flagged. If you edit the source while repair runs, its results are not applied; run it again against the new draft. You can still select the exact original words and choose **Attach to selected text**, or request a fresh review if you have rewritten them.
 
 **Accept & compile** and **Accept all applicable suggestions** check the candidate before changing the draft. A successfully generated PDF can still have undefined citations or references, duplicate labels, or missing characters (glyphs). The editor explains these acceptance warnings and preserves the unchanged draft while you inspect **View candidate PDF** and **Build details**.
 
@@ -177,7 +189,7 @@ Matches arrive while pages are indexed. **Stop** pauses indexing; **Continue ind
 3. Keep bibliography files, figures, and local styles in the paper folder with relative paths. Linked or external project resources need a self-contained copy. The app disables shell escape and `latexmkrc` startup scripts, so workflows that require them need another compilation route or an adjusted paper.
 4. Supply missing packages, fonts, and custom definitions. A pasted paragraph can use **Add preamble…**, but source-body errors or conflicting existing definitions can require manual work.
 
-`tcilatex.tex` is bundled for Scientific Word/WorkPlace source and supplied inside build snapshots when the paper has no root-level copy. In large folders, an exact copy of the bundled support library is recognized automatically. On macOS, a Windows drive entry in `\graphicspath` is ignored during dependency discovery when local figures resolve the references. The source is unchanged. Windows-only figure references, BMP figures, and Scientific Word graphics specials still require attention. A working Mac compile does not establish a Windows/SWP round trip.
+`tcilatex.tex` is bundled for Scientific Word/WorkPlace source and supplied inside build snapshots when the paper has no root-level copy. In large folders, an exact copy of the bundled support library is recognized automatically. On macOS, Windows drive and Parallels `//Mac/…` graphics-path fallbacks do not block compilation when local figures resolve the references. Ordinary BMP figures referenced by literal `\includegraphics` commands are converted to PNG in the temporary build automatically, preserving display dimensions. The source, SWP metadata and original images are unchanged. Windows-only or missing figures and Scientific Word graphics specials still require attention. BMP conversion on other operating systems is not supplied; use PNG or PDF there. A working Mac compile does not establish a Windows/SWP round trip.
 
 ## Does Save happen automatically?
 
@@ -213,18 +225,54 @@ Recovery can inspect readable disk text, session/save records, archived conflict
 
 Review records and their complete recovery envelopes have a **32,000,000-byte JSON limit**, including UTF-8 characters, escaping, source text, and metadata. An update that would exceed it is rejected, and discussion history is never silently shortened to fit. Use **Export source…** to preserve your current text if a large review reaches the limit. Oversized or corrupt records may need manual recovery.
 
-In **Compare versions… → Save history…**, expand **Storage for this folder**. The default 50 MB target covers managed automatic source backups across the folder's root documents. Repeated saves of identical text reuse a copy. Lowering the target or a successful Save can prune older unprotected versions. Protected originals, current/previous checkpoints, and versions required for recovery or the pinned baseline can exceed the target. **Delete version…** refuses protected copies.
+In the comparison column's version picker, choose **Saved versions…** and expand **Storage for this folder**. **Compare versions… → Save history…** provides the same controls. The default 50 MB target covers managed automatic source backups across the folder's `.tex` and `.txt` documents. Repeated saves of identical text reuse a copy. Lowering the target or a successful Save can prune older unprotected versions. Protected originals, current/previous checkpoints, and versions required for recovery or the pinned baseline can exceed the target. **Delete version…** refuses protected copies.
 
 The target does not cover comments, outside feedback, recovery archives, comparison archives, or PDF build caches. **Actions → Clear older builds** removes eligible app-marked compilation caches; another paper may need compiling again afterward. It preserves source and source-recovery records. Keep application storage and legacy `.runtime/` copies if they contain papers you need.
+
+The original paste, pre-review drafts and named comparison checkpoints are retained separately, up to 1,000 per paper and 2 MB of source text each. Section reviews of the same draft share one checkpoint. Reaching a limit or failing to save a required checkpoint stops the new request with an error; earlier versions are preserved. These checkpoints are local and retaining them does not send a model request.
 
 If Save reports that version history needs attention, the source was saved but history maintenance is paused. Keep the affected metadata and backups for inspection; automatic pruning and manual version deletion stop while protection records cannot be verified. Repeated unchanged Saves reuse a recovery archive as well as a source backup.
 
 ## How should I report a problem?
 
-Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **1.7.0**.
+Use **Settings → Copy setup details** for the editor, operating system, Codex and TeX versions with check status. The copied summary excludes manuscript text, file paths and account details; expand **Copied setup details** to inspect it. Help, Settings and the native About window identify the editor version, currently **1.8.0**.
 
 Add the exact action and error, whether the synthetic sample reproduces it, your Node version (`node --version`), and the editor commit if known. A small synthetic `.tex` example is most useful. Inspect logs, screenshots, and `.modern-editor` records before sharing: they may contain source, discussion, or local paths. Do not include authentication tokens or account configuration. The [testing guide](../TESTING.md) separates offline checks from optional live Codex requests.
 
 ## Does Changes PDF work with Beamer?
 
 It supports ordinary wording edits inside literal frames, bullets, blocks and columns. It keeps slide structure and uses inline revision markup. Dense slides can overflow when deleted wording is shown: inspect the warning and use Clean paper, or compare Original and Proposed revision in PDF mode. Unsupported changes are explicitly listed on comparison-notes slides when a marked comparison is available; Text diff always has the exact changes. See [Beamer slides](USER_GUIDE.md#beamer-slides) for limits and navigation.
+
+## Where can I see response times and usage?
+
+Open **Actions → Usage & speed…** or the same button in Settings. The local request history shows total time, first-answer delay, model/effort/speed, outcomes and tokens reported by Codex. Recording is enabled by default, retains 1,000 requests and excludes prompt/reply text. It begins with this update and does not replace optional debugging. Missing token data is shown as unavailable. **Refresh account limits** reads account-wide limits separately; those include use outside this editor and are not inferred from token counts.
+
+It also records time to the first saved comment batch. **Add suggestions as they arrive** lets you decide those suggestions before the request finishes. Compare similar tasks before changing effort settings; an individual faster run does not establish a general speed advantage.
+
+## Can I review just my recent revisions?
+
+Choose **Review → Reviewing → Changes since…**, then use the adjacent version picker. Deletions and surrounding context are included. Codex can read the wider draft, but replacement suggestions stay inside the displayed change contexts; broader concerns become questions. Use **Whole document** for a whole-paper review.
+
+## How do I clear old editing jobs?
+
+Use **Settings → Data & cleanup**. Choose old temporary builds or selected papers' editing records, inspect every file and confirm. ME verifies a dated recovery archive before removal. The open paper, source files, figures, exports, global settings and sign-in are kept. Shared diagnostics and CLI history are outside this cleanup. See [Data & cleanup](USER_GUIDE.md#data--cleanup) for details and limits.
+
+## Why is a small suggestion showing less surrounding text?
+
+The comment starts with the changed sentence and nearby sentences. **More context** expands toward the paragraph; **Clean** and **Edit** still retain the full replacement. Displaying less context never shortens an accepted edit. A changed source quotation still needs confirmation before acceptance.
+
+## Can Codex read my paper folder? Does a new review continue the previous chat?
+
+The initial prompt contains your request, scope and essential rules. Codex reads `current-draft` (including unsaved edits), `paper-instructions.md`, `review-decisions.md` and relevant history through ME’s existing tools. These are read-only views of existing storage, not new files or a separate memory system. History has a searchable index and individual exchanges; old prompts/drafts are not prepended to answers. Reading still sends the returned text to the configured Codex service. It is not a guarantee of faster or cheaper review.
+
+Ordinary reviews and discussions can read the current unsaved draft and, by default, supported documents in its folder and subfolders. Turn off **Codex can read this folder** in Review or Context to limit automatic folder access. No manual attachment is needed for the current folder. Other reference locations remain separately controlled. Access does not mean the whole folder is read or uploaded; **Sources used** records the excerpts actually returned. Quick editorial shortcuts can read the draft and saved context, but do not browse other folders or join the active review conversation.
+
+**Review → Continue review** resumes the active paper conversation, including ordinary comment discussions. Each request points to the current unsaved snapshot and readable instructions, decisions and history; it does not embed them in the prompt. The arrow beside Continue review offers **Use a fresh conversation**; **Start fresh review** then starts separately and preserves earlier history for inspection. Rejection reasons are optional under the **Reject** arrow or **Comments → Details**; no reason is inferred from a model explanation. Side Chat remains separate, with completed paper exchanges shared as notes for subsequent reviews when a review conversation is active. See [Continue or start a fresh review](USER_GUIDE.md#continue-or-start-a-fresh-review).
+
+## How do I reuse an earlier review request?
+
+Open **Review → More options → Review history**, select an exchange, then **Use these instructions again**. The full instruction is copied into the current form. Your current draft, scope and model choices stay in place; nothing is sent until **Start review**. Raw request data is under **Technical details**.
+
+## What survives a stopped or failed review?
+
+Earlier retained suggestions and accepted edits remain. Expand the bottom summary to inspect saved suggestions and open waiting results for that request. Add them locally without another model call; this does not accept them. An unsuccessful recovery write or receipt leaves the result available to retry. **Saved** in this summary refers to suggestions, not the manuscript file.

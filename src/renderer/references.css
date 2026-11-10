@@ -10,6 +10,11 @@
 .pasted-context input:not([type=checkbox]), .pasted-context textarea, .guidance-panel textarea { display: block; width: 100%; box-sizing: border-box; }
 .pasted-context textarea { min-height: 12rem; max-height: 35vh; white-space: pre-wrap; }
 .pasted-context button, .guidance-panel button { margin-right: .4rem; }
+.paste-save-row { position: sticky; top: 44px; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; background: white; padding: 8px 0; }
+.paste-save-row span { color: #80551d; font-size: 13px; }
+.paste-saved { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+.pasted-context { scroll-margin-top: 50px; }
+.rejection-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
 .context-item-actions { display: flex; flex-shrink: 0; gap: .4rem; }
 .guidance-panel { width: min(750px, 90vw); max-height: 80vh; overflow: auto; background: #fbfcf9; border: 1px solid #cddbc6; border-radius: 10px; padding: 1.25rem; }
 .guidance-panel textarea { min-height: 10rem; }

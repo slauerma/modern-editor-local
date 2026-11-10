@@ -131,6 +131,22 @@ test('a source edit exceeding the persistence bound is rejected without changing
   assert.equal(next.doc.toString(), 'Kept manuscript'); assert.equal(notified, true);
 });
 
+test('a review with more than thirty useful comments is retained in full without changing source', async () => {
+  const originals = Array.from({ length: 40 }, (_, i) => `Result ${i + 1} is clear.`);
+  const f = await fixture(originals.join('\n')), service = new CodexService(f.projects, path.join(f.root, 'fake-client'));
+  try {
+    service.client.run = async () => ({ comments: originals.map(original => ({ ...comment(), original, before: '', after: '', replacement: original.replace('clear', 'precise') })) });
+    const comments = await service.review({ projectId: f.p.id, text: f.p.text, from: 0, to: f.p.text.length, instructions: 'Review the complete passage.' }, () => {});
+    assert.deepEqual(comments.map(c => c.original), originals);
+    assert(comments.every(c => c.validity === 'current'));
+    const results = await service.results.list(f.p.id);
+    const retained = results.items.find(r => r.kind === 'review');
+    assert(retained && retained.kind === 'review');
+    assert.deepEqual(retained.comments.map(c => c.original), originals);
+    assert.equal(await fs.readFile(f.file, 'utf8'), f.p.text);
+  } finally { await fs.rm(f.root, { recursive: true, force: true }); }
+});
+
 test('model answers rejected by schema remain separately recoverable', async () => {
   const f = await fixture(), service = new CodexService(f.projects, path.join(f.root, 'fake-client'));
   const response = { reply: 'x'.repeat(100001), replacement: null, packages: [] };

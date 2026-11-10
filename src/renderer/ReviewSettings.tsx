@@ -6,7 +6,7 @@ import { SettingsChanges } from './SettingsChanges.tsx';
 type Controls = { disabled: boolean; changesOnly: boolean; onCount(count: number): void; onBusy(busy: boolean): void };
 export type PaperSettings = { id: string; name: string; settings: PaperReviewSettings; save(settings: PaperReviewSettings): Promise<void> };
 const labels: Record<keyof PaperReviewSettings, string> = { engine: 'LaTeX engine', effort: 'Review effort', fastMode: 'Fast mode', localEditsOnly: 'Smallest local edits only', preserveVoice: 'Preserve my voice' };
-const valueLabels: Record<string, string> = { pdflatex: 'pdfLaTeX', lualatex: 'LuaLaTeX', xelatex: 'XeLaTeX', medium: 'Standard', low: 'Quick', high: 'Deep', max: 'Max' };
+const valueLabels: Record<string, string> = { pdflatex: 'pdfLaTeX', lualatex: 'LuaLaTeX', xelatex: 'XeLaTeX', medium: 'Medium', low: 'Low', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
 const format = (value: string | boolean) => typeof value === 'boolean' ? value ? 'On' : 'Off' : valueLabels[value] ?? value;
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 

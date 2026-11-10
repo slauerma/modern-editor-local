@@ -1,0 +1,12 @@
+.text-import-backdrop { position: fixed; inset: 0; z-index: 230; background: #14282033; display: grid; place-items: center; padding: 24px; }
+.text-import-dialog { width: min(880px, 100%); max-height: calc(100dvh - 48px); overflow: auto; background: var(--paper, white); border: 1px solid #d7dfd5; border-radius: 10px; padding: 24px; box-shadow: 0 16px 48px #14282024; font-size: 15px; }
+.text-import-dialog header, .text-import-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.text-import-dialog h2 { font-size: 19px; margin: 0; }
+.text-import-dialog p { margin: 12px 0; }
+.text-import-path { overflow-wrap: anywhere; color: #53645a; font-size: 13px; user-select: text; }
+.text-import-warning { color: #80551d; }
+.text-import-encoding { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+.text-import-encoding span { font-size: 13px; color: #53645a; }
+.text-import-preview { display: block; width: 100%; height: clamp(140px, 36dvh, 480px); resize: vertical; font: 15px/1.5 ui-monospace, monospace; white-space: pre-wrap; }
+.text-import-dialog footer { justify-content: flex-end; flex-wrap: wrap; margin-top: 16px; }
+.text-import-dialog button, .text-import-dialog select { min-height: 36px; }

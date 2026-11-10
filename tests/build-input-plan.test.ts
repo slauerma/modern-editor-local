@@ -265,3 +265,27 @@ test('directory identity is rechecked after an awaited dependency resolution bef
     }), /paper folder changed or is linked/);
   } finally { await f.remove(); }
 });
+
+test('Parallels fallback and literal BMPs resolve locally; missing or ambiguous images stay explicit', async () => {
+  const text = '\\graphicspath{{figures/}{//Mac/Dropbox/lecture/figures/}}\n\\includegraphics[width=2cm]{picture.bmp}\n% \\includegraphics{unused.bmp}';
+  const f = await fixture(text);
+  try {
+    await f.put('figures/picture.bmp', 'BMP bytes are checked when preparing the snapshot');
+    const plan = await planBuildInputs(f.settings);
+    assert.equal(plan.status, 'ready', JSON.stringify(plan)); if (plan.status !== 'ready') return;
+    assert.deepEqual(plan.files.map(file => file.relative), ['figures/picture.bmp', 'main.tex']);
+    assert.equal(plan.bitmapGraphics?.length, 1);
+    const reference = plan.bitmapGraphics![0];
+    assert.equal(reference.input, 'figures/picture.bmp');
+    assert.equal(text.slice(reference.from, reference.to), '\\includegraphics[width=2cm]{picture.bmp}');
+    const missing = await planBuildInputs({ ...f.settings, text: text.replace('{picture.bmp}', '{missing.bmp}') });
+    assert.equal(missing.status, 'needs-selection'); if (missing.status === 'needs-selection') {
+      assert.equal(missing.canAskCodex, false); assert.match(missing.issues.join(), /Unresolved dependency.*missing.bmp/);
+    }
+    await f.put('picture.bmp', 'Other BMP');
+    const ambiguous = await planBuildInputs(f.settings);
+    assert.equal(ambiguous.status, 'needs-selection'); if (ambiguous.status === 'needs-selection') assert.match(ambiguous.issues.join(), /Ambiguous BMP/);
+    const external = await planBuildInputs({ ...f.settings, text: '\\includegraphics{//Mac/elsewhere/picture.bmp}' });
+    assert.equal(external.status, 'needs-selection'); if (external.status === 'needs-selection') assert.match(external.issues.join(), /outside/);
+  } finally { await f.remove(); }
+});

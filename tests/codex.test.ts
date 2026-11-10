@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { parseCodexModel } from '../src/shared/codex-models.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -34,6 +35,40 @@ test('the model catalog exposes Sol and Luna without creating a thread or sendin
   const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
   assert.equal(requests.filter((r: any) => r.method === 'model/list').length, 2);
   assert(!requests.some((r: any) => r.method === 'thread/start' || r.method === 'turn/start'));
+  await assertExited(directory);
+});
+
+test('new runtime disables automatic model routing and keeps explicit choices', async () => {
+  const { client, directory } = await fixture();
+  await fs.mkdir(directory, { recursive: true });
+  await fs.writeFile(path.join(directory, 'new-version'), '');
+  for (const flag of ['enabled-daybreak', 'missing-daybreak']) {
+    await fs.writeFile(path.join(directory, flag), '');
+    await assert.rejects(client.run('normal', replyOutputSchema, () => {}), /model routing/);
+    const calls = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+    assert(!calls.some((r: any) => r.method === 'turn/start'));
+    await fs.unlink(path.join(directory, flag)); await assertExited(directory);
+  }
+});
+
+test('model metadata retains replacement notices but not arbitrary migration text or links', () => {
+  const model = parseCodexModel({ id: 'older-model', model: 'older-model', displayName: 'Older', hidden: true, isDefault: false,
+    supportedReasoningEfforts: [{ reasoningEffort: 'medium' }], upgrade: 'legacy-choice',
+    upgradeInfo: { model: 'next-model', retirementAt: 2000000000, migrationMarkdown: 'UNTRUSTED', modelLink: 'javascript:alert(1)' } });
+  assert.equal(model.hidden, true); assert.equal(model.upgrade, 'next-model'); assert.equal(model.retirementAt, 2000000000);
+  assert(!JSON.stringify(model).includes('UNTRUSTED')); assert(!JSON.stringify(model).includes('javascript:'));
+});
+
+test('time to first saved batch is recorded separately from response text and total time', async () => {
+  const { client, directory } = await fixture();
+  const usage: any[] = []; client.usageRecord = r => usage.push(r);
+  await client.run('publish-tools', replyOutputSchema, () => {}, 'medium', false, {
+    tools: [{ type: 'function', name: 'publish_comments', description: 'Synthetic publishing.', inputSchema: { type: 'object', properties: {}, required: [], additionalProperties: false } }],
+    call: async () => ({ published: 5, total: 5 }), cancel: async () => {}
+  });
+  assert.equal(usage.length, 1); assert(usage[0].firstBatchMs > 0);
+  assert(usage[0].firstAnswerMs > usage[0].firstBatchMs);
+  assert(usage[0].elapsedMs >= usage[0].firstAnswerMs);
   await assertExited(directory);
 });
 
@@ -459,4 +494,40 @@ test('discussion instructions do not force edits and timing events distinguish s
   const started = new Promise<void>(resolve => client.once('notification', function listen(event) { if (event.method === 'turn/started') resolve(); else client.once('notification', listen); }));
   const run = client.run('wait', replyOutputSchema, () => {}), rejected = assert.rejects(run, /cancelled/);
   await started; await client.cancel(); await rejected; assert.equal(records.find(r => r.kind === 'event').data.outcome, 'cancelled'); await assertExited(directory);
+});
+
+
+test('usage records exact cumulative token totals and timings, independently of debugging', async () => {
+  const { client, directory } = await fixture();
+  try {
+    await fs.mkdir(directory, { recursive: true }); await fs.writeFile(path.join(directory, 'usage-events'), '');
+    const records: import('../src/shared/usage.ts').UsageRecord[] = [];
+    client.usageScope = () => 'a'.repeat(64); client.usageRecord = r => records.push(r);
+    await client.run('normal', replyOutputSchema, () => {}, 'high', true);
+    assert.equal(records.length, 1); const r = records[0];
+    assert.equal(r.tokens?.totalTokens, 120); assert.equal(r.scope, 'a'.repeat(64));
+    assert.equal(r.model, 'fixture-model'); assert.equal(r.effort, 'high'); assert.equal(r.fastMode, true);
+    assert(r.elapsedMs >= r.firstAnswerMs! && r.firstAnswerMs! > 0);
+    assert.equal(r.outcome, 'complete'); await assertExited(directory);
+    await fs.unlink(path.join(directory, 'usage-events'));
+    await assert.rejects(client.run('failure', replyOutputSchema, () => {}), /Fixture model failure/);
+    assert.equal(records[1].outcome, 'error'); assert.equal(records[1].tokens, null); await assertExited(directory);
+    const started = notification(client, 'turn/started');
+    const waiting = assert.rejects(client.run('wait', replyOutputSchema, () => {}), /cancelled/);
+    await within(started); await client.cancel(); await waiting;
+    assert.equal(records[2].outcome, 'cancelled'); await assertExited(directory);
+    client.usageRecord = () => { throw new Error('metadata failure'); };
+    await client.run('normal', replyOutputSchema, () => {}); await assertExited(directory);
+  } finally { await client.cancel(); await fs.rm(directory, { recursive: true, force: true }); }
+});
+
+test('account limit refresh reads only limits and initializes no thread or model turn', async () => {
+  const { client, directory } = await fixture();
+  try {
+    const result = await client.accountLimits();
+    assert.equal(result.windows[0].usedPercent, 35); assert.equal(result.windows[1].usedPercent, null);
+    const requests = JSON.parse(await fs.readFile(path.join(directory, 'requests.json'), 'utf8'));
+    assert.deepEqual(requests.map((r: any) => r.method), ['initialize', 'initialized', 'account/rateLimits/read']);
+    assert.equal(requests[2].params.excludeResetCreditDetails, true); await assertExited(directory);
+  } finally { await client.cancel(); await fs.rm(directory, { recursive: true, force: true }); }
 });

@@ -1,6 +1,6 @@
 .references-drawer { flex-shrink:0; max-height:min(50vh,500px); overflow:auto; border-bottom:1px solid #d7e0d7; background:#fff; padding:1rem 1.5rem; }
 .references-drawer[hidden] { display:none; }
-.references-drawer>.recovery-heading { margin-bottom:.75rem; }
+.references-drawer>.recovery-heading { margin-bottom:.75rem; position:sticky; top:-1rem; background:white; z-index:3; padding:8px 0; min-height:44px; }
 .files-panel { width: min(920px, 94vw); max-height: 85vh; overflow: auto; background: #fbfcf9; border: 1px solid #cddbc6; border-radius: 10px; padding: 1.25rem; box-shadow: 0 10px 36px #23362130; }
 .files-panel h2 { margin: 0; font-size: 20px; }
 .files-actions, .chat-context-links { display: flex; gap: 12px; padding: 10px 0; }

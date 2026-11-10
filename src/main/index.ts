@@ -7,9 +7,13 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'ele
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ProjectService } from './project-service.ts';
+import { TextImportService } from './text-import.ts';
+import { textEncodings } from '../shared/text-import.ts';
+import { DataCleanup } from './data-cleanup.ts';
+import { ProjectCleanup } from './project-cleanup.ts';
 import { sourceRequestSchema } from '../shared/contracts.ts';
 import { ProjectFilesService } from './project-files.ts';
 import { CompileService } from './compile-service.ts';
@@ -22,6 +26,7 @@ import { attachmentSelectionsSchema, attachmentPreviewIdSchema } from '../shared
 import { feedbackRequestSchema } from '../shared/feedback.ts';
 import { prepareFeedbackSchema, resumeFeedbackSchema } from '../shared/feedback-batches.ts';
 import { CodexService } from './codex-service.ts';
+import { anchorRepairRequestSchema } from '../shared/anchor-repair.ts';
 import { CodexClient } from './codex-client.ts';
 import { ChangesPdfService } from './changes-pdf.ts';
 import { readComparisonMarkers } from './comparison-markers.ts';
@@ -37,6 +42,8 @@ import { chatInputSchema, chatScopeSchema } from '../shared/help-chat.ts';
 import { normalizeChatImage } from './chat-images.ts';
 import { atomicWrite, readRegularFile, readJSON, writeJSON } from './files.ts';
 import { DebugStore } from './debug-store.ts';
+import { UsageStore } from './usage-store.ts';
+import { codexModelIdSchema } from '../shared/codex-models.ts';
 import { debugSettingsSchema, debugInteractionSchema } from '../shared/debugging.ts';
 import { chatImageSchema } from '../shared/help-chat.ts';
 import { managedCodexLocation, managedCodexVersion, verifyManagedCodex } from './managed-codex.ts';
@@ -53,10 +60,29 @@ if (runtimeOverride) app.setPath('userData', path.join(path.dirname(runtime), pa
 const primaryInstance = app.requestSingleInstanceLock();
 if (!primaryInstance) app.quit();
 const projects = new ProjectService(runtime), compiler = new CompileService(projects, path.join(runtime, 'builds'), undefined, undefined, path.join(__dirname, 'tex-support', 'tcilatex.tex'));
+const projectCleanup = new ProjectCleanup(projects, runtime);
+const dataCleanup = new DataCleanup(projects, runtime, projectCleanup);
+let cleanupPapers: string[] = [];
+const textImports = new TextImportService();
+let cleanupLocked = false, cleanupBusy = false, cleanupArchive: string | null = null;
+const activeRequests = new Set<Promise<void>>();
 const attachments = new AttachmentService({ pdfModulePath: path.join(app.getAppPath(), 'node_modules/pdfjs-dist/legacy/build/pdf.mjs') });
 const references = new ReferenceService(projects, path.join(runtime, 'reference-folders'), attachments);
 const codex = new CodexService(projects, path.join(runtime, 'codex-context'), attachments, references);
+// Side Chat has its own request, cancellation and protocol directory. A paper
+// review can keep running while the author asks questions or requests edits.
+const chatClient = new CodexClient(path.join(runtime, 'chat-context'));
+const codexClients = [codex.client, chatClient, codex.anchorClient];
 const debug = new DebugStore(path.join(runtime, 'debugging'));
+const usage = new UsageStore(path.join(runtime, 'usage'));
+const usageScope = () => projects.current ? createHash('sha256').update(projects.current.path).digest('hex') : null;
+codex.client.usageScope = usageScope;
+codex.client.usageRecord = record => { void usage.record(record); };
+for (const client of codexClients) {
+  client.usageStarted = (id, start) => usage.startComments(id, start);
+  client.usageComments = (id, count) => { void usage.publishedComments(id, count); };
+  client.usageReviewOutcome = (id, outcome) => { void usage.reviewOutcome(id, outcome); };
+}
 codex.client.debugRecord = record => {
   if (!debug.enabled) return;
   if (record.kind === 'screenshot') {
@@ -66,16 +92,23 @@ codex.client.debugRecord = record => {
   } else if (record.kind === 'event') void debug.recordEvent('Codex timing', record.data);
   else void debug.record(record.kind, 'Codex ' + record.kind, record.data);
 };
+for (const client of [chatClient, codex.anchorClient]) {
+  client.usageScope = usageScope;
+  client.usageRecord = codex.client.usageRecord;
+  client.debugRecord = codex.client.debugRecord;
+}
 const buildHelp = new BuildInputHelp(projects, compiler, codex);
 const changesPdf = new ChangesPdfService(projects, compiler, codex, (bytes, ids, signal) =>
   readComparisonMarkers(bytes, ids, signal, path.join(app.getAppPath(), 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')));
 const tools = new ToolSettingsService(runtime, undefined, app.getAppPath());
-const helpChat = new HelpChat(projects, codex.client, path.join(runtime, 'help-chats'), async () => ({
+const helpChat = new HelpChat(projects, chatClient, path.join(runtime, 'help-chats'), async () => ({
   version: app.getVersion(), platform: process.platform, osVersion: process.getSystemVersion(),
   documentation: (await Promise.all(['USER_GUIDE.md','SETUP.md','FAQ.md','CHANGELOG.md'].map(async name => `## ${name}\n${(await readRegularFile(path.join(__dirname, 'help', name), 100000)).toString('utf8')}`))).join('\n\n')
 }), references);
+helpChat.reviewConversations = codex.conversations;
 let storageNotices: string[] = [], setupBusy = false, activeToolOperations = 0;
 let setupCatalog: CodexClient | null = null;
+let setupCatalogBusy = false;
 let setupCatalogGeneration = 0;
 let debugCapture = Promise.resolve(), debugSuspended = false;
 let window: BrowserWindow | null = null, closing = false, rendererGone = false;
@@ -86,9 +119,17 @@ const textInput = z.object({ projectId: z.string(), text: z.string().max(2000000
 function handle(channel: string, action: (...args: any[]) => unknown) {
   ipcMain.handle(channel, async (event, ...args) => {
     if (event.sender !== window?.webContents || event.senderFrame?.url.split('#')[0] !== documentURL) throw new Error('Untrusted application request.');
+    if (cleanupLocked && !channel.startsWith('data:') && !['project:cleanup-preview', 'project:cleanup-cancel', 'project:cleanup-confirm', 'project:cleanup-open-archive', 'window:close-ready'].includes(channel)) throw new Error('Finish or cancel the cleanup preview before working on this paper.');
     const toolOperation = /^(codex:|build:)/.test(channel) && !['codex:cancel', 'build:cancel', 'codex:progress'].includes(channel);
     if (toolOperation && setupBusy) throw new Error('Wait for setup to finish before starting Codex or compilation.');
     if (toolOperation) activeToolOperations++;
+    // Track the whole IPC operation, including file pickers/reads before a
+    // service registers its own write. Cleanup blocks new requests, cancels
+    // model/build work, then waits for every older handler to finish.
+    let finishedRequest = () => {};
+    const pendingRequest = new Promise<void>(resolve => { finishedRequest = resolve; });
+    const trackRequest = !channel.startsWith('data:') && !channel.startsWith('project:cleanup-') && channel !== 'window:close-ready';
+    if (trackRequest) activeRequests.add(pendingRequest);
     const began = performance.now();
     const timed = /^(codex:|build:(compile|changes|export)|project:(open|save|close|import))/.test(channel);
     try { const result = await action(...args);
@@ -101,11 +142,18 @@ function handle(channel: string, action: (...args: any[]) => unknown) {
       if (error instanceof SyntaxError) throw new Error('The JSON file could not be read. Check its syntax; the original file was preserved.');
       throw error;
     }
-    finally { if (toolOperation) activeToolOperations--; }
+    finally { if (toolOperation) activeToolOperations--; activeRequests.delete(pendingRequest); finishedRequest(); }
   });
 }
 const send = (command: string) => window?.webContents.send('menu:command', command);
 handle('debug:state', () => debug.state());
+handle('usage:state', () => usage.state(usageScope()));
+handle('usage:comment-ready', input => { const p = z.object({ requestId: z.string().uuid(), delivery: z.enum(['automatic', 'manual']) }).parse(input); return usage.commentReady(p.requestId, p.delivery); });
+handle('usage:configure', async input => { await usage.configure(z.boolean().parse(input)); return usage.state(usageScope()); });
+handle('usage:limits', async () => {
+  reserveSetup();
+  try { return await codex.client.accountLimits(); } finally { setupBusy = false; }
+});
 handle('debug:interaction', input => { const event = debugInteractionSchema.parse(input); void debug.recordEvent('Interaction', event); });
 handle('debug:configure', input => debug.configure(debugSettingsSchema.parse(input)));
 handle('debug:delete', ids => debug.remove(z.union([z.literal('all'), z.array(z.string().uuid()).max(500)]).parse(ids)));
@@ -121,10 +169,30 @@ async function restoreWorkspace(p: Project | null) {
   catch { p.notices.push('The previous PDF is no longer available or could not be verified. Compile to rebuild it; your saved reading position is kept.'); }
   return p;
 }
+async function openDocument(file: string) {
+  const preview = await textImports.prepare(file);
+  return preview ?? restoreWorkspace(await projects.open(file));
+}
+handle('project:recent', () => projects.recentProjects.list());
+handle('project:open-recent', async id => openDocument(await projects.recentProjects.resolve(z.string().regex(/^[a-f0-9]{64}$/).parse(id))));
 handle('project:open', async () => {
   const result = await dialog.showOpenDialog(window!, { title: 'Open a LaTeX or text document', properties: ['openFile'], filters: [{ name: 'LaTeX or text document', extensions: ['tex', 'txt'] }] });
-  return result.canceled ? null : restoreWorkspace(await projects.open(result.filePaths[0]));
+  if (result.canceled) return null;
+  return openDocument(result.filePaths[0]);
 });
+handle('project:import-text', async input => {
+  const { id, encoding } = z.object({ id: z.string().uuid(), encoding: z.enum(textEncodings) }).strict().parse(input);
+  const defaultPath = textImports.defaultPath(id);
+  const result = await dialog.showSaveDialog(window!, { title: 'Save a new UTF-8 copy', defaultPath, filters: [{ name: 'UTF-8 source copy', extensions: [path.extname(defaultPath).slice(1)] }] });
+  if (result.canceled || !result.filePath) return null;
+  const file = await textImports.save(id, encoding, result.filePath);
+  try {
+    const project = await projects.open(file);
+    project.notices.push('Opened the UTF-8 copy. The original file was kept unchanged.');
+    return restoreWorkspace(project);
+  } catch (e) { throw new Error(`The UTF-8 copy was saved at ${file}, but could not be opened: ${e instanceof Error ? e.message : String(e)}`); }
+});
+handle('project:cancel-text-import', id => textImports.cancel(z.string().uuid().parse(id)));
 handle('project:resume', async () => restoreWorkspace(await projects.resume()));
 handle('project:draft', async () => {
   const result = await dialog.showSaveDialog(window!, { title: 'Choose a folder for the new paper', defaultPath: path.join(app.getPath('documents'), 'new-paper.tex'), filters: [{ name: 'LaTeX or text source', extensions: ['tex', 'txt'] }] });
@@ -138,10 +206,19 @@ async function toolSettingsState(): Promise<ToolSettingsState> {
 }
 const setupIdentity = () => ({ editorVersion: app.getVersion(), platform: process.platform, osVersion: process.getSystemVersion() });
 function reserveSetup() {
-  if (setupBusy || activeToolOperations || compiler.isBusy || codex.client.isBusy) throw new Error('Finish or cancel active Codex, compilation, and PDF navigation before changing or checking setup.');
+  if (setupBusy || setupCatalogBusy || activeToolOperations || compiler.isBusy || codexClients.some(client => client.isBusy)) throw new Error('Finish or cancel active Codex, compilation, and PDF navigation before changing or checking setup.');
   setupBusy = true;
 }
 handle('setup:get', toolSettingsState);
+handle('setup:review-model', async input => {
+  const model = codexModelIdSchema.nullable().parse(input); reserveSetup();
+  try {
+    const { settings } = await tools.load();
+    const saved = await tools.save({ ...settings, codexModel: model });
+    for (const client of codexClients) client.setModel(saved.codexModel ?? null);
+    return toolSettingsState();
+  } finally { setupBusy = false; }
+});
 handle('help:copy-review-prompt', input => { clipboard.writeText(z.string().min(1).max(20000).parse(input)); });
 handle('setup:choose', async input => {
   const tool = z.enum(['codex', 'latexmk']).parse(input);
@@ -154,8 +231,11 @@ handle('setup:save', async input => {
     const saved = await tools.save(parsed);
     // All tool requests are excluded across the await above. Apply both paths
     // together, retaining the compiler's already verified PDF snapshots.
-    compiler.setLatexmk(saved.latexmkPath); codex.client.setBinary(saved.codexPath, saved.codexSource === 'managed' ? managedCodexVersion : undefined, saved.codexSource === 'managed' ? app.getAppPath() : undefined);
-    codex.client.setModel(saved.codexModel ?? null);
+    compiler.setLatexmk(saved.latexmkPath);
+    for (const client of codexClients) {
+      client.setBinary(saved.codexPath, saved.codexSource === 'managed' ? managedCodexVersion : undefined, saved.codexSource === 'managed' ? app.getAppPath() : undefined);
+      client.setModel(saved.codexModel ?? null);
+    }
     return toolSettingsState();
   } finally { setupBusy = false; }
 });
@@ -164,7 +244,10 @@ handle('setup:check', async input => {
   try { return await tools.check(parsed); } finally { setupBusy = false; }
 });
 handle('setup:models', async input => {
-  const parsed = tools.resolve(input); reserveSetup();
+  const parsed = tools.resolve(input);
+  if (setupBusy || setupCatalogBusy) throw new Error('Wait for the current setup or model check.');
+  // Catalog reads use a separate connection and never change running requests.
+  setupCatalogBusy = true;
   const generation = setupCatalogGeneration;
   try {
     if (parsed.codexSource === 'managed') await verifyManagedCodex(app.getAppPath());
@@ -172,7 +255,7 @@ handle('setup:models', async input => {
     if (generation !== setupCatalogGeneration) throw new Error('Codex model check cancelled.');
     setupCatalog = new CodexClient(path.join(runtime, 'setup-models'), parsed.codexPath, parsed.codexSource === 'managed' ? managedCodexVersion : undefined, parsed.codexSource === 'managed' ? app.getAppPath() : undefined);
     return await setupCatalog.listModels();
-  } finally { setupCatalog = null; setupBusy = false; }
+  } finally { setupCatalog = null; setupCatalogBusy = false; }
 });
 handle('setup:copy-details', async input => {
   const parsed = toolSettingsSchema.parse(input); reserveSetup();
@@ -218,6 +301,9 @@ handle('project:guidance', input => { const p = z.object({ projectId: z.string()
 handle('project:workspace', input => { const p = z.object({ projectId: z.string(), workspace: workspaceSchema }).parse(input); return projects.setWorkspace(p.projectId, p.workspace); });
 const versionInput = z.object({ projectId:z.string(), versionId:z.string().regex(/^[a-f0-9]{64}$/) });
 handle('comparison:history', id => projects.versionHistory(z.string().parse(id)));
+handle('comparison:versions', id => projects.comparisonVersions(z.string().parse(id)));
+handle('comparison:initial-paste', input => { const p = textInput.strict().parse(input); return projects.captureInitialPaste(p.projectId, p.text); });
+handle('comparison:select', input => { const p = z.object({ projectId: z.string(), versionId: z.string().uuid() }).strict().parse(input); return projects.selectComparisonVersion(p.projectId, p.versionId); });
 handle('comparison:saved', input => { const p = versionInput.parse(input); return projects.compareSavedVersion(p.projectId,p.versionId); });
 handle('comparison:delete', input => { const p = versionInput.parse(input); return projects.deleteSavedVersion(p.projectId,p.versionId); });
 handle('comparison:budget', input => { const p = z.object({ projectId:z.string(), bytes:historyBudgetSchema }).parse(input); return projects.setHistoryBudget(p.projectId,p.bytes); });
@@ -233,7 +319,7 @@ handle('review:import', async input => {
   const result = await dialog.showOpenDialog(window!, { title: 'Import comments from JSON', properties: ['openFile'], filters: [{ name: 'JSON review', extensions: ['json'] }] });
   return result.canceled ? null : projects.import(result.filePaths[0], parsed.projectId, parsed.text);
 });
-const changesInput = z.object({ projectId: z.string(), before: z.string().max(2000000), after: z.string().max(2000000), name: z.string().max(200), engine: engineSchema, presentation: z.enum(['markup', 'clean']).optional(), proposalId: z.string().max(200).optional(), interactive: z.boolean().optional(), layouts: z.record(z.enum(['inline', 'paired'])).refine(v => Object.keys(v).length <= 100).optional(), arrangementId: z.string().uuid().optional(), selectedPaths: buildInputPathsSchema.optional() }).strict();
+const changesInput = z.object({ projectId: z.string(), before: z.string().max(2000000), after: z.string().max(2000000), name: z.string().max(200), engine: engineSchema, presentation: z.enum(['markup', 'clean']).optional(), proposalId: z.string().max(200).optional(), interactive: z.boolean().optional(), layouts: z.record(z.string(), z.enum(['inline', 'paired'])).refine(v => Object.keys(v).length <= 100).optional(), arrangementId: z.string().uuid().optional(), selectedPaths: buildInputPathsSchema.optional() }).strict();
 handle('build:changes', input => changesPdf.build(changesInput.parse(input)));
 handle('build:changes-presentation', input => { const p = z.object({ projectId: z.string(), artifactId: z.string().uuid(), presentation: z.enum(['markup', 'clean']) }).strict().parse(input); return changesPdf.present(p.projectId, p.artifactId, p.presentation); });
 handle('codex:changes-plan', input => changesPdf.smartPlan(changesInput.parse(input), message => window?.webContents.send('codex:progress', message)));
@@ -298,6 +384,7 @@ handle('attachments:preview', input => { const p = z.object({ projectId: z.strin
 handle('attachments:remove', input => { const p = z.object({ projectId: z.string(), id: z.string().uuid() }).strict().parse(input); projects.get(p.projectId); return attachments.remove(p.projectId, p.id); });
 handle('attachments:clear', id => attachments.clear(z.string().parse(id)));
 handle('references:state', id => references.state(z.string().parse(id)));
+handle('references:project-folder', raw => { const p = z.object({ projectId: z.string(), enabled: z.boolean() }).strict().parse(raw); return references.setProjectFolder(p.projectId, p.enabled); });
 const contextIdSchema = z.object({ projectId: z.string(), id: z.string().uuid() }).strict();
 handle('references:paste', raw => { const p = z.object({ projectId: z.string(), input: pastedContextSchema }).strict().parse(raw); return references.paste(p.projectId, p.input); });
 handle('references:inspect-paste', raw => { const p = contextIdSchema.parse(raw); return references.inspectPaste(p.projectId, p.id); });
@@ -314,9 +401,16 @@ handle('codex:feedback', input => codex.convertFeedback(feedbackRequestSchema.pa
 handle('feedback:prepare', input => codex.prepareFeedback(prepareFeedbackSchema.parse(input)));
 handle('codex:feedback-resume', input => codex.resumeFeedback(resumeFeedbackSchema.parse(input), message => window?.webContents.send('codex:progress', message)));
 handle('feedback:list', id => codex.feedback.list(z.string().parse(id)));
-handle('codex:review', input => { const p = textInput.extend({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), instructions: z.string().max(10000), localEditsOnly: z.boolean().optional(), autoAddComments: z.boolean().optional(), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional() }).parse(input); return codex.review(p, message => window?.webContents.send('codex:progress', message)); });
+handle('codex:conversation', input => codex.conversations.state(z.string().parse(input)));
+handle('codex:conversation-history', input => { const p = z.object({ projectId: z.string(), conversationId: z.string().uuid(), offset: z.number().int().min(0).max(1000).default(0) }).strict().parse(input); return codex.conversations.history(p.projectId, p.conversationId, p.offset); });
+handle('codex:conversation-turn', input => { const p = z.object({ projectId: z.string(), conversationId: z.string().uuid(), requestId: z.string().uuid() }).strict().parse(input); return codex.conversations.inspect(p.projectId, p.conversationId, p.requestId); });
+handle('codex:conversation-exchange', input => { const p = z.object({ projectId: z.string(), conversationId: z.string().uuid(), requestId: z.string().uuid() }).strict().parse(input); return codex.conversations.exchange(p.projectId, p.conversationId, p.requestId); });
+handle('codex:review', input => { const p = textInput.extend({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), changesSince: z.string().regex(/^[a-f0-9]{64}$/).optional(), instructions: z.string().max(10000), conversationMode: z.enum(['continue', 'fresh']).optional(), localEditsOnly: z.boolean().optional(), autoAddComments: z.boolean().optional(), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional() }).parse(input); return codex.review(p, message => window?.webContents.send('codex:progress', message), () => window?.webContents.send('codex:review-result', p.projectId)); });
 handle('codex:reply', input => { const p = textInput.extend({ comment: commentSchema, message: z.string().min(1).max(10000), attachmentPreviewId: attachmentPreviewIdSchema.optional(), requestId: z.string().uuid().optional(), deeper: z.boolean().optional(), action: replyActionSchema.optional() }).parse(input); return codex.reply(p, message => window?.webContents.send('codex:progress', message)); });
+handle('codex:repair-anchors', input => codex.repairAnchors(anchorRepairRequestSchema.parse(input), message => window?.webContents.send('anchors:progress', message)));
+handle('anchors:cancel', () => codex.cancelAnchorRepair());
 handle('codex:waiting', id => codex.results.list(z.string().parse(id)));
+handle('codex:request-results', input => { const p = z.object({ projectId: z.string(), requestIds: z.array(z.string().uuid()).min(1).max(500) }).strict().parse(input); return codex.results.forRequests(p.projectId, p.requestIds); });
 handle('chat:pending', () => helpChat.pending());
 handle('chat:pending-reply', id => helpChat.pendingReply(z.string().regex(/^[a-f0-9]{64}$/).parse(id)));
 handle('chat:recover', async input => {
@@ -334,19 +428,20 @@ handle('chat:preview', input => {
 });
 handle('codex:chat', input => {
   const parsed = chatScopeSchema.extend({ previewId: z.string().uuid() }).strict().parse(input);
-  return helpChat.send({ projectId: parsed.projectId }, parsed.previewId, message => window?.webContents.send('codex:progress', message));
+  return helpChat.send({ projectId: parsed.projectId }, parsed.previewId, message => window?.webContents.send('chat:progress', message), projectId => window?.webContents.send('codex:review-result', projectId));
 });
+handle('chat:cancel', () => helpChat.cancel());
 handle('codex:acknowledge', input => { const p = z.object({ projectId: z.string(), resultId: z.string().uuid(), outcome: z.enum(['adopted', 'dismissed']) }).parse(input); return codex.results.acknowledge(p.projectId, p.resultId, p.outcome); });
-handle('codex:cancel', () => { buildHelp.cancel(); changesPdf.cancel(); return Promise.all([helpChat.cancel(), codex.cancel()]); });
+handle('codex:cancel', () => { buildHelp.cancel(); changesPdf.cancel(); return codex.cancel(); });
 handle('codex:preamble', input => codex.preamble(preambleRequestSchema.parse(input), message => window?.webContents.send('codex:progress', message)));
 function cancelSetupCatalog() { setupCatalogGeneration++; return setupCatalog?.cancel(); }
 async function settleWindowWork() {
   debugSuspended = true;
   try {
   changesPdf.cancel();
-  await Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), attachments.stop(), cancelSetupCatalog()]);
+  await Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), codex.cancelAnchorRepair(), references.stop(), attachments.stop(), cancelSetupCatalog()]);
   // A finished model process can still have an answer being validated/written.
-  await Promise.all([changesPdf.settle(), codex.settle(), helpChat.settle()]); await projects.settle();
+  await Promise.all([changesPdf.settle(), codex.settle(), helpChat.settle(), references.settle()]); await projects.settle();
   await debugCapture; await debug.settle();
   } finally { debugSuspended = false; }
 }
@@ -355,7 +450,65 @@ handle('project:close', async id => {
   await settleWindowWork();
   await projects.close(projectId);
 });
+const cleanupOptions = z.object({ mode: z.enum(['temporary', 'forget']), days: z.union([z.literal(7), z.literal(30), z.literal(90)]) }).strict();
+async function dataOperation<T>(action: () => Promise<T>) {
+  if (cleanupBusy) throw new Error('Wait for cleanup inspection to finish.');
+  cleanupBusy = true; cleanupLocked = true;
+  try { await settleWindowWork(); await Promise.all([...activeRequests]); return await action(); }
+  finally { cleanupBusy = false; debugSuspended = true; }
+}
+handle('data:list', input => { const options = cleanupOptions.parse(input); return dataOperation(() => dataCleanup.list(options.mode, options.days)); });
+handle('data:choose', input => {
+  const options = cleanupOptions.parse(input);
+  return dataOperation(async () => {
+    const result = await dialog.showOpenDialog(window!, { title: 'Choose a paper to inspect its ME data', properties: ['openFile'], filters: [{ name: 'Source documents', extensions: ['tex', 'txt'] }] });
+    if (result.canceled || !result.filePaths[0]) return null;
+    dataCleanup.add(await fs.realpath(result.filePaths[0]), true);
+    return dataCleanup.list(options.mode, options.days);
+  });
+});
+handle('data:preview', input => {
+  const options = cleanupOptions.extend({ ids: z.array(z.string().regex(/^[a-f0-9]{64}$/)).min(1).max(100) }).parse(input);
+  return dataOperation(async () => { const preview = await dataCleanup.preview(options.ids, options.mode, options.days); cleanupPapers = preview.papers ?? []; return preview; });
+});
+handle('data:confirm', input => {
+  const id = z.string().uuid().parse(input);
+  if (!cleanupLocked) throw new Error('Preview the files before cleanup.');
+  return dataOperation(async () => {
+    const result = await projectCleanup.confirm('selected-papers', id); cleanupArchive = result.archivePath;
+    for (const paper of cleanupPapers) references.forgetCached(paper);
+    return result;
+  });
+});
+handle('project:cleanup-preview', async id => {
+  const projectId = z.string().parse(id); projects.get(projectId);
+  if (cleanupBusy) throw new Error('Cleanup is already finishing.');
+  cleanupLocked = true; cleanupBusy = true;
+  try { await settleWindowWork(); await Promise.all([...activeRequests]); return await projectCleanup.preview(projectId); }
+  finally { cleanupBusy = false; debugSuspended = true; }
+});
+handle('project:cleanup-cancel', () => {
+  if (cleanupBusy) throw new Error('Cleanup is already finishing.');
+  projectCleanup.cancel(); cleanupLocked = false; debugSuspended = false;
+});
+handle('project:cleanup-confirm', async input => {
+  const value = z.object({ projectId: z.string(), previewId: z.string().uuid() }).strict().parse(input);
+  if (!cleanupLocked || cleanupBusy) throw new Error('Preview the files before clearing editing data.');
+  cleanupBusy = true;
+  try {
+    const paper = projects.get(value.projectId).path;
+    const result = await projectCleanup.confirm(value.projectId, value.previewId);
+    cleanupArchive = result.archivePath;
+    references.forgetCached(paper);
+    try { await projects.close(value.projectId); }
+    catch (error) { projects.current = null; result.warning = [result.warning, `The last-opened pointer could not be cleared: ${String(error)} The source may reopen on restart.`].filter(Boolean).join(' '); }
+    return result;
+  } finally { cleanupBusy = false; }
+});
+handle('project:cleanup-open-archive', async () => { if (cleanupArchive) { const error = await shell.openPath(cleanupArchive); if (error) throw new Error(error); } });
 async function finishClose() {
+  if (cleanupBusy) throw new Error('Wait for cleanup to finish before closing the window.');
+  projectCleanup.cancel(); cleanupLocked = false;
   await settleWindowWork();
   closing = true; window?.close();
 }
@@ -367,7 +520,7 @@ async function createWindow() {
   window.webContents.on('will-navigate', (event, url) => { if (url !== documentURL) event.preventDefault(); });
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   window.webContents.on('console-message', details => { if (['warning', 'error'].includes(details.level)) console.error('Renderer:', details.message); });
-  window.webContents.on('render-process-gone', () => { rendererGone = true; changesPdf.cancel(); void Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), attachments.stop(), cancelSetupCatalog()]).catch(console.error); });
+  window.webContents.on('render-process-gone', () => { rendererGone = true; changesPdf.cancel(); void Promise.all([compiler.stop(), helpChat.cancel(), codex.cancel(), codex.cancelAnchorRepair(), references.stop(), attachments.stop(), cancelSetupCatalog()]).catch(console.error); });
   window.on('close', event => { if (!closing) { event.preventDefault(); if (rendererGone) void finishClose().catch(console.error); else window?.webContents.send('window:close-requested'); } });
   window.on('closed', () => { window = null; });
   await window.loadFile(documentFile);
@@ -377,8 +530,11 @@ if (primaryInstance) app.whenReady().then(async () => {
   const storage = await prepareRuntimeStorage({ directory: runtime, isolated: runtimeOverride !== undefined, legacyDirectory: app.isPackaged ? userData : path.join(app.getAppPath(), '.runtime') });
   storageNotices = storage.notices;
   const settings = await tools.load();
-  compiler.setLatexmk(settings.settings.latexmkPath); codex.client.setBinary(settings.settings.codexPath, settings.settings.codexSource === 'managed' ? managedCodexVersion : undefined, settings.settings.codexSource === 'managed' ? app.getAppPath() : undefined);
-  codex.client.setModel(settings.settings.codexModel ?? null);
+  compiler.setLatexmk(settings.settings.latexmkPath);
+  for (const client of codexClients) {
+    client.setBinary(settings.settings.codexPath, settings.settings.codexSource === 'managed' ? managedCodexVersion : undefined, settings.settings.codexSource === 'managed' ? app.getAppPath() : undefined);
+    client.setModel(settings.settings.codexModel ?? null);
+  }
   storageNotices.push(...settings.notices);
   app.setAboutPanelOptions({ applicationName: 'Modern Codex Editor', applicationVersion: app.getVersion(),
     authors: [editorAuthor], copyright: `© 2026 ${editorAuthor}. MIT license.`, credits: predecessorCredit,

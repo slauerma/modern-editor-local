@@ -21,19 +21,19 @@ await fs.writeFile(path.join(copy, 'package.json'), JSON.stringify({ name: 'help
 const probeFile=path.join(root,'chat-probe.json');
 const injection = `
 const chatProbe={requests:[],pending:null,compileAttempts:0};
-ipcMain.removeHandler('setup:models');ipcMain.handle('setup:models',()=>[{id:'test-smart',name:'Test Smart',efforts:['low','medium','high','xhigh','max','ultra'],images:true,fast:true,isDefault:true},{id:'test-quick',name:'Test Quick',efforts:['low','medium'],images:true,fast:false,isDefault:false}]);
+ipcMain.removeHandler('setup:models');ipcMain.handle('setup:models',()=>[{id:'gpt-6.1-sol',name:'GPT-6.1 Sol',efforts:['low','medium','high','xhigh','max','ultra'],images:true,fast:true,isDefault:false},{id:'test-smart',name:'Test Smart',efforts:['low','medium','high','xhigh','max','ultra'],images:true,fast:true,isDefault:true},{id:'test-quick',name:'Test Quick',efforts:['low','medium'],images:true,fast:false,isDefault:false}]);
 const probePath=${JSON.stringify(probeFile)};
 function writeChatProbe(){
   const fs=require('node:fs');
   fs.writeFileSync(probePath+'.tmp',JSON.stringify({count:chatProbe.requests.length,pending:!!chatProbe.pending,compileAttempts:chatProbe.compileAttempts,request:chatProbe.requests.at(-1)}));
   fs.renameSync(probePath+'.tmp',probePath);
 }
-codex.client.run=async(prompt,schema,progress,effort,fast,reader,options)=>{
+chatClient.run=async(prompt,schema,progress,effort,fast,reader,options)=>{
   if(chatProbe.pending)throw new Error('Concurrent requests');
   chatProbe.requests.push({prompt:JSON.parse(prompt),model:options?.model,effort,fast,images:options?.images??[]});
   return new Promise((resolve,reject)=>{chatProbe.pending={resolve,reject};writeChatProbe();});
 };
-codex.client.cancel=codex.client.stop=async()=>{const p=chatProbe.pending;chatProbe.pending=null;writeChatProbe();p?.reject(new Error('Synthetic cancellation'));};
+chatClient.cancel=chatClient.stop=async()=>{const p=chatProbe.pending;chatProbe.pending=null;writeChatProbe();p?.reject(new Error('Synthetic cancellation'));};
 compiler.compile=async()=>{chatProbe.compileAttempts++;writeChatProbe();throw new Error('Unexpected compilation from chat');};
 globalThis.__chatProbe=chatProbe;globalThis.__writeChatProbe=writeChatProbe;writeChatProbe();
 `;
@@ -60,7 +60,7 @@ async function complete(answer,hidden=false){await application.evaluate((_,answe
 async function shot(name){await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].showInactive());try{await page.screenshot({path:path.join(evidence,name+'.png'),scale:'css'});receipt.screenshots.push(name+'.png');}finally{await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].hide());}}
 async function check(name){assert.equal((await probe()).compileAttempts,0);assert.equal(await fs.readFile(file,'utf8'),source);receipt.checks.push(name);console.log('PASS',name);}
 async function buffer(){return page.getByLabel('Document source',{exact:true}).evaluate(el=>window.editorViewForTest(el).state.doc.toString());}
-async function launch(){application=await _electron.launch({executablePath:appRequire('electron'),args:[copy],cwd:appRoot,env:{...process.env,MODERN_EDITOR_RUNTIME_DIR:path.join(root,'runtime')},chromiumSandbox:true,timeout:25000});const child=application.process();receipt.processes.push({pid:child.pid,exited:false});console.log('Owned Electron PID',child.pid);page=await application.firstWindow();page.setDefaultTimeout(12000);page.on('pageerror',e=>receipt.errors.push(String(e)));await page.evaluate(reader.outputFiles[0].text);await application.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setContentSize(1450,960);w.webContents.setBackgroundThrottling(false);w.hide();});}
+async function launch(){application=await _electron.launch({executablePath:appRequire('electron'),args:[copy],cwd:appRoot,env:{...process.env,MODERN_EDITOR_RUNTIME_DIR:path.join(root,'runtime')},chromiumSandbox:true,timeout:25000});const child=application.process();receipt.processes.push({pid:child.pid,exited:false});console.log('Owned Electron PID',child.pid);page=await application.firstWindow();page.setDefaultTimeout(12000);page.on('pageerror',e=>receipt.errors.push(String(e)));await page.getByRole('button',{name:'Codex Side Chat',exact:true}).waitFor();await page.evaluate(reader.outputFiles[0].text);await application.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setContentSize(1450,960);w.webContents.setBackgroundThrottling(false);w.hide();});}
 async function close(){const child=application.process();await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].close());await poll(async()=>child.exitCode!==null||child.signalCode!==null,'owned Electron exit');assert.equal(child.exitCode,0);Object.assign(receipt.processes.find(p=>p.pid===child.pid),{exited:true,exitCode:child.exitCode});application=null;}
 async function openPaper(){await application.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},file);await page.getByRole('button',{name:'Actions ▾',exact:true}).click();await page.getByRole('button',{name:'Open paper…',exact:true}).click();await page.getByLabel('Document source',{exact:true}).waitFor();assert.equal(await buffer(),source);}
 async function pasteScreenshot(dataUrl,name){await question().evaluate((el,{dataUrl,name})=>{const bytes=Uint8Array.from(atob(dataUrl.split(',')[1]),c=>c.charCodeAt(0));const dt=new DataTransfer();dt.items.add(new File([bytes],name,{type:'image/png'}));el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}));},{dataUrl,name});}
@@ -108,7 +108,7 @@ try{
   assert.equal(await question().inputValue(),'Draft with an attachment');assert(await drawer().getByAltText('Synthetic warning.png').isVisible());
   await ask('Explain this screenshot.');request=await lastRequest();assert.equal(request.images.length,1);assert(!Buffer.from(request.images[0].split(',')[1],'base64').includes(Buffer.from('SYNTHETIC_METADATA_TO_REMOVE')));assert(!JSON.stringify(request.prompt).includes('data:image'));
   await complete({reply:'The attached synthetic image is available as an image input.',suggestion:null});await shot('02-screenshot-message');await check('Paste, drop, enlarge, remove, file attachment and main-process image normalization');
-  await ask('Retry this same question after stopping.');await button('Stop').click();await poll(()=>question().isEnabled(),'cancel completion');assert.equal(await question().inputValue(),'Retry this same question after stopping.');await ask('Retry this same question after stopping.');await complete({reply:'The unchanged question can be retried after Stop.',suggestion:null});await check('Stop retains question and unchanged retry uses a fresh preview');
+  await ask('Retry this same question after stopping.');await button('Stop Side Chat').click();await poll(()=>question().isEnabled(),'cancel completion');assert.equal(await question().inputValue(),'Retry this same question after stopping.');await ask('Retry this same question after stopping.');await complete({reply:'The unchanged question can be retried after Stop.',suggestion:null});await check('Stop retains question and unchanged retry uses a fresh preview');
   await question().fill('Keep this unsent question.');await button('Close Codex Side Chat').click();await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert.equal(await question().inputValue(),'Keep this unsent question.');await button('Close Codex Side Chat').click();
   await openPaper();
   await page.getByRole('button',{name:'Actions ▾',exact:true}).click();
@@ -117,11 +117,11 @@ try{
   assert.equal(await paperEffort.locator('option[value=xhigh]').count(),1);assert.equal(await paperEffort.locator('option[value=ultra]').count(),1);
   await paperEffort.selectOption('xhigh');await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Actions ▾',exact:true}).click();await page.locator('summary').filter({hasText:/^Codex effort ·/}).click();await poll(()=>paperEffort.isEnabled(),'paper effort reload');assert.equal(await paperEffort.inputValue(),'xhigh');await page.keyboard.press('Escape');
-  await check('Paper effort uses the catalog and saves Extra deep independently of Side Chat Ultra');
+  await check('Paper effort uses the catalog and saves Extra high independently of Side Chat Ultra');
   await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert.equal(await scope().inputValue(),'paper');assert.equal(await drawer().locator('.chat-turn').count(),0);
   await question().fill('Keep this paper question.');await pasteScreenshot(image,'Unsent paper.png');await drawer().getByAltText('Unsent paper.png').waitFor();await scope().selectOption('editor');assert.equal(await question().inputValue(),'Keep this unsent question.');await scope().selectOption('paper');assert.equal(await question().inputValue(),'Keep this paper question.');assert(await drawer().getByAltText('Unsent paper.png').isVisible());await button('Remove Unsent paper.png').click();await check('Switching conversations preserves separate unsent messages and attachments');
   await ask('Improve the grammar of the first sentence.');request=await lastRequest();assert.equal(request.prompt.source.text,source);assert(!request.prompt.diagnostics);assert.equal(request.model,'test-smart');assert.equal(request.effort,'ultra');assert.equal(request.fast,true);await complete(answer);assert.equal(await buffer(),source);assert.equal(await drawer().locator('.chat-suggestion').count(),1);await shot('03-paper-proposal');
-  await button('Add comment').click();assert(await drawer().isVisible());await poll(()=>button('Added').isDisabled(),'individual addition remains visible');await button('Close Codex Side Chat').click();assert.equal(await buffer(),source);await page.getByRole('button',{name:'Edit',exact:true}).click();assert.equal(await page.getByLabel('Proposed replacement',{exact:true}).inputValue(),answer.suggestion.replacement);
+  await button('Add comment').click();assert(await drawer().isVisible());await poll(()=>button('Added to Comments').isDisabled(),'individual addition remains visible');await button('Close Codex Side Chat').click();assert.equal(await buffer(),source);await page.getByRole('button',{name:'Edit',exact:true}).click();assert.equal(await page.getByLabel('Proposed replacement',{exact:true}).inputValue(),answer.suggestion.replacement);
   await application.evaluate(({Menu,BrowserWindow})=>{const item=Menu.getApplicationMenu().items.find(x=>x.label==='Edit').submenu.items.find(x=>x.label==='Undo');item.click(item,BrowserWindow.getAllWindows()[0],{});});await poll(()=>page.getByLabel('Proposed replacement',{exact:true}).count().then(n=>n===0),'undo added comment');await check('Adding a visible proposal is undoable and never changes source');
   await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();await ask('Give me three independent comments.');
   const batch={reply:'Three separate comments. Add whichever you want to review.',suggestions:[answer.suggestion,
@@ -131,13 +131,13 @@ try{
   await complete(batch);const batchTurn=drawer().locator('.chat-turn').last();assert.equal(await batchTurn.locator('.chat-suggestion').count(),3);
   await shot('06-multiple-comments');await batchTurn.getByRole('button',{name:'Add comment',exact:true}).first().click();assert(await drawer().isVisible());await button('Close Codex Side Chat').click();
   await page.getByRole('button',{name:'Reject',exact:true}).click();
-  await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert(await batchTurn.getByRole('button',{name:'Added',exact:true}).isDisabled());assert(await button('Add all and review (2)').isEnabled());
+  await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert(await batchTurn.getByRole('button',{name:'Added to Comments',exact:true}).isDisabled());assert(await button('Add all and review (2)').isEnabled());
   await button('Add all and review (2)').click();await poll(()=>drawer().isHidden(),'batch addition');assert.equal(await buffer(),source);
   await page.locator('footer').getByText('2 open · 0 applied',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert(await button('All added').isDisabled());assert.equal(await batchTurn.getByRole('button',{name:'Added',exact:true}).count(),3);await button('Close Codex Side Chat').click();
+  await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert(await button('All added to Comments').isDisabled());assert.equal(await batchTurn.getByRole('button',{name:'Added to Comments',exact:true}).count(),3);await button('Close Codex Side Chat').click();
   await application.evaluate(({Menu,BrowserWindow})=>{const item=Menu.getApplicationMenu().items.find(x=>x.label==='Edit').submenu.items.find(x=>x.label==='Undo');item.click(item,BrowserWindow.getAllWindows()[0],{});});
   await page.locator('footer').getByText('0 open · 0 applied',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert.equal(await batchTurn.getByRole('button',{name:'Added',exact:true}).count(),1);assert(await button('Add all and review (2)').isEnabled());
+  await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();assert.equal(await batchTurn.getByRole('button',{name:'Added to Comments',exact:true}).count(),1);assert(await button('Add all and review (2)').isEnabled());
   await batchTurn.getByRole('button',{name:'Discuss this',exact:true}).nth(1).click();await ask('What does comment 2 propose?');request=await lastRequest();assert.equal(request.prompt.history.exchanges.at(-1).comments[1].original,batch.suggestions[1].original);assert.equal(request.prompt.history.selectedSuggestion.number,2);assert.equal(request.prompt.history.selectedSuggestion.original,batch.suggestions[1].original);
   await complete({reply:'Comment 2 removes a redundant adjective.',suggestions:[]});await check('Three comments can be added individually or together; rejected comments stay in History, batch Undo is atomic, and follow-ups include numbered proposals');
   await ask('Improve that sentence again while I edit.');
@@ -167,7 +167,7 @@ try{
   assert.equal(await paperEffort.locator('option[value=xhigh]').count(),1);assert.equal(await paperEffort.locator('option[value=ultra]').count(),1);
   await paperEffort.selectOption('xhigh');await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Actions ▾',exact:true}).click();await page.locator('summary').filter({hasText:/^Codex effort ·/}).click();await poll(()=>paperEffort.isEnabled(),'paper effort reload');assert.equal(await paperEffort.inputValue(),'xhigh');await page.keyboard.press('Escape');
-  await check('Paper effort uses the catalog and saves Extra deep independently of Side Chat Ultra');
+  await check('Paper effort uses the catalog and saves Extra high independently of Side Chat Ultra');
   await page.getByRole('button',{name:'Codex Side Chat',exact:true}).click();}
   await poll(()=>drawer().locator('.chat-turn').count().then(n=>n===4),'paper chat restored');
   await scope().selectOption('editor');await drawer().getByText('The unchanged question can be retried after Stop.',{exact:true}).waitFor();assert.equal(await drawer().getByAltText('Synthetic warning.png').count(),1);await shot('05-reopened-editor-conversation');await check('Restart restores placement, independent chat model/effort/speed, separate conversations and screenshots');

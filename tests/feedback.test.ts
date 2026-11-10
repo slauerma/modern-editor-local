@@ -23,7 +23,7 @@ async function fixture() {
   const projects = new ProjectService(path.join(root, 'runtime')), p = await projects.open(file);
   const attachments = new AttachmentService({ pdfModulePath: fileURLToPath(new URL('../node_modules/pdfjs-dist/legacy/build/pdf.mjs', import.meta.url)) });
   const service = new CodexService(projects, path.join(root, 'codex'), attachments);
-  const request = { projectId: p.id, text: source, label: 'Referee report', feedback: rawFeedback };
+  const request = { projectId: p.id, text: source, label: 'External feedback', feedback: rawFeedback };
   return { root, file, projects, p, service, attachments, request };
 }
 function suggestion(overrides: Record<string, unknown> = {}) {
@@ -36,14 +36,18 @@ function record(comments = [commentSchema.parse({ ...suggestion(), id: randomUUI
 test('outside feedback is retained exactly before the model request and survives reopening', async () => {
   const f = await fixture();
   let calls = 0;
-  f.service.client.run = async prompt => {
+  f.service.client.run = async (prompt, _schema, _progress, _effort, _fast, reader) => {
     calls++;
     const saved = await f.service.feedback.list(f.p.id);
     assert.equal(saved.items.length, 1);
     assert.equal(saved.items[0].status, 'saved');
     assert.equal(saved.items[0].feedback, rawFeedback);
     assert.equal(saved.items[0].source, source);
-    assert.deepEqual(JSON.parse(prompt), feedbackContext(f.request, f.p.paperInstructions));
+    const { availableReferences, ...payload } = JSON.parse(prompt);
+    assert.deepEqual(payload, feedbackContext(f.request, f.p.paperInstructions));
+    assert(!prompt.includes(source)); assert(!prompt.includes(rawFeedback)); assert(reader);
+    assert.equal((await reader.call('references_read', { fileId: 'current-draft' }) as any).excerpts[0].text, source);
+    assert.match((await reader.call('references_read', { fileId: 'outside-feedback' }) as any).excerpts[0].text, /Outside feedback/);
     return { comments: [suggestion()] };
   };
   const converted = await f.service.convertFeedback(f.request, () => {});
@@ -180,12 +184,15 @@ test('the actual review and reply service use exactly the displayed reference pa
   const preview = await f.attachments.preview(f.p.id, [{ id: inventory.items[0].id, lines: '2' }]);
   const review = { projectId: f.p.id, text: source, from: 0, to: source.length, instructions: 'Check reasoning.', attachmentPreviewId: preview.id };
   const reply = { projectId: f.p.id, text: source, comment: commentSchema.parse({ ...suggestion(), id: randomUUID() }), message: 'Compare with the reference.', attachmentPreviewId: preview.id };
-  const prompts: unknown[] = [];
+  const prompts: any[] = [];
   f.service.client.run = async prompt => { prompts.push(JSON.parse(prompt)); return prompts.length === 1 ? { comments: [] } : { reply: 'Compare the hypotheses.', replacement: null, packages: [] }; };
   await f.service.review(review, () => {});
   await f.service.reply(reply, () => {});
-  assert.deepEqual(prompts[0], reviewContext(review, f.p.paperInstructions, attachmentPromptContext(preview)));
-  assert.deepEqual(prompts[1], replyContext(reply, f.p.paperInstructions, attachmentPromptContext(preview)));
+  const { reviewConversation, availableReferences, ...reviewPayload } = prompts[0];
+  const { reviewConversation: continued, availableReferences: replyReferences, ...replyPayload } = prompts[1];
+  assert.equal(reviewConversation.id, continued.id); assert(availableReferences.documents.some((d: any) => d.fileId === 'selected-context')); assert(replyReferences.documents.some((d: any) => d.fileId === 'selected-context'));
+  assert.deepEqual(reviewPayload, reviewContext(review, f.p.paperInstructions, attachmentPromptContext(preview)));
+  assert.deepEqual(replyPayload, replyContext(reply, f.p.paperInstructions, attachmentPromptContext(preview)));
   assert.doesNotMatch(JSON.stringify(prompts), /Not selected/);
   assert(!JSON.stringify(prompts).includes(f.root));
   await fs.writeFile(file, 'Changed supporting argument.');

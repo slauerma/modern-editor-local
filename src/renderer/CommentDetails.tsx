@@ -4,6 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties
 export function CommentDetails({ children, infoLabel }: { children: ReactNode; infoLabel?: string }) {
   const id = useId(), root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), popup = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false), pinned = useRef(false), timer = useRef<ReturnType<typeof setTimeout>>();
+  const suppressFocus = useRef(false);
   const [position, setPosition] = useState<CSSProperties>({ visibility: 'hidden' });
   const clear = () => clearTimeout(timer.current);
   const close = () => { clear(); pinned.current = false; setOpen(false); };
@@ -22,11 +23,12 @@ export function CommentDetails({ children, infoLabel }: { children: ReactNode; i
   useEffect(() => {
     if (!open) return;
     const pointer = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) close(); };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close(); trigger.current?.focus({ preventScroll: true }); } };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close(); if (document.activeElement !== trigger.current) { suppressFocus.current = true; trigger.current?.focus({ preventScroll: true }); } } };
     document.addEventListener('pointerdown', pointer); document.addEventListener('keydown', key);
     return () => { document.removeEventListener('pointerdown', pointer); document.removeEventListener('keydown', key); };
   }, [open]);
   return <div className={infoLabel ? 'comment-details info-hint' : 'comment-details'} ref={root}
+    onFocus={e => { if (suppressFocus.current) { suppressFocus.current = false; return; } if (infoLabel && (e.target as EventTarget) === trigger.current) { clear(); timer.current = setTimeout(() => setOpen(true), 180); } }}
     onPointerEnter={e => { if (e.pointerType === 'mouse') { clear(); timer.current = setTimeout(() => setOpen(true), 180); } }}
     onPointerLeave={() => { clear(); timer.current = setTimeout(() => { if (!pinned.current && !root.current?.contains(document.activeElement)) setOpen(false); }, 160); }}
     onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) close(); }}>

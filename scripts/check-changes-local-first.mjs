@@ -151,7 +151,7 @@ try {
 
   await write(after);await hold();await refresh();await held();
   const stoppedId=await pane().getAttribute('data-artifact');
-  await pane().getByRole('button',{name:'Stop',exact:true}).click();await release();await settled();
+  await pane().getByRole('button',{name:'Stop comparison',exact:true}).click();await release();await settled();
   assert.equal(await pane().getAttribute('data-artifact'),stoppedId);
   assert((await pane().innerText()).includes('Updates paused'));
   assert(await pane().getByRole('region',{name:'Compiled PDF',exact:true}).isVisible());

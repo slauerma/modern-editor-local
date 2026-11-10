@@ -1,0 +1,12 @@
+.recent-projects-backdrop { position: fixed; inset: 0; z-index: 220; background: #14282033; display: grid; place-items: center; padding: 24px; }
+.recent-projects-dialog { width: min(780px, 100%); max-height: calc(100dvh - 48px); overflow: auto; background: white; border: 1px solid var(--line); border-radius: 10px; padding: 24px; box-shadow: 0 16px 48px #14282024; font-size: 15px; }
+.recent-projects-dialog header, .recent-projects-dialog footer { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
+.recent-projects-dialog h2 { font-size: 19px; margin: 0; }
+.recent-projects-dialog input { width: 100%; }
+.recent-projects-dialog ul { list-style: none; margin: 16px 0; padding: 0; }
+.recent-projects-dialog li button { display: block; width: 100%; padding: 12px 8px; text-align: left; white-space: normal; overflow-wrap: anywhere; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: white; }
+.recent-projects-dialog li button:hover:not(:disabled) { background: #f5f7f4; }
+.recent-projects-dialog span, .recent-projects-dialog small { display: block; margin-top: 4px; overflow-wrap: anywhere; font-size: 13px; color: #53645a; }
+.recent-projects-dialog footer { justify-content: flex-end; }
+.recent-projects-trigger { color: inherit; padding: 4px 2px; border: 0; background: transparent; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-name .recent-projects-trigger strong { font-size: 13px; }

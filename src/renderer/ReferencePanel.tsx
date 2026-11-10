@@ -3,18 +3,20 @@ import { PASTED_CONTEXT_BYTES, type ReferenceState, type SourcesHistory, type Pa
 import { useDialogFocus } from './use-dialog-focus.ts';
 import './references.css';
 
-export function ReferencePanel({ projectId, disabled, onState, showSources, convert }: { projectId: string; disabled: boolean; onState(state: ReferenceState): void; showSources(): void; convert(id: string): void }) {
-  const [state, setState] = useState<ReferenceState>({ roots: [], notices: [] });
+export function ReferencePanel({ projectId, state, disabled, onState, showSources, convert, pasteRequest = 0 }: { projectId: string; state: ReferenceState; disabled: boolean; onState(state: ReferenceState): void; showSources(): void; convert(id: string): void; pasteRequest?: number }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [pasting, setPasting] = useState(false), [name, setName] = useState(''), [text, setText] = useState('');
   const [inspected, setInspected] = useState<(PastedContext & { id: string }) | null>(null), [copied, setCopied] = useState(false);
   const bytes = new TextEncoder().encode(text).length;
   const mounted = useRef(true), working = useRef(false), changed = useRef(onState); changed.current = onState;
   const pasteRevision = useRef(0);
-  function apply(next: ReferenceState) { if (mounted.current) { setState(next); changed.current(next); } }
+  const draftField = useRef<HTMLTextAreaElement>(null), pasteForm = useRef<HTMLElement>(null);
+  const [savedPaste, setSavedPaste] = useState<{ id: string; name: string } | null>(null);
+  useEffect(() => { if (pasteRequest) setPasting(true); }, [pasteRequest]);
+  useEffect(() => { if (pasting) { pasteForm.current?.scrollIntoView({ block: 'start' }); draftField.current?.focus({ preventScroll: true }); } }, [pasting, pasteRequest]);
+  function apply(next: ReferenceState) { if (mounted.current) changed.current(next); }
   useEffect(() => {
     mounted.current = true;
-    void window.editor.referenceState(projectId).then(apply).catch(e => { if (mounted.current) setError(String(e)); });
     return () => { mounted.current = false; };
   }, [projectId]);
   async function act(action: () => Promise<ReferenceState | null>) {
@@ -30,19 +32,24 @@ export function ReferencePanel({ projectId, disabled, onState, showSources, conv
   async function savePaste() {
     const revision = pasteRevision.current;
     await act(async () => {
-      const next = await window.editor.pasteContext(projectId, { name, text });
+      const previousIds = new Set(state.roots.map(root => root.id));
+      const next = await window.editor.pasteContext(projectId, { name: name.trim() || 'Pasted material', text });
       // The saved snapshot may finish after the author has started another
       // paste. Only clear the draft that this request actually saved.
-      if (mounted.current && pasteRevision.current === revision) { setName(''); setText(''); setPasting(false); }
+      if (mounted.current && pasteRevision.current === revision) {
+        const saved = next.roots.find(root => root.kind === 'paste' && !previousIds.has(root.id));
+        setSavedPaste(saved ? { id: saved.id, name: saved.name } : null); setName(''); setText(''); setPasting(false);
+      }
       return next;
     });
   }
   return <section className="reference-panel" aria-label="Remembered references">
-    <p>Attach once for this paper. When you ask, Codex can find and read relevant material here. Read-only excerpts are sent to your configured Codex service; the draft in the editor remains authoritative.</p>
-    <div className="attachment-actions"><button disabled={disabled || busy} onClick={() => setPasting(true)}>Paste context…</button><button disabled={disabled || busy} onClick={() => void act(() => window.editor.addReferences(projectId, true))}>Add reference folder…</button><button disabled={disabled || busy} onClick={() => void act(() => window.editor.addReferences(projectId, false))}>Add reference files…</button><button onClick={showSources}>Sources used…</button></div>
-    {pasting && <section className="pasted-context" aria-label="Paste context">
-      <label>Name<input aria-label="Context name" maxLength={200} value={name} onChange={e => { pasteRevision.current++; setName(e.target.value); }} placeholder="Background notes, referee report…" /></label>
-      <label>Text<textarea aria-label="Pasted context text" value={text} onChange={e => { pasteRevision.current++; setText(e.target.value); }} onPaste={e => {
+    <div className="attachment-actions"><button disabled={disabled || busy} onClick={() => setPasting(true)}>Paste material (context/comments)…</button><button disabled={disabled || busy} onClick={() => void act(() => window.editor.addReferences(projectId, true))}>Add reference folder…</button><button disabled={disabled || busy} onClick={() => void act(() => window.editor.addReferences(projectId, false))}>Add reference files…</button><button onClick={showSources}>Sources used…</button></div>
+    {savedPaste && !pasting && <div className="paste-saved" role="status"><span>Saved “{savedPaste.name}” · available to the next review.</span><button disabled={disabled || busy} onClick={() => convert(savedPaste.id)}>Turn into comments…</button></div>}
+    {pasting && <section ref={pasteForm} className="pasted-context" aria-label="Paste context">
+      <div className="paste-save-row"><button disabled={disabled || busy || !text.trim() || bytes > PASTED_CONTEXT_BYTES} onClick={() => void savePaste()}>Save and enable for this paper</button><span role="status">{busy ? 'Saving…' : 'Not yet saved'}</span><button onClick={() => setPasting(false)}>Hide draft</button></div>
+      <label>Name (optional)<input aria-label="Context name" maxLength={200} value={name} onChange={e => { pasteRevision.current++; setName(e.target.value); }} placeholder="Background notes, external feedback…" /></label>
+      <label>Text<textarea ref={draftField} aria-label="Pasted context text" value={text} onChange={e => { pasteRevision.current++; setText(e.target.value); }} onPaste={e => {
         // Insert a large clipboard document in one update. Native editable-text
         // insertion can block Chromium for many thousands of lines. Keep a
         // fresh paste verbatim, including its original line endings.
@@ -54,10 +61,8 @@ export function ReferencePanel({ projectId, disabled, onState, showSources, conv
         pasteRevision.current++; setText(next);
         requestAnimationFrame(() => { if (field.isConnected) field.setSelectionRange(caret, caret); });
       }} spellCheck={false} placeholder="Paste plain text or Markdown here" /></label>
-      <p>{bytes.toLocaleString()} / {PASTED_CONTEXT_BYTES.toLocaleString()} bytes · Saved verbatim on this computer. Saving sends nothing to Codex. Enabled context is available when you ask; it is reference material, not standing instructions.</p>
+      <p>{bytes.toLocaleString()} / {PASTED_CONTEXT_BYTES.toLocaleString()} bytes · Saving keeps the full text locally and sends nothing to Codex. Unsaved text stays in this form while you return to Review.</p>
       {bytes > PASTED_CONTEXT_BYTES && <p className="error">This paste exceeds 2 MB. Split it into named documents; your text is still here.</p>}
-      <button disabled={disabled || busy || !name.trim() || !text.trim() || bytes > PASTED_CONTEXT_BYTES} onClick={() => void savePaste()}>Save and enable for this paper</button>
-      <button onClick={() => setPasting(false)}>Hide draft</button>
     </section>}
     {state.roots.length > 0 && <ul className="reference-roots">{state.roots.map(root => <li key={root.id}>
       <label><input type="checkbox" checked={root.enabled} disabled={disabled || busy} onChange={e => void act(() => window.editor.changeReference(projectId, root.id, e.target.checked))} /><span>{root.name}<small>{root.kind === 'paste' ? 'Pasted text' : root.kind === 'folder' ? 'Folder' : 'File'}{root.bytes !== undefined ? ` · ${root.bytes.toLocaleString()} bytes` : ''}{root.createdAt ? ` · ${new Date(root.createdAt).toLocaleDateString()}` : ''}{!root.available ? ' · unavailable — reattach if needed' : root.enabled ? ' · available to Codex' : ' · disabled'}</small></span></label>
@@ -74,7 +79,7 @@ export function ReferencePanel({ projectId, disabled, onState, showSources, conv
       <button disabled={busy} onClick={() => void act(async () => { await window.editor.copyContext(projectId, inspected.id); setCopied(true); return null; })}>{copied ? 'Copied' : 'Copy full text'}</button>
       <button onClick={() => setInspected(null)}>Close inspection</button>
     </section>}
-    <p className="attachment-hint">Codex reads relevant excerpts within each request’s budget; a large saved document is not automatically read in full. Sources used records coverage. Removing a file reference leaves the original file intact; removing pasted context deletes its saved copy. Turn into comments prepares a separate, resumable review; it does not edit the paper or send anything until you request conversion.</p>
+    <details className="attachment-hint"><summary>How this material is used</summary><p>Enabled material is available when you ask Codex; saving alone sends nothing. Codex reads relevant excerpts within each request’s budget. Sources used records coverage. Turn into comments prepares external feedback for conversion into suggestions. Removing a file reference leaves its original intact; removing pasted material deletes its saved copy.</p></details>
   </section>;
 }
 
@@ -92,7 +97,7 @@ export function SourcesUsedPanel({ projectId, close }: { projectId: string; clos
     <p>Recorded by the editor from reference-tool results. Search entries show returned matches and coverage; they do not mean Codex read every word of the file. Older requests retain the excerpts they used.</p>
     {loading && <p role="status">Loading source records…</p>}{error && <p role="alert" className="error">{error}</p>}
     {history.notices.map((notice, i) => <p key={i} role="status">{notice}</p>)}
-    {!loading && !history.items.length && <p>No reference-tool records yet. They appear after a review or discussion that has attached references.</p>}
+    {!loading && !history.items.length && <p>No reading-tool records yet. They appear after a review or discussion with file reading enabled.</p>}
     {history.items.map((item, i) => <details key={item.id} open={i === 0} className="source-request"><summary>{item.kind === 'review' ? 'Review' : 'Discussion'} · {new Date(item.createdAt).toLocaleString()} · {item.status === 'complete' ? 'completed' : 'stopped or failed'} · {item.sources.length} reads/searches</summary>
       {!item.sources.length && <p>No reference excerpts were returned by reading tools in this request.</p>}
       {item.notices.map((notice, j) => <p key={j} className="attachment-hint">{notice}</p>)}

@@ -18,8 +18,11 @@ async function fixture(bytes = 'Original source\n') {
 }
 test('resetting paper review settings preserves instructions, comments, recovery and reading position', async () => {
   const f = await fixture(), defaults = defaultPaperReviewSettings();
+  assert.equal(f.project.effort, 'xhigh'); assert.equal(f.project.fastMode, true);
   await f.service.setPaperGuidance(f.project.id, 'Keep my notation and mathematical claims.', { localEditsOnly: false, preserveVoice: false });
-  await f.service.setPaperReviewSettings(f.project.id, { ...defaults, engine: 'lualatex', effort: 'high', fastMode: true, localEditsOnly: false, preserveVoice: false });
+  await f.service.setPaperReviewSettings(f.project.id, { ...defaults, engine: 'lualatex', effort: 'high', fastMode: false, localEditsOnly: false, preserveVoice: false });
+  const customized = await new ProjectService(path.join(f.root, 'cache')).open(f.file);
+  assert.equal(customized.effort, 'high'); assert.equal(customized.fastMode, false);
   const review = { ...f.project.review, comments: [commentSchema.parse({ id: 'keep-note', title: 'Keep this comment', original: '', replacement: null, explanation: 'Retained note' })] };
   await f.service.persist({ projectId: f.project.id, text: 'Unsaved manuscript\n', review });
   await f.service.setWorkspace(f.project.id, { ...defaultWorkspace(), pdf: { ...defaultWorkspace().pdf, page: 3 }, autoAddComments: false });

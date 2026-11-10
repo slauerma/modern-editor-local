@@ -4,8 +4,9 @@ import type { AttachmentInventory, AttachmentPreview, AttachmentSelection } from
 import type { ToolSettings, ToolSettingsState, SetupCheck, CopiedSetupDetails } from './tool-settings.ts';
 import { editPreferencesSchema } from './paper-guidance.ts';
 import type { ReferenceState, SourcesHistory } from './references.ts';
+import type { AnchorRepairRequest, AnchorRepairResult } from './anchor-repair.ts';
 import { z } from 'zod';
-import { codexEfforts } from './codex-options.ts';
+import { codexEfforts, defaultReviewSettings } from './codex-options.ts';
 import { assertRecoveryFits, serializeJSON } from './persistence.ts';
 
 function boundedJSON(value: unknown, ctx: z.RefinementCtx) {
@@ -31,6 +32,7 @@ export const commentSchema = z.object({
   before: z.string().max(2000).default(''), after: z.string().max(2000).default(''),
   from: z.number().int().nonnegative().default(0), to: z.number().int().nonnegative().default(0),
   decision: z.enum(['open', 'applied', 'dismissed', 'resolved']).default('open'),
+  rejectionReason: z.string().max(2000).optional(),
   later: z.boolean().default(false),
   validity: z.enum(['current', 'stale', 'ambiguous', 'missing', 'unconfirmed']).default('missing'),
   draft: z.string().max(100000).nullable().optional().transform(value => value ?? undefined), appliedText: z.string().max(100000).optional(),
@@ -81,7 +83,7 @@ export const effortSchema = z.enum(codexEfforts);
 export type Effort = z.infer<typeof effortSchema>;
 export const fastModeSchema = z.boolean();
 export const paperReviewSettingsSchema = z.object({
-  engine: engineSchema.default('pdflatex'), effort: effortSchema.default('medium'), fastMode: fastModeSchema.default(false),
+  engine: engineSchema.default('pdflatex'), effort: effortSchema.default(defaultReviewSettings.effort), fastMode: fastModeSchema.default(defaultReviewSettings.fastMode),
   ...editPreferencesSchema.shape
 }).strict();
 export type PaperReviewSettings = z.infer<typeof paperReviewSettingsSchema>;
@@ -89,6 +91,8 @@ export const defaultPaperReviewSettings = (): PaperReviewSettings => paperReview
 export const paperInstructionsSchema = z.string().max(10000);
 export const baselineSchema = z.object({ schemaVersion: z.literal(1), rootFile: z.string().max(500), name: z.string().trim().min(1).max(200), text: z.string().max(2000000), sourceHash: z.string().regex(/^[a-f0-9]{64}$/), createdAt: z.string().datetime(), sourcePath: z.string().max(10000).nullable() });
 export type Baseline = z.infer<typeof baselineSchema>;
+export type ComparisonVersion = { id: string; kind: 'paste' | 'review' | 'named'; name: string; createdAt: string; sourceHash: string; characters: number; preview: string };
+export type ComparisonVersions = { baseline: Baseline | null; versions: ComparisonVersion[] };
 export const historyBudgetSchema = z.number().int().min(1000000).max(1000000000);
 export type SavedVersion = { id: string; createdAt: string; bytes: number; protectedReason: string | null };
 export type VersionHistory = { versions: SavedVersion[]; folderBytes: number; protectedBytes: number; budgetBytes: number; notices: string[] };
@@ -99,7 +103,7 @@ export type PreambleRequest = z.infer<typeof preambleRequestSchema>;
 export type Project = { id: string; path: string; name: string; text: string; diskHash: string; review: Review; recovered: boolean; notices: string[]; engine: Engine; effort: Effort; fastMode: boolean; paperInstructions: string; editPreferences?: import('./paper-guidance.ts').EditPreferences; baseline: Baseline | null; sessionBaseline?: Baseline; workspace?: WorkspaceState; restoredPdf?: { build: Build; text: string } };
 export type Diagnostic = { severity: 'error' | 'warning'; message: string; line?: number; file?: string };
 export type BuildInputLimits = { maxBytes: number; maxFiles: number };
-export type BuildInputPreparation = { status: 'needs-selection'; reason: string; issues: string[]; requiredPaths: string[]; requiredBytes?: number; requiredFiles?: number; selectedBytes?: number; selectedFiles?: number; inventory: { paths: { relative: string; size: number }[]; truncated: boolean; visitedEntries: number }; limits: BuildInputLimits };
+export type BuildInputPreparation = { status: 'needs-selection'; reason: string; canAskCodex?: boolean; issues: string[]; requiredPaths: string[]; requiredBytes?: number; requiredFiles?: number; selectedBytes?: number; selectedFiles?: number; inventory: { paths: { relative: string; size: number }[]; truncated: boolean; visitedEntries: number }; limits: BuildInputLimits };
 export type BuildInputSelection = { mode: 'folder' | 'dependencies' | 'explicit'; fileCount: number; totalBytes: number; unresolvedIssues?: string[] };
 export type Build = { purpose?: 'paper' | 'proposal' | 'comparison'; id: string; engine: Engine; success: boolean; clean: boolean; dependenciesVerified?: boolean; sourceHash: string; diagnostics: Diagnostic[]; log: string; elapsedMs: number; inputPreparation?: BuildInputPreparation; inputSelection?: BuildInputSelection };
 export const pdfRequestSchema = z.object({ projectId: z.string(), buildId: z.string(), text: z.string().max(2000000), from: z.number().int().nonnegative(), to: z.number().int().nonnegative() });
@@ -110,18 +114,23 @@ export type SourceRequest = z.infer<typeof sourceRequestSchema>;
 export type SourceLocation = { kind: 'mapped'; buildId: string; from: number; to: number; line: number } | { kind: 'compile' | 'unavailable'; reason: string };
 export type BuildValidation = { status: 'valid' | 'changed' | 'deferred' | 'unavailable' };
 export type PdfLocation = { kind: 'mapped'; buildId: string; page: number; x: number; y: number; width: number; height: number } | { kind: 'compile' | 'unavailable'; reason: string };
-export type ReviewRequest = { projectId: string; text: string; from: number; to: number; instructions: string; localEditsOnly?: boolean; autoAddComments?: boolean; attachmentPreviewId?: string; requestId?: string };
+export type ReviewRequest = { changesSince?: string; projectId: string; text: string; from: number; to: number; instructions: string; conversationMode?: import('./review-conversation.ts').ReviewMode; localEditsOnly?: boolean; autoAddComments?: boolean; attachmentPreviewId?: string; requestId?: string };
 export type ReplyRequest = { projectId: string; text: string; comment: Comment; message: string; requestId?: string; attachmentPreviewId?: string; deeper?: boolean; action?: ReplyAction };
 export type CodexReply = z.infer<typeof codexReplySchema>;
 const resultBase = { schemaVersion: z.union([z.literal(1), z.literal(2)]), id: z.string().uuid(), rootFile: z.string().max(500), sourceHash: z.string().regex(/^[a-f0-9]{64}$/), createdAt: z.string().datetime() };
 export const resultSchema = z.discriminatedUnion('kind', [
-  z.object({ ...resultBase, kind: z.literal('review'), comments: commentsSchema, autoAddComments: z.boolean().optional() }),
+  z.object({ ...resultBase, kind: z.literal('review'), comments: commentsSchema, originRequestId: z.string().uuid().optional(), autoAddComments: z.boolean().optional(), delivery: z.literal('side-chat-suggest').optional() }),
   z.object({ ...resultBase, kind: z.literal('reply'), commentId: z.string().min(1).max(200), original: z.string().max(100000), answer: codexReplySchema })
 ]).transform(value => (value.kind === 'review' ? value.comments.some(c => c.alternatives?.length) : value.answer.alternatives?.length)
   ? { ...value, schemaVersion: 2 as const } : value).superRefine(boundedJSON);
 export type WaitingResult = z.infer<typeof resultSchema>;
 export type SourceRecovery = { name: string; choices: { label: string; text: string }[]; notices: string[] };
 export type EditorAPI = {
+  usageState(): Promise<import('./usage.ts').UsageState>;
+  commentReady(requestId: string, delivery: 'automatic' | 'manual'): Promise<void>;
+  configureUsage(enabled: boolean): Promise<import('./usage.ts').UsageState>;
+  accountLimits(): Promise<import('./usage.ts').AccountLimits>;
+  setReviewModel(model: string | null): Promise<ToolSettingsState>;
   projectFiles(projectId: string): Promise<import('./project-files.ts').ProjectFiles>;
   fileAction(projectId: string, id: string, action: 'reveal' | 'copy'): Promise<void>;
   exportPdf(projectId: string, buildId: string): Promise<import('./project-files.ts').PdfExport | null>;
@@ -142,11 +151,25 @@ export type EditorAPI = {
   retryChat(scope: import('./help-chat.ts').ChatScope): Promise<import('./help-chat.ts').ChatState>;
   previewChat(input: import('./help-chat.ts').ChatInput): Promise<import('./help-chat.ts').ChatPreview>;
   sendChat(scope: import('./help-chat.ts').ChatScope, previewId: string): Promise<import('./help-chat.ts').ChatTurn>;
-  openProject(): Promise<Project | null>;
+  cancelChat(): Promise<void>;
+  onChatProgress(callback: (message: string) => void): () => void;
+  openProject(): Promise<Project | import('./text-import.ts').TextImportPreview | null>;
+  recentProjects(): Promise<import('./recent-projects.ts').RecentProjects>;
+  openRecentProject(id: string): Promise<Project | import('./text-import.ts').TextImportPreview | null>;
+  saveTextImport(id: string, encoding: import('./text-import.ts').TextEncoding): Promise<Project | null>;
+  cancelTextImport(id: string): Promise<void>;
   resumeProject(): Promise<Project | null>;
   closeProject(projectId: string): Promise<void>;
+  previewProjectCleanup(projectId: string): Promise<import('./project-cleanup.ts').CleanupPreview>;
+  cancelProjectCleanup(): Promise<void>;
+  confirmProjectCleanup(projectId: string, previewId: string): Promise<import('./project-cleanup.ts').CleanupResult>;
+  openCleanupArchive(): Promise<void>;
   openDemo(): Promise<Project>;
   openDraft(): Promise<Project | null>;
+  listCleanupPapers(input: { mode: import('./project-cleanup.ts').CleanupMode; days: number }): Promise<import('./project-cleanup.ts').CleanupPapers>;
+  chooseCleanupPaper(input: { mode: import('./project-cleanup.ts').CleanupMode; days: number }): Promise<import('./project-cleanup.ts').CleanupPapers | null>;
+  previewDataCleanup(input: { ids: string[]; mode: import('./project-cleanup.ts').CleanupMode; days: number }): Promise<import('./project-cleanup.ts').CleanupPreview>;
+  confirmDataCleanup(previewId: string): Promise<import('./project-cleanup.ts').CleanupResult>;
   getSetup(): Promise<ToolSettingsState>;
   chooseTool(tool: 'codex' | 'latexmk'): Promise<string | null>;
   saveSetup(settings: ToolSettings): Promise<ToolSettingsState>;
@@ -161,6 +184,7 @@ export type EditorAPI = {
   removeAttachment(projectId: string, id: string): Promise<AttachmentInventory>;
   clearAttachments(projectId: string): Promise<void>;
   referenceState(projectId: string): Promise<ReferenceState>;
+  setProjectFolderAccess(projectId: string, enabled: boolean): Promise<ReferenceState>;
   addReferences(projectId: string, folder: boolean): Promise<ReferenceState | null>;
   pasteContext(projectId: string, input: import('./references.ts').PastedContext): Promise<ReferenceState>;
   inspectContext(projectId: string, id: string): Promise<import('./references.ts').PastedContext>;
@@ -184,6 +208,9 @@ export type EditorAPI = {
   setWorkspace(projectId: string, workspace: WorkspaceState): Promise<void>;
   pinBaseline(input: { projectId: string; name: string; text: string }): Promise<Baseline>;
   chooseBaseline(projectId: string): Promise<Baseline | null>;
+  comparisonVersions(projectId: string): Promise<ComparisonVersions>;
+  captureInitialPaste(input: { projectId: string; text: string }): Promise<ComparisonVersions>;
+  selectComparisonVersion(projectId: string, versionId: string): Promise<Baseline>;
   versionHistory(projectId: string): Promise<VersionHistory>;
   compareSavedVersion(projectId: string, versionId: string): Promise<Baseline>;
   deleteSavedVersion(projectId: string, versionId: string): Promise<VersionHistory>;
@@ -207,11 +234,20 @@ export type EditorAPI = {
   cancelBuild(): Promise<void>;
   clearOldBuilds(keepIds: string[]): Promise<{ removed: number; retained: number }>;
   requestReview(input: ReviewRequest): Promise<Comment[]>;
+  reviewConversation(projectId: string): Promise<import('./review-conversation.ts').ReviewConversationState>;
+  reviewConversationHistory(projectId: string, conversationId: string, offset?: number): Promise<import('./review-conversation.ts').ReviewConversationHistory>;
+  reviewConversationTurn(projectId: string, conversationId: string, requestId: string): Promise<string>;
+  reviewConversationExchange(projectId: string, conversationId: string, requestId: string): Promise<import('./review-conversation.ts').ReviewExchange>;
   replyToComment(input: ReplyRequest): Promise<CodexReply>;
+  repairAnchors(input: AnchorRepairRequest): Promise<AnchorRepairResult>;
+  cancelAnchorRepair(): Promise<void>;
+  onAnchorProgress(callback: (message: string) => void): () => void;
   waitingResults(projectId: string): Promise<{ items: WaitingResult[]; notices: string[] }>;
+  reviewRequestResults(projectId: string, requestIds: string[]): Promise<import('./review-outcome.ts').ReviewRequestResults>;
   acknowledgeResult(input: { projectId: string; resultId: string; outcome: 'adopted' | 'dismissed' }): Promise<void>;
   generatePreamble(input: PreambleRequest): Promise<PreambleProposal>;
   cancelCodex(): Promise<void>;
+  onReviewResult(callback: (projectId: string) => void): () => void;
   onCodexProgress(callback: (message: string) => void): () => void;
   finishClose(): Promise<void>;
   onCloseRequested(callback: () => void): () => void;

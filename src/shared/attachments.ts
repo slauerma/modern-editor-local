@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 export const ATTACHMENT_LIMITS = Object.freeze({ files: 8, inventory: 100, entries: 500, depth: 3, textBytes: 2_000_000, pdfBytes: 20_000_000, pages: 20, characters: 48_000, perFileCharacters: 12_000 });
+// The on-demand reader can explore a whole ordinary paper project. The manual
+// excerpt picker keeps its smaller inventory; both disclose incomplete scans.
+export const REFERENCE_FOLDER_LIMITS = Object.freeze({ inventory: 2000, entries: 10000, depth: 64 });
+export const REFERENCE_TEXT_EXTENSIONS = ['.tex', '.bib', '.sty', '.cls', '.bst', '.txt', '.md', '.markdown', '.json', '.csv', '.yaml', '.yml', '.toml'] as const;
 export type AttachmentItem = { id: string; name: string; kind: 'text' | 'pdf'; bytes: number };
 export type AttachmentInventory = { items: AttachmentItem[]; notices: string[] };
 export const attachmentSelectionSchema = z.object({ id: z.string().uuid(), pages: z.string().max(160).optional(), lines: z.string().max(80).optional() }).strict();

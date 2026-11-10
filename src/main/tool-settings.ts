@@ -8,12 +8,14 @@ import { readJSON, writeJSON } from './files.ts';
 import { verifiedCodexVersions, verifyCodexVersion } from './codex-policy.ts';
 import { codexVersion } from '../shared/codex-version.ts';
 import { managedCodexLocation, managedCodexVersion, verifyManagedCodex } from './managed-codex.ts';
+import { defaultReviewSettings } from '../shared/codex-options.ts';
 
 const execute = promisify(execFile);
 export const defaultToolSettings: ToolSettings = {
   codexSource: 'managed',
   codexPath: managedCodexLocation().path,
-  latexmkPath: '/Library/TeX/texbin/latexmk'
+  latexmkPath: '/Library/TeX/texbin/latexmk',
+  codexModel: defaultReviewSettings.model
 };
 
 function validateExecutablePath(file: string) {
@@ -40,6 +42,8 @@ export class ToolSettingsService {
   }
   resolve(input: unknown): ToolSettings {
     const settings = toolSettingsSchema.parse(input);
+    // Missing means no saved choice. Explicit null still follows the CLI default.
+    if (settings.codexModel === undefined) settings.codexModel = defaultReviewSettings.model;
     // Migrate the old automatic desktop path; deliberately selected custom paths stay custom.
     if (settings.codexSource === 'managed' || (!settings.codexSource && settings.codexPath === '/Applications/ChatGPT.app/Contents/Resources/codex')) {
       return { ...settings, codexSource: 'managed', codexPath: managedCodexLocation(this.applicationDirectory).path };

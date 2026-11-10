@@ -1,4 +1,6 @@
 import { ChangeJournal } from './change-journal.ts';
+import { RecentProjectStore } from './recent-projects.ts';
+import { comparisonVersions, keepComparisonVersion, readComparisonVersion } from './comparison-versions.ts';
 import { listVersions, savedVersion, deleteVersion, setVersionBudget, pruneVersions, recordSaveCheckpoints, completeSaveCheckpoints, originalSaveVersion } from './version-history.ts';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
@@ -67,7 +69,8 @@ export class ProjectService {
   private queue: Promise<unknown> = Promise.resolve();
   readonly cache: string;
   private readonly writeAtomic: typeof atomicWrite;
-  constructor(cache: string, writeAtomic = atomicWrite) { this.cache = cache; this.writeAtomic = writeAtomic; }
+  readonly recentProjects: RecentProjectStore;
+  constructor(cache: string, writeAtomic = atomicWrite) { this.cache = cache; this.writeAtomic = writeAtomic; this.recentProjects = new RecentProjectStore(cache); }
   private serial<T>(action: () => Promise<T>): Promise<T> {
     const pending = this.queue.then(action, action); this.queue = pending.catch(() => {}); return pending;
   }
@@ -188,6 +191,8 @@ export class ProjectService {
     catch { p.notices.push('The session comparison is available in memory, but its checkpoint could not be saved.'); }
     try { await this.changeJournal.open((await this.dirs(p)).home, p.text, p.review.comments); }
     catch { this.changeJournal.notice = 'Reason recording is unavailable; exact comparison still works.'; }
+    try { await this.recentProjects.record(actual); }
+    catch { p.notices.push('The paper opened, but the recent-project list could not be updated. Use Open paper to find it again.'); }
     return structuredClone(p);
   }); }
   async resume() {
@@ -271,10 +276,45 @@ export class ProjectService {
     } : undefined);
     p.workspace = checked;
   }); }
-  async pinBaseline(projectId: string, name: string, text: string, sourcePath: string | null = null): Promise<Baseline> { return this.serial(() => this.keepBaseline(this.get(projectId), name, text, sourcePath)); }
+  async comparisonVersions(projectId: string) { return this.serial(async () => {
+    const p = this.get(projectId);
+    return { baseline: p.baseline, versions: await comparisonVersions((await this.dirs(p)).home, p.name) };
+  }); }
+  async captureInitialPaste(projectId: string, text: string) { return this.serial(async () => {
+    const p = this.get(projectId), home = (await this.dirs(p)).home;
+    const versions = await comparisonVersions(home, p.name);
+    if (!p.sessionBaseline?.text.trim() && text.trim() && !versions.some(v => v.kind === 'review')) {
+      const initial = await keepComparisonVersion(home, p.name, text, 'paste', undefined, null, this.writeAtomic);
+      await this.selectInitialComparison(p, initial);
+    }
+    return { baseline: p.baseline, versions: await comparisonVersions(home, p.name) };
+  }); }
+  async captureReviewVersion(projectId: string, text: string) { return this.serial(async () => {
+    const p = this.get(projectId);
+    const before = await keepComparisonVersion((await this.dirs(p)).home, p.name, text, 'review', undefined, null, this.writeAtomic);
+    await this.selectInitialComparison(p, before);
+  }); }
+  private async selectInitialComparison(p: Project, baseline: Baseline) {
+    // An explicitly chosen reference always wins. Automatic checkpoints only
+    // establish the first reference; later reviews never move it.
+    if (!p.baseline && !(await exists(path.join((await this.dirs(p)).home, 'baseline.json'))))
+      await this.installBaseline(p, baseline);
+  }
+  async selectComparisonVersion(projectId: string, versionId: string) { return this.serial(async () => {
+    const p = this.get(projectId), baseline = await readComparisonVersion((await this.dirs(p)).home, p.name, versionId);
+    return this.installBaseline(p, baseline);
+  }); }
+  async pinBaseline(projectId: string, name: string, text: string, sourcePath: string | null = null): Promise<Baseline> { return this.serial(async () => {
+    const p = this.get(projectId);
+    const baseline = await keepComparisonVersion((await this.dirs(p)).home, p.name, text, 'named', name, sourcePath, this.writeAtomic);
+    return this.installBaseline(p, baseline);
+  }); }
   private async keepBaseline(p: Project, name: string, text: string, sourcePath: string | null = null): Promise<Baseline> {
     const baseline = baselineSchema.parse({ schemaVersion: 1, rootFile: p.name, name, text, sourceHash: digest(text), createdAt: new Date().toISOString(), sourcePath });
     if (Buffer.byteLength(text) > 2000000) throw new Error('Comparison versions are limited to 2 MB. The existing version was kept.');
+    return this.installBaseline(p, baseline);
+  }
+  private async installBaseline(p: Project, baseline: Baseline): Promise<Baseline> {
     const baselineJSON = serializeJSON(baseline);
     const dirs = await this.dirs(p), file = path.join(dirs.home, 'baseline.json');
     if (await exists(file)) {

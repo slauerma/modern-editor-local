@@ -27,19 +27,23 @@ async function fixture(t: any) {
   return { root, file, service, projects, p };
 }
 
-test('Quick explanation uses Sol Low without reference reads or edits and preserves the paper configuration', async t => {
+test('Quick explanation uses Sol Low with local-only context and no edits and preserves the paper configuration', async t => {
   const f = await fixture(t), calls: any[] = [];
   // An invalid attachment would fail if Quick tried to resolve it.
   f.service.client.run = async (prompt, schema, _progress, effort, fast, reader, config) => {
-    calls.push({ prompt: JSON.parse(prompt), schema, effort, fast, reader, config });
+    assert(reader);
+    const guidance = await reader.call('references_read', { fileId: 'paper-instructions' });
+    const discussion = await reader.call('references_read', { fileId: 'comment-discussion' });
+    calls.push({ prompt: JSON.parse(prompt), schema, effort, fast, reader, config, guidance, discussion });
     return { reply: 'The singular subject needs a singular verb.', replacement: null, packages: [] };
   };
   const c = comment(); c.messages = Array.from({ length: 10 }, (_, i) => ({ role: 'user', text: `Question ${i}`, createdAt: '2026-09-26' }));
   await f.service.reply({ projectId: f.p.id, text, comment: c, message: quickQuestion, action: 'quick', attachmentPreviewId: 'not-a-reference' }, () => {});
-  const run = calls[0]; assert.equal(run.effort, 'low'); assert.equal(run.fast, false); assert.equal(run.reader, undefined);
+  const run = calls[0]; assert.equal(run.effort, 'low'); assert.equal(run.fast, false); assert(run.reader); assert(!run.reader.tools.some((t: any) => t.name === 'review_history'));
   assert.deepEqual(run.config, { purpose: 'discussion', model: 'gpt-6.1-sol', fastMode: false });
   assert.deepEqual(run.schema, quickReplyOutputSchema); assert.equal(run.schema.properties.replacement.type, 'null');
-  assert.equal(run.prompt.references, undefined); assert.equal(run.prompt.conversation.length, 6); assert.equal(run.prompt.paperInstructions, 'Keep my voice.');
+  assert.equal(run.prompt.references, undefined); assert.equal(run.prompt.conversation, undefined); assert.equal(run.prompt.paperInstructions, undefined);
+  assert.match(JSON.stringify(run.guidance), /Keep my voice/); assert.match(JSON.stringify(run.discussion), /Question 0/);
   assert.match(run.prompt.task, /context is insufficient/); assert.equal(f.projects.get(f.p.id).effort, 'max'); assert.equal(f.projects.get(f.p.id).fastMode, true);
   assert.equal(await fs.readFile(f.file, 'utf8'), text); assert.equal((await f.service.results.list(f.p.id)).items.length, 1);
 });
@@ -98,10 +102,10 @@ test('choosing an alternative is one undoable proposal change; all alternatives 
   assert.throws(() => replyFields({ ...c, messages: Array.from({ length: 498 }, () => ({ role: 'user', text: 'Saved note', createdAt: '2026-09-26' })) }, { reply: 'Choices', replacement: null, packages: [], alternatives: options }), /500/);
 });
 
-test('Quick limits nearby source and carries fixed-span semantics and paper guidance', () => {
+test('Quick and normal discussion identify the exact draft scope without embedding surrounding source', () => {
   const source = 'a'.repeat(10000) + original + 'b'.repeat(10000), c = { ...comment(), from: 10000, to: 10000 + original.length };
   const request = { projectId: 'p', text: source, comment: c, message: 'Why?' };
   const quick = replyContext({ ...request, action: 'quick' }, 'Keep terminology.'), normal = replyContext(request);
-  assert.equal(quick.nearbySource.length, 3000 + original.length); assert.equal(normal.nearbySource.length, 12000 + original.length);
+  for (const context of [quick, normal]) { assert(!('nearbySource' in context)); assert.equal(context.scope.from, 10000); assert.equal(context.scope.to, 10000 + original.length); assert(!JSON.stringify(context).includes('a'.repeat(100))); }
   assert.match(quick.task, /ENTIRE original/); assert.match(quick.task, /replacement:null/);
 });

@@ -25,6 +25,20 @@ async function request(f: Awaited<ReturnType<typeof fixture>>, text = 'Unsaved a
   const session = await f.service.begin(f.p.id, text, 'review', () => {}); assert(session); return session;
 }
 
+test('parallel readers keep separate cancellation and persist both source-use receipts', async t => {
+  const f = await fixture();
+  t.after(async () => { await f.service.stop(); await f.attachments.stop(); await fs.rm(f.root, { recursive: true, force: true }); });
+  const [review, chat] = await Promise.all([request(f, 'Review draft.'), request(f, 'Chat draft.')]);
+  await review.cancel();
+  await assert.rejects(review.call('references_read', { fileId: 'current-draft' }), /cancelled/);
+  assert.equal(((await chat.call('references_read', { fileId: 'current-draft' })) as any).excerpts[0].text, 'Chat draft.');
+  await Promise.all([f.service.finish(review, false), f.service.finish(chat, true)]);
+  const reopened = new ReferenceService(f.projects, f.directory, f.attachments);
+  const history = await reopened.history(f.p.id);
+  assert.equal(history.items.length, 2);
+  assert.equal(new Set(history.items.map(item => item.id)).size, 2);
+});
+
 test('native-picker reference grants persist per paper; disabled/removed roots never read; sidecars cannot grant access', async () => {
   const f = await fixture(), folder = path.join(f.root, 'references'); await fs.mkdir(folder);
   await fs.writeFile(path.join(folder, 'earlier.tex'), 'Earlier reference version.');
@@ -37,10 +51,16 @@ test('native-picker reference grants persist per paper; disabled/removed roots n
   const p2 = await f.projects.open(other);
   assert.deepEqual((await reopened.state(p2.id)).roots, []);
   await fs.writeFile(path.join(f.paper, 'references.json'), JSON.stringify({ path: folder }));
-  assert.equal(await reopened.begin(p2.id, 'Another draft.', 'review', () => {}), undefined);
+  const second = await reopened.begin(p2.id, 'Another draft.', 'review', () => {});
+  const files = await second.call('references_list', {}) as any;
+  assert(!files.files.some((file: any) => file.name.endsWith('earlier.tex')));
+  await reopened.finish(second, true);
   const p1 = await f.projects.open(f.file);
   await reopened.change(p1.id, state.roots[0].id, false);
-  assert.equal(await reopened.begin(p1.id, 'draft', 'review', () => {}), undefined);
+  await reopened.setProjectFolder(p1.id, false);
+  const draftOnly = await reopened.begin(p1.id, 'draft', 'review', () => {});
+  assert.deepEqual((await draftOnly.call('references_list', {}) as any).files.map((f: any) => f.id), ['current-draft']);
+  await reopened.finish(draftOnly, true);
   await reopened.change(p1.id, state.roots[0].id, null);
   assert.deepEqual((await reopened.state(p1.id)).roots, []);
   assert.equal(await fs.readFile(path.join(folder, 'earlier.tex'), 'utf8'), 'Earlier reference version.');
@@ -115,7 +135,7 @@ test('late reference read after cancellation returns no excerpt and creates no n
   assert.equal((await f.service.history(f.p.id)).items[0].sources.length, 0);
 });
 
-test('review and discussion get bounded reading tools; preamble/feedback do not; actual read receipt retained', async () => {
+test('review and discussion get bounded reading tools; preamble/feedback get only local snapshots; actual read receipt retained', async () => {
   const f = await fixture(), file = path.join(f.root, 'reference.txt'); await fs.writeFile(file, 'Reference hypothesis.'); await f.service.add(f.p.id, [file]);
   const service = new CodexService(f.projects, path.join(f.root, 'codex'), f.attachments, f.service);
   let called = 0;
@@ -127,7 +147,7 @@ test('review and discussion get bounded reading tools; preamble/feedback do not;
   };
   await service.review({ projectId: f.p.id, text: 'Current buffer.', from: 0, to: 15, instructions: '' }, () => {});
   assert.equal(called, 1); assert.equal((await f.service.history(f.p.id)).items[0].sources[0].excerpts[0].text, 'Reference hypothesis.');
-  service.client.run = async (_p, _s, _pr, _e, _f, reader) => { assert.equal(reader, undefined); return { explanation: '', preamble: '', ending: '', needsInput: null }; };
+  service.client.run = async (_p, _s, _pr, _e, _f, reader) => { assert(reader); assert(!reader.tools.some(t => t.name === 'review_history')); assert.deepEqual((await reader.call('references_list', {}) as any).files.filter((f: any) => !['current-draft','paper-instructions','review-decisions','outside-feedback'].includes(f.id)), []); return { explanation: '', preamble: '', ending: '', needsInput: null }; };
   await service.preamble({ projectId: f.p.id, text: 'Current buffer.', engine: 'pdflatex' }, () => {});
 });
 

@@ -3,6 +3,7 @@ import { history, invertedEffects, isolateHistory } from '@codemirror/commands';
 import { bufferSchema, commentsSchema, type BufferInput, type Comment } from '../shared/contracts.ts';
 import { proposalChanges, changedText } from '../shared/review.ts';
 import { wordingChoices } from '../shared/alternatives.ts';
+import { sourceEditMapping } from './source-edit-mapping.ts';
 
 type Patch = { id: string; fields: Partial<Comment> };
 export const loadComments = StateEffect.define<Comment[]>();
@@ -80,7 +81,7 @@ export function validateReviewTransaction(tr: Transaction, current: BufferInput)
   bufferSchema.parse({ ...current, text: tr.newDoc.toString(), review: { ...current.review, comments: tr.state.field(commentsField) } });
 }
 export function initialState(text: string, comments: Comment[], onSourceLimit: () => void = () => {}) {
-  let state = EditorState.create({ doc: text, extensions: [commentsField, history(), reviewHistory, EditorState.transactionFilter.of(tr => {
+  let state = EditorState.create({ doc: text, extensions: [commentsField, history(), reviewHistory, sourceEditMapping, EditorState.transactionFilter.of(tr => {
     if (tr.newDoc.length <= 2000000) return tr;
     onSourceLimit(); return [];
   })] });

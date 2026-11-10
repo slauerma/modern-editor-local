@@ -9,13 +9,15 @@ import { ReferenceService } from '../src/main/reference-service.ts';
 import { AttachmentService } from '../src/main/attachment-service.ts';
 import { CodexService } from '../src/main/codex-service.ts';
 import { splitFeedback, feedbackBatchContext } from '../src/shared/feedback-batches.ts';
-import { feedbackComments, feedbackRecordSchema } from '../src/shared/feedback.ts';
+import { feedbackComments, feedbackDelivery, feedbackRecordSchema } from '../src/shared/feedback.ts';
+import { commentSchema } from '../src/shared/contracts.ts';
+import { captureContext } from '../src/shared/review.ts';
 
 const source = 'A unique quotation.\nRepeated. Repeated.\n';
 function response(prompt: string) {
   const payload = JSON.parse(prompt);
   return { items: payload.items.map((item: any) => ({ itemId: item.itemId, comments: [{
-    category:'Clarity', title:'Consider this point', explanation:item.feedback,
+    category:'Clarity', title:'Consider this point', explanation:'Inspect issue ' + item.originalNumber,
     original:item.originalNumber === '2' ? 'Repeated.' : item.originalNumber === '3' ? 'Absent quotation.' : 'A unique quotation.',
     replacement:null, before:'', after:'', packages:[]
   }] })) };
@@ -31,6 +33,73 @@ async function fixture(t: TestContext) {
   return { root,file,runtime,projects,paper,references,service };
 }
 const review = (n: number) => '\uFEFFReview introduction.\r\n\r\n' + Array.from({length:n},(_,i)=>(i+1)+'. Please inspect issue '+(i+1)+'.  \r\n\r\n').join('');
+
+test('each batch reads fresh decisions while retaining prepared guidance and source', async t => {
+  const f = await fixture(t);
+  await f.projects.setPaperGuidance(f.paper.id, 'Prepared guidance.', { localEditsOnly: true, preserveVoice: true });
+  const saved = await f.service.prepareFeedback({ projectId: f.paper.id, text: source, label: 'Trial', feedback: review(11) });
+  await f.projects.setPaperGuidance(f.paper.id, 'Changed guidance.', { localEditsOnly: false, preserveVoice: false });
+  const old = captureContext(source, commentSchema.parse({ id: 'old', title: 'Earlier decision', explanation: '', original: 'A unique quotation.',
+    replacement: 'An exact quotation.', from: 0, to: 'A unique quotation.'.length, validity: 'current', decision: 'dismissed', rejectionReason: 'Reason after preparation.' }));
+  const persist = async (comments: typeof old[]) => f.projects.persist({ projectId: f.paper.id, text: source, review: { ...f.projects.get(f.paper.id).review, comments } });
+  await persist([old]);
+  let calls = 0;
+  const during = { ...old, id: 'during', replacement: 'A precise quotation.', rejectionReason: 'Rejected during generation.' };
+  f.service.client.run = async (prompt, _schema, _progress, _effort, _fast, reader) => {
+    calls++; assert(reader);
+    const read = async (fileId: string) => (await reader.call('references_read', { fileId }) as any).excerpts[0].text;
+    assert.equal(await read('current-draft'), source);
+    assert.match(await read('paper-instructions'), /Prepared guidance/);
+    assert.doesNotMatch(await read('paper-instructions'), /Changed guidance/);
+    const decisions = await read('review-decisions');
+    if (calls === 1) {
+      assert.match(decisions, /Reason after preparation/);
+      assert.doesNotMatch(decisions, /Rejected during generation/);
+      await persist([{ ...old, decision: 'open' }, during]);
+    } else {
+      assert.match(decisions, /Rejected during generation/);
+      assert.match(decisions, /Decision: open/);
+    }
+    const output = response(prompt);
+    for (const item of output.items) item.comments = [{ ...item.comments[0], original: old.original, replacement: during.replacement }];
+    return output;
+  };
+  const first = await f.service.resumeFeedback({ projectId: f.paper.id, id: saved.id, all: false }, () => {});
+  assert.equal(feedbackComments(first, source, f.projects.get(f.paper.id).review.comments).length, 0, 'intake sees rejection during generation');
+  const done = await f.service.resumeFeedback({ projectId: f.paper.id, id: saved.id, all: true }, () => {});
+  assert.equal(calls, 2); assert.equal(done.comments.length, 11);
+  await persist([{ ...old, decision: 'open' }, { ...during, decision: 'open' }]);
+  assert.equal(feedbackComments(done, source, f.projects.get(f.paper.id).review.comments).length, 11);
+});
+
+test('feedback outcomes separate saved items, membership, rejected repeats and questions', async t => {
+  const f = await fixture(t), saved = await f.service.prepareFeedback({ projectId: f.paper.id, text: source, label: 'Four items', feedback: review(4) });
+  f.service.client.run = async prompt => {
+    const output = response(prompt);
+    output.items.forEach((item: any, i: number) => {
+      item.comments = [{ ...item.comments[0], original: i === 3 ? '' : 'A unique quotation.', replacement: i === 3 ? null : ['Grammar.', 'Rejected wording.', 'Different wording.'][i] }];
+    });
+    return output;
+  };
+  const record = await f.service.resumeFeedback({ projectId: f.paper.id, id: saved.id, all: true }, () => {});
+  const old = { ...record.comments[1], id: 'prior', decision: 'dismissed' as const };
+  const offered = feedbackComments(record, source, [old]);
+  assert.equal(offered.length, 3); assert.equal(offered[2].replacement, null);
+  const added = [old, ...offered.map(c => ({ ...c, draft: c.replacement === null ? undefined : 'Author draft.' }))];
+  assert.deepEqual(feedbackDelivery(record, source, added).map(e => e.status), ['in-comments', 'rejected', 'in-comments', 'in-comments']);
+  assert.equal(feedbackComments(record, source, added).length, 0);
+  assert.equal(feedbackDelivery(record, source, added)[0].current?.draft, 'Author draft.');
+  assert.equal(feedbackDelivery(record, source, added)[1].rejection?.id, 'prior');
+  const rejected = added.map(c => c.id === record.comments[0].id ? { ...c, decision: 'dismissed' as const, rejectionReason: 'Keep this.' } : c);
+  assert.equal(feedbackDelivery(record, source, rejected)[0].current?.rejectionReason, 'Keep this.');
+  assert.equal(feedbackDelivery(record, source, added.map(c => c.id === offered[0].id ? { ...c, decision: 'dismissed' } : c))[0].status, 'in-comments');
+  assert.equal(feedbackComments(record, source, added.map(c => c.id === 'prior' ? { ...c, decision: 'open' } : c)).length, 1);
+  assert.equal(feedbackComments(record, source, [old]).length, 3, 'Undo import restores availability');
+  const two = { ...record, plan: { ...record.plan!, items: record.plan!.items.map((item, i) => i === 0 ? { ...item, commentIds: [record.comments[0].id, record.comments[1].id] } : item).filter((_item, i) => i !== 1) } };
+  assert.equal(feedbackRecordSchema.parse(two).plan!.items.length, 3);
+  assert.equal(feedbackDelivery(two, source, added).length, 4, 'item and comment counts remain distinct');
+  assert.equal(await fs.readFile(f.file, 'utf8'), source);
+});
 
 test('numbered Markdown and JSON retain original numbers, introduction and fenced source blocks', () => {
   const raw = 'Intro\r\n7. First\r\n\x60\x60\x60tex\n1. Not another item\n\x60\x60\x60\n## **9.** Second\n';
@@ -54,9 +123,13 @@ test('46 review items are saved in batches, source and guidance remain captured,
   const saved = await f.service.prepareFeedback({projectId:f.paper.id,text:source,label:'Trial review',feedback:raw});
   assert.equal(calls,0); assert.equal(saved.plan!.items.length,46); assert.equal(saved.feedback,raw);
   await f.projects.setPaperGuidance(f.paper.id,'New instructions.',{localEditsOnly:false,preserveVoice:false});
-  f.service.client.run = async prompt => {
+  f.service.client.run = async (prompt, _schema, _progress, _effort, _fast, reader) => {
     calls++; const payload=JSON.parse(prompt);
-    assert.equal(payload.paper,source); assert.equal(payload.paperInstructions,'Keep notation.'); assert(payload.editPolicy);
+    assert.equal(payload.paper, undefined); assert(!prompt.includes('Keep notation.')); assert(reader);
+    assert.equal((await reader.call('references_read', { fileId: 'current-draft' }) as any).excerpts[0].text, source);
+    const guidance = (await reader.call('references_read', { fileId: 'paper-instructions' }) as any).excerpts[0].text;
+    assert.match(guidance, /Keep notation/); assert.doesNotMatch(guidance, /New instructions/);
+    assert.match((await reader.call('references_read', { fileId: 'outside-feedback' }) as any).excerpts[0].text, /Please inspect issue/);
     const durable=await f.service.feedback.get(f.paper.id,saved.id);
     assert.equal(durable.comments.length,(calls-1)*10);
     return response(prompt);

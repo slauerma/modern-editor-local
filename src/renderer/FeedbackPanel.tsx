@@ -1,7 +1,8 @@
+import { CommentUpdates } from './CommentUpdates.tsx';
 import { useDialogFocus } from './use-dialog-focus.ts';
 import { useEffect, useRef, useState } from 'react';
 import type { Comment } from '../shared/contracts.ts';
-import { feedbackComments, type FeedbackRecord } from '../shared/feedback.ts';
+import { feedbackDelivery, type FeedbackDelivery, type FeedbackRecord } from '../shared/feedback.ts';
 import { FEEDBACK_BYTES, nextFeedbackBatch, type PrepareFeedback } from '../shared/feedback-batches.ts';
 import type { ReferenceState } from '../shared/references.ts';
 import { ReadableArea } from './ReadableArea.tsx';
@@ -10,8 +11,22 @@ import './feedback.css';
 type Props = { autoAdd: boolean; onAutoAdd(value: boolean): void; projectId: string; open: boolean; text: string; comments: Comment[]; disabled: boolean; contextId?: string; onClose(): void;
   onPrepare(input: Omit<PrepareFeedback, 'projectId' | 'text'>): Promise<FeedbackRecord>;
   onConvert(record: FeedbackRecord, all: boolean): Promise<FeedbackRecord>; onPause(): Promise<void>;
-  onAdopt(comments: Comment[], text: string): Promise<void>; onPreview(record: FeedbackRecord): void };
-export function FeedbackPanel({ autoAdd, onAutoAdd, projectId, open, text, comments, disabled, contextId, onClose, onPrepare, onConvert, onPause, onAdopt, onPreview }: Props) {
+  onAdopt(record: FeedbackRecord, ids: string[], text: string): Promise<void>; onPreview(record: FeedbackRecord): void; onInspect(id: string): void; navigationDisabled: boolean };
+const deliveryLabel = { 'in-comments': 'In Comments', rejected: 'Matched a prior rejection', available: 'Available to add' };
+function DeliveryDetail({ entry, onInspect, disabled }: { entry: FeedbackDelivery; onInspect(id: string): void; disabled: boolean }) {
+  const c = entry.current ?? entry.comment, target = entry.current ?? entry.rejection;
+  const decision = c.decision === 'applied' ? 'Applied' : c.decision === 'dismissed' ? 'Rejected' : c.decision === 'resolved' ? 'Addressed' : c.later ? 'Later' : c.replacement === null ? 'Open question' : 'Open edit';
+  return <div className="feedback-delivery"><details><summary>{c.title} · {entry.current ? decision : deliveryLabel[entry.status]}</summary>
+    <p>{c.explanation}</p><pre>{c.original}</pre><pre>{c.draft ?? c.replacement ?? 'Discussion only; no replacement.'}</pre>
+    {entry.current?.rejectionReason && <p>Rejection reason: {entry.current.rejectionReason}</p>}
+    {entry.rejection && <div><p>Matching rejection: {entry.rejection.title}</p>
+      <pre>{entry.rejection.original}</pre><pre>{entry.rejection.draft ?? entry.rejection.replacement ?? 'Discussion only.'}</pre>
+      <p>{entry.rejection.rejectionReason || 'No rejection reason recorded.'}</p></div>}
+  </details>
+    {target && <button className="text-button" disabled={disabled} onClick={() => onInspect(target.id)}>{target.decision === 'open' ? 'Open in Comments' : 'Open in History'}</button>}
+  </div>;
+}
+export function FeedbackPanel({ autoAdd, onAutoAdd, projectId, open, text, comments, disabled, contextId, onClose, onPrepare, onConvert, onPause, onAdopt, onPreview, onInspect, navigationDisabled }: Props) {
   const [label, setLabel] = useState('Outside feedback'), [raw, setRaw] = useState('');
   const [contexts, setContexts] = useState<ReferenceState['roots']>([]), [context, setContext] = useState(contextId ?? '');
   const [records, setRecords] = useState<FeedbackRecord[]>([]), [active, setActive] = useState<string | null>(null);
@@ -30,7 +45,9 @@ export function FeedbackPanel({ autoAdd, onAutoAdd, projectId, open, text, comme
     if (contextId) { setActive(null); setSelected([]); setError(''); }
     void refresh().catch(e => setError(String(e)));
   } }, [open, contextId]);
-  const record = records.find(r => r.id === active), available = record ? feedbackComments(record, text, comments) : [];
+  const record = records.find(r => r.id === active), delivery = record ? feedbackDelivery(record, text, comments) : [];
+  const available = delivery.filter(item => item.status === 'available').map(item => item.comment);
+  const inComments = delivery.filter(item => item.status === 'in-comments').length, rejected = delivery.filter(item => item.status === 'rejected').length;
   const pending = record?.plan?.items.filter(item => !item.complete).length ?? 0, bytes = new TextEncoder().encode(raw).length;
   async function act(action: () => Promise<void>) {
     if (working.current || disabled) return;
@@ -65,7 +82,7 @@ export function FeedbackPanel({ autoAdd, onAutoAdd, projectId, open, text, comme
     {notices.map((n,i) => <p key={i}>{n}</p>)}
     {record && <>
       {record.plan && <><p role="status">{record.plan.items.length - pending} / {record.plan.items.length} review items converted · {record.comments.length} comments saved · {pending} pending</p>
-        <label><input type="checkbox" checked={autoAdd} onChange={e => onAutoAdd(e.target.checked)} /> Add comments when ready</label>
+        <CommentUpdates enabled={autoAdd} onChange={onAutoAdd} />
         <div className="feedback-actions">
           <button className="primary" disabled={disabled || busy || !pending} onClick={() => convert(true)}>Convert remaining with Codex</button>
           <button disabled={disabled || busy || !pending} onClick={() => convert(false)}>Next batch ({nextFeedbackBatch(record).length})</button>
@@ -73,15 +90,16 @@ export function FeedbackPanel({ autoAdd, onAutoAdd, projectId, open, text, comme
           {converting && <button onClick={() => void onPause().catch(e => setError(String(e)))}>Pause conversion</button>}
         </div>
         {converting && <p role="status">Converting… Each completed batch is saved. Pause stops the current request; earlier batches remain available.</p>}
-        <details><summary>Review items and coverage</summary><ol className="feedback-items">{record.plan.items.map(item => <li key={item.id}><details><summary>Item {item.number} · {item.complete ? item.commentIds.length + ' comment(s) saved' : 'pending'}</summary><pre>{item.text}</pre></details></li>)}</ol></details>
+        <details><summary>Review items and coverage</summary><ol className="feedback-items">{record.plan.items.map(item => <li key={item.id}><details><summary>Item {item.number} · {item.complete ? item.commentIds.length + ' comment(s) saved' : 'pending'}</summary><pre>{item.text}</pre>{delivery.filter(entry => item.commentIds.includes(entry.comment.id)).map(entry => <DeliveryDetail key={entry.comment.id} entry={entry} onInspect={onInspect} disabled={navigationDisabled} />)}</details></li>)}</ol></details>
       </>}
       <details><summary>Original feedback · {record.label}</summary><ReadableArea label="saved feedback" resetKey={record.id}><pre>{record.feedback}</pre></ReadableArea></details>
       {!record.plan && record.status !== 'complete' && <button disabled={busy || disabled} onClick={() => { setContext(''); setLabel(record.label); setRaw(record.feedback); setActive(null); }}>Prepare this older feedback again</button>}
       {record.error && <p className="stale-notice">{record.error}</p>}
       {record.source !== text && <p className="stale-notice">The draft has changed. Resuming uses the captured draft and saved guidance. Imported quotations require confirmation in the current source before applying replacements.</p>}
-      {record.comments.length > 0 && <><p>{available.length ? 'Choose comments to add. Missing or ambiguous quotations remain visible for inspection; they are never guessed.' : 'All these comments are already in the queue. The original review remains here.'}</p>
+      {record.comments.length > 0 && <><p role="status">{inComments} in Comments · {rejected} matched a prior rejection · {available.length} available to add</p>
+        {!record.plan && <details><summary>Saved comments and outcomes</summary>{delivery.map(entry => <DeliveryDetail key={entry.comment.id} entry={entry} onInspect={onInspect} disabled={navigationDisabled} />)}</details>}
         <div className="feedback-actions"><button disabled={busy || disabled || !available.length} onClick={() => setSelected(available.map(c => c.id))}>Select all available ({available.length})</button>
-          <button className="primary" disabled={disabled || busy || !selected.some(id => available.some(c => c.id === id))} onClick={() => void act(async () => { await onAdopt(available.filter(c => selected.includes(c.id)), text); setSelected([]); })}>Add selected comments</button></div>
+          <button className="primary" disabled={disabled || busy || !selected.some(id => available.some(c => c.id === id))} onClick={() => void act(async () => { await onAdopt(record, selected, text); setSelected([]); })}>Add selected comments</button></div>
         {available.map(c => <article className="feedback-comment" key={c.id}><label><input type="checkbox" disabled={busy} checked={selected.includes(c.id)} onChange={e => setSelected(ids => e.target.checked ? [...ids,c.id] : ids.filter(id => id !== c.id))} /> {c.title}</label><p>{c.explanation}</p><small>{c.validity === 'current' ? 'Located in this draft' : c.original ? 'Needs source confirmation · ' + c.validity : 'Discussion · no local quotation'}</small>{c.original && <details><summary>Original and suggestion</summary><pre>{c.original}</pre><pre>{c.replacement ?? 'Discussion only; no replacement.'}</pre></details>}</article>)}
       </>}
     </>}

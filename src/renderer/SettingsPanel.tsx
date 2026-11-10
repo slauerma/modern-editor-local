@@ -3,16 +3,17 @@ import { setupOperatingSystem, type SetupCheck, type ToolSettings, type ToolSett
 import { useDialogFocus } from './use-dialog-focus.ts';
 import { editorialModelName } from '../shared/codex-options.ts';
 import type { CodexModel } from '../shared/codex-models.ts';
+import { ModelNotice } from './ModelNotice.tsx';
 import './settings-panel.css';
 import { DebugPanel } from './DebugPanel.tsx';
 import { editorAuthor, predecessorCredit } from '../shared/editor-credits.ts';
 import { SettingsChanges } from './SettingsChanges.tsx';
 import { ChangesUpdateSettings, PaperReviewSettingsPanel, type PaperSettings } from './ReviewSettings.tsx';
 
-type Props = { onClose(): void; disabled?: boolean; paper?: PaperSettings };
+type Props = { onClose(): void; onUsage(): void; onCleanup?(): void; disabled?: boolean; paper?: PaperSettings; initialSection?: 'model' };
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-export function SettingsPanel({ onClose, disabled = false, paper }: Props) {
+export function SettingsPanel({ onClose, onUsage, onCleanup, disabled = false, paper, initialSection }: Props) {
   const [state, setState] = useState<ToolSettingsState | null>(null), [draft, setDraft] = useState<ToolSettings>({ codexPath: '', latexmkPath: '' });
   const [result, setResult] = useState<SetupCheck | null>(null), [busy, setBusy] = useState('Loading settings…');
   const [error, setError] = useState(''), [status, setStatus] = useState('');
@@ -23,6 +24,13 @@ export function SettingsPanel({ onClose, disabled = false, paper }: Props) {
   const [paperBusy, setPaperBusy] = useState(false), [updateBusy, setUpdateBusy] = useState(false), [debugBusy, setDebugBusy] = useState(false);
   const extraBusy = paperBusy || updateBusy || debugBusy;
   const live = useRef(true), working = useRef(true), panel = useRef<HTMLElement>(null);
+  const modelChoice = useRef<HTMLSelectElement>(null), modelShown = useRef(false);
+  useEffect(() => {
+    if (initialSection !== 'model' || !state || busy || disabled || modelShown.current) return;
+    modelShown.current = true;
+    modelChoice.current?.scrollIntoView({ block: 'center' });
+    modelChoice.current?.focus({ preventScroll: true });
+  }, [initialSection, state, busy, disabled]);
   useDialogFocus(panel, onClose, { canClose: !busy && !extraBusy });
   useEffect(() => {
     let cancelled = false; live.current = true;
@@ -60,6 +68,7 @@ export function SettingsPanel({ onClose, disabled = false, paper }: Props) {
   return <div className="settings-overlay"><section ref={panel} tabIndex={-1} className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="editor-settings-title" aria-busy={!!busy}>
     <header><h2 id="editor-settings-title">Settings</h2><button onClick={onClose} disabled={!!busy || extraBusy}>Close</button></header>
     {state && <p className="settings-identity">Modern Codex Editor <strong>{state.identity.editorVersion}</strong><span>{setupOperatingSystem(state.identity)}</span></p>}
+    <div className="settings-actions"><button disabled={locked} onClick={onCleanup}>Data &amp; cleanup…</button></div>
     <nav className="settings-view" aria-label="Settings view"><button aria-pressed={!changesOnly} onClick={() => setChangesOnly(false)}>All settings</button><button aria-pressed={changesOnly} onClick={() => setChangesOnly(true)}>Changed settings ({toolChanges.length + paperCount + updateCount + debugCount})</button></nav>
     <p className="settings-hint">Reset stages default values for the selected group. Save applies them; Undo reset restores the previous values.</p>
     {!changesOnly && <p>The editor includes a fixed Codex CLI version. Choose your TeX installation below; these settings apply to future reviews and compilations.</p>}
@@ -87,10 +96,10 @@ export function SettingsPanel({ onClose, disabled = false, paper }: Props) {
     <div className="settings-model">
       <label htmlFor="codex-model">Codex model</label>
       <div className="settings-actions">
-        <select id="codex-model" value={draft.codexModel ?? ''} disabled={locked} onChange={event => update('codexModel', event.target.value || null)}>
+        <select id="codex-model" ref={modelChoice} value={draft.codexModel ?? ''} disabled={locked} onChange={event => update('codexModel', event.target.value || null)}>
           <option value="">Use Codex default</option>
           {draft.codexModel && !selectedModel && <option value={draft.codexModel}>{draft.codexModel} · {models ? 'not in current catalog' : 'saved choice'}</option>}
-          {models?.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+          {models?.filter(model => !model.hidden || model.id === draft.codexModel).map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
         </select>
         <button disabled={locked || !draft.codexPath.trim()} onClick={() => void action('Reading available Codex models…', async () => {
           const available = await window.editor.listCodexModels({ ...draft });
@@ -99,7 +108,7 @@ export function SettingsPanel({ onClose, disabled = false, paper }: Props) {
       </div>
       <p className="settings-hint">Applies to new reviews and discussions. Side Chat follows this only when its Model is Editor default; it has separate model, effort and speed controls. Changes PDF and quick editorial actions use {editorialModelName} separately. Your general Codex settings stay unchanged. Load models checks the selected CLI's catalog without sending paper text or starting an AI response.</p>
       {selectedModel && <p className="settings-hint">Supported effort: {selectedModel.efforts.join(', ')}. {selectedModel.fast ? 'Fast mode available.' : 'Standard speed only.'} {selectedModel.images ? 'Screenshots supported.' : 'Text only.'} Access is checked again when you send a request.</p>}
-      {models && draft.codexModel && !selectedModel && <p className="settings-hint">The saved model is not in this catalog. Choose an available model or use the Codex default before reviewing.</p>}
+      <ModelNotice selected={draft.codexModel ?? null} models={models} disabled={locked} onSelect={id => update('codexModel', id)} />
     </div>
     </div>
     {state && <details className="settings-storage" open={changesOnly && (!!toolChanges.length || changed || !!resetUndo) || undefined}><summary>Application setup · {toolChanges.length} changed</summary><SettingsChanges scope="Application setup" changes={toolChanges} disabled={locked} reset={resetTools} undo={resetUndo ? () => { setDraft(resetUndo); setResetUndo(null); clearChecks(); setModels(null); setStatus('Previous values restored. Save settings to apply.'); } : undefined} /></details>}
@@ -110,7 +119,7 @@ export function SettingsPanel({ onClose, disabled = false, paper }: Props) {
       })}>Check setup</button>
       <button className="primary" disabled={locked || !changed || !draft.codexPath.trim() || !draft.latexmkPath.trim()} onClick={() => void action('Saving settings…', async () => {
         const saved = await window.editor.saveSetup({ ...draft });
-        if (live.current) { setState(saved); setDraft(saved.settings); setResult(null); setStatus('Settings saved.'); }
+        if (live.current) { setState(saved); setDraft(saved.settings); setResult(null); setStatus('Settings saved.'); window.dispatchEvent(new Event('review-model-changed')); }
       })}>Save settings</button>
       {changed && <button disabled={locked} onClick={() => { setDraft(state!.settings); setResetUndo(null); clearChecks(); setModels(null); }}>Discard setup changes</button>}
       <button hidden={changesOnly} disabled={locked || !draft.codexPath.trim() || !draft.latexmkPath.trim()} onClick={() => void action('Checking and copying setup details…', async () => {
@@ -137,6 +146,7 @@ export function SettingsPanel({ onClose, disabled = false, paper }: Props) {
     </details>}
     {paper && <PaperReviewSettingsPanel paper={paper} disabled={locked} changesOnly={changesOnly} onCount={setPaperCount} onBusy={setPaperBusy} />}
     <ChangesUpdateSettings disabled={locked} changesOnly={changesOnly} onCount={setUpdateCount} onBusy={setUpdateBusy} />
+    <button disabled={locked} onClick={onUsage}>Usage &amp; speed…</button>
     <DebugPanel disabled={locked} changesOnly={changesOnly} onCount={setDebugCount} onBusy={setDebugBusy} />
     {state?.notices.map((notice, index) => <p key={index} className="settings-hint">{notice}</p>)}
     <p className="settings-hint">By {editorAuthor}. {predecessorCredit}</p>

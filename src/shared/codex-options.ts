@@ -4,11 +4,12 @@ export const editorialModelName = 'GPT-6.1 Sol';
 
 export const codexEfforts = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const;
 export type CodexEffort = typeof codexEfforts[number];
+export const defaultReviewSettings = { model: editorialModel, effort: 'xhigh', fastMode: true } as const;
 export const effortOptions: Record<CodexEffort, { label: string; minutes: number }> = {
-  low: { label: 'Quick', minutes: 3 },
-  medium: { label: 'Standard', minutes: 3 },
-  high: { label: 'Deep', minutes: 10 },
-  xhigh: { label: 'Extra deep', minutes: 15 },
+  low: { label: 'Low', minutes: 3 },
+  medium: { label: 'Medium', minutes: 3 },
+  high: { label: 'High', minutes: 10 },
+  xhigh: { label: 'Extra high', minutes: 15 },
   max: { label: 'Max', minutes: 20 },
   ultra: { label: 'Ultra', minutes: 30 }
 };

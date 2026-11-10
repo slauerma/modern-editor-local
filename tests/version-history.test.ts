@@ -7,12 +7,27 @@ import { ProjectService } from '../src/main/project-service.ts';
 import { atomicWrite, digest } from '../src/main/files.ts';
 import { documentStatePath } from '../src/main/document-state.ts';
 
-async function fixture(source = '\uFEFFfirst\r\nline\r\n', write = atomicWrite) {
+async function fixture(source = '\uFEFFfirst\r\nline\r\n', write = atomicWrite, name = 'main.tex') {
   const root = path.resolve('.test-runs','history-'+randomUUID()); await fs.mkdir(root,{recursive:true});
-  const file=path.join(root,'main.tex');await fs.writeFile(file,source);
+  const file=path.join(root,name);await fs.writeFile(file,source);
   const service=new ProjectService(path.join(root,'runtime'),write), p=await service.open(file);
   return { root,file,service,p, save:(text:string)=>service.save({projectId:p.id,text,review:p.review}) };
 }
+test('Text mode history lists and compares exact saved versions without blocking sibling LaTeX history', async () => {
+  const f = await fixture('\uFEFFOriginal\r\ntext\r\n', atomicWrite, 'report.txt');
+  await f.save('Revised\ntext\n'); await f.save('Final\ntext\n');
+  const h = await f.service.versionHistory(f.p.id);
+  assert.equal(h.versions.length, 3); assert.deepEqual(h.notices, []);
+  const kept = await f.service.compareSavedVersion(f.p.id, digest('\uFEFFRevised\r\ntext\r\n'));
+  assert.equal(kept.text, '\uFEFFRevised\r\ntext\r\n');
+  const reopened = await f.service.open(f.file); assert.deepEqual(reopened.baseline, kept);
+  const sibling = path.join(f.root, 'article.tex'); await fs.writeFile(sibling, 'zero');
+  const p = await f.service.open(sibling);
+  for (const text of ['one', 'two', 'three', 'four']) await f.service.save({ projectId: p.id, text, review: p.review });
+  await f.service.deleteSavedVersion(p.id, digest('one'));
+  assert.deepEqual((await f.service.versionHistory(p.id)).notices, []);
+  assert.equal(await fs.readFile(f.file, 'utf8'), '\uFEFFFinal\r\ntext\r\n');
+});
 test('Save history keeps exact bytes, establishes a fixed original, and selecting a saved version survives Save/reopen',async()=>{
   const f=await fixture(), original=await fs.readFile(f.file);
   const first=await f.save('second\nline\n');assert.equal(first.baseline?.text,original.toString());

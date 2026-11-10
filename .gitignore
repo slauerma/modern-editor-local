@@ -34,6 +34,14 @@
 !/scripts/check-codex-isolation.mjs
 !/scripts/check-writing-conveniences.mjs
 !/scripts/check-contextual-comments.mjs
+!/scripts/check-anchor-repair.mjs
+!/scripts/check-review-convenience.mjs
+!/scripts/check-cleanup-review-quality.mjs
+!/scripts/check-everyday-workflows.mjs
+!/scripts/check-project-folder-access.mjs
+!/scripts/check-review-continuity.mjs
+!/scripts/check-comparison-versions.mjs
+!/scripts/check-swp-compilation.mjs
 !/scripts/check-pdf-review.mjs
 !/scripts/check-feedback-batches.mjs
 !/scripts/check-saved-alternatives.mjs
@@ -56,6 +64,7 @@
 **/.modern-editor/
 **/.runtime/
 **/debugging/
+**/usage/requests.json
 **/.test-runs/
 **/test-evidence/
 **/.env
@@ -198,3 +207,8 @@
 !/demo/2026-10-07/modern-editor-beamer-45s.vtt
 !/demo/2026-10-07/modern-editor-beamer-45s-transcript.md
 !/demo/2026-10-07/beamer-poster.png
+
+!scripts/check-review-batches.mjs
+!scripts/check-chat-suggest.mjs
+!scripts/check-parallel-codex.mjs
+!scripts/check-project-cleanup.mjs

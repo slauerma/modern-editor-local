@@ -21,6 +21,7 @@ export const readStateFile = readRegularFile;
 async function checkIdentity(home: string, name: string) {
   const identity = JSON.parse((await readStateFile(path.join(home, 'document.json'), 10000)).toString('utf8'));
   if (identity.schemaVersion !== 1 || identity.rootFile !== name) throw new Error(`Cannot open ${name}: its saved state identifies ${String(identity.rootFile)}. Existing files were preserved.`);
+  return identity;
 }
 
 const HASH = /^[a-f0-9]{64}$/, HISTORY_MARKER = 'legacy-history-imports.json';
@@ -143,10 +144,10 @@ export async function prepareDocumentState(file: string, create: boolean, notice
   const name = path.basename(file), home = documentStatePath(file);
   const legacy = path.join(path.dirname(file), '.modern-editor'), documents = path.dirname(home);
   if (await regularDirectory(legacy) && await regularDirectory(documents) && await regularDirectory(home)) {
-    await checkIdentity(home, name);
+    const identity = await checkIdentity(home, name);
     // Opening also upgrades older per-document folders. Routine autosave and
     // metadata writes only ensure that folder; they must not rescan legacy data.
-    if (!create) await importLegacyVersions(home, name, await legacyVersions(legacy, name, notices), notices);
+    if (!create && !identity.legacyHistoryDisabled) await importLegacyVersions(home, name, await legacyVersions(legacy, name, notices), notices);
     return home;
   }
   const copies: { relative: string; bytes: Buffer }[] = [];

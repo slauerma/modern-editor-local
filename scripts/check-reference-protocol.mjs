@@ -20,7 +20,7 @@ const schema = { type: 'object', properties: { token: { type: 'string' } }, requ
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 if (process.argv[2] === '--worker') {
-  const [mode, binary, directory] = process.argv.slice(3), enabled = mode === 'references';
+  const [mode, binary, directory] = process.argv.slice(3), enabled = mode !== 'none';
   const { CodexClient } = await import('../src/main/codex-client.ts');
   const { disabledCodexFeatures } = await import('../src/main/codex-policy.ts');
   const { referenceTools } = await import('../src/main/reference-service.ts');
@@ -46,7 +46,7 @@ if (process.argv[2] === '--worker') {
     if (envelope.method === 'thread/start') {
       stage = 'thread restrictions'; const p = envelope.params;
       assert.deepEqual(p.dynamicTools, enabled ? referenceTools : []);
-      assert.equal(p.ephemeral, true); assert.equal(p.approvalPolicy, 'never'); assert.equal(p.sandbox, 'read-only');
+      assert.equal(p.ephemeral, mode !== 'legacy'); assert.equal(p.approvalPolicy, 'never'); assert.equal(p.sandbox, 'read-only');
       assert.deepEqual(p.environments, []); assert.deepEqual(p.selectedCapabilityRoots, []);
       assert.equal(p.config.features.code_mode_host, enabled); assert.equal(p.config.agents.enabled, false);
       assert(disabledCodexFeatures.every(key => p.config.features[key] === false));
@@ -64,12 +64,30 @@ if (process.argv[2] === '--worker') {
   let outcome;
   try {
     stage = 'synthetic turn';
-    const result = await client.run(`SYNTHETIC_PROTOCOL_${enabled ? 'REFERENCES' : 'NONE'}. Use only synthetic reference tools if provided, then return the token.`, schema, () => {}, 'low', false, enabled ? reader : undefined);
-    stage = 'result checks'; assert.equal(result.token, enabled ? nonce : 'NO_READER_VERIFIED');
+    let legacy;
+    if (mode === 'legacy') {
+      const { ReviewPublisher } = await import('../src/main/review-publisher.ts');
+      const { reviewOutputSchema } = await import('../src/main/codex-service.ts');
+      const ids = [], saved = [];
+      const conversation = { threadId: null, tokens: null, async onThread(id) { ids.push(id); conversation.threadId = id; }, onUsage() {} };
+      const first = await client.run('Create a synthetic legacy review without a publishing tool.', reviewOutputSchema, () => {}, 'low', false, reader, { conversation });
+      assert.deepEqual(first, { comments: [] });
+      const source = 'The conclusion are immediate.';
+      const publisher = new ReviewPublisher(source, 0, source.length, async comments => { saved.push(...comments); }, () => true);
+      const final = await client.run('Continue the same review. If publish_comments is unavailable, return all comments in the final response.', reviewOutputSchema, () => {}, 'low', false, publisher.reader(reviewOutputSchema, reader), { conversation });
+      const comments = await publisher.finish(final);
+      assert.equal(ids.length, 2); assert.equal(ids[0], ids[1]);
+      assert.equal(comments.length, 1); assert.equal(saved.length, 1);
+      assert.equal(saved[0].validity, 'current'); assert.equal(saved[0].original, source);
+      legacy = { sameConversation: true, finalOnlyDeliveryRetained: true, comments: saved.length };
+    } else {
+      const result = await client.run(`SYNTHETIC_PROTOCOL_${enabled ? 'REFERENCES' : 'NONE'}. Use only synthetic reference tools if provided, then return the token.`, schema, () => {}, 'low', false, enabled ? reader : undefined);
+      stage = 'result checks'; assert.equal(result.token, enabled ? nonce : 'NO_READER_VERIFIED');
+    }
     assert(initialized && threadChecked && skillsSeen);
-    assert.deepEqual([...new Set(calls)].sort(), enabled ? [...referenceNames].sort() : []);
+    assert.deepEqual([...new Set(calls)].sort(), mode === 'references' ? [...referenceNames].sort() : []);
     if (enabled) assert(cancelled);
-    outcome = { passed: true, mode, version: client.version, editorVersion: version, referenceCalls: calls, syntheticSkillDiscoveredAndDisabled: true };
+    outcome = { passed: true, mode, version: client.version, editorVersion: version, referenceCalls: calls, syntheticSkillDiscoveredAndDisabled: true, ...(legacy ? { legacy } : {}) };
   } catch { outcome = { passed: false, mode, failedStage: stage }; process.exitCode = 1; }
   finally {
     await client.cancel(); await pause(50);
@@ -104,20 +122,26 @@ if (process.argv[2] === '--worker') {
         if (tool.type === 'namespace') {
           assert.equal(tool.name, 'functions'); assert(Array.isArray(tool.tools));
           for (const nested of tool.tools) { assert(['function', 'custom'].includes(nested.type)); assert(controls.has(`${tool.name}.${nested.name}`)); }
-        } else { assert.equal(tool.type, 'function'); assert(mode === 'references' && referenceNames.includes(tool.name)); }
+        } else { assert.equal(tool.type, 'function'); assert(mode !== 'none' && referenceNames.includes(tool.name)); }
       }
       const exec = advertised.find(tool => tool.type === 'namespace' && tool.name === 'functions')?.tools?.find(tool => tool.name === 'exec');
       const names = advertised.flatMap(tool => tool.type === 'namespace' ? (tool.tools ?? []).map(nested => `${tool.name}.${nested.name}`) : [tool.name ?? tool.type]);
-      assert(names.every(name => controls.has(name) || mode === 'references' && referenceNames.includes(name)));
+      assert(names.every(name => controls.has(name) || mode !== 'none' && referenceNames.includes(name)));
       const refs = exec ? referenceNames.filter(name => exec.description.includes(`tools: { ${name}(`)) : names.filter(name => referenceNames.includes(name));
-      assert.deepEqual([...refs].sort(), mode === 'references' ? [...referenceNames].sort() : []);
+      assert.deepEqual([...refs].sort(), mode !== 'none' ? [...referenceNames].sort() : []);
+      if (mode === 'legacy') assert(!JSON.stringify(advertised).includes('publish_comments'), 'Legacy conversation must keep its original tool inventory on resume');
       lastOutputs = (payload.input ?? []).filter(item => ['function_call_output', 'custom_tool_call_output'].includes(item.type));
       requests.push({ mode, referenceCount: refs.length, authorizationAbsent: true, skillMetadataAbsent: true });
-      assert(++responseIndex <= 16); step++;
+      assert(++responseIndex <= 18); step++;
       const custom = (id, input) => ({ id: `ctc_${id}`, type: 'custom_tool_call', status: 'completed', namespace: 'functions', name: 'exec', input, call_id: id });
-      const skills = 'const results={toolNames:ALL_TOOLS.map(t=>t.name)};for(const kind of ["executor","orchestrator"]){try{results[kind]=await tools.skills__list({authority:{kind}});}catch(e){results[kind]=String(e);}}text(results);';
+      const skills = 'const results={toolNames:ALL_TOOLS.map(t=>t.name)};for(const kind of ["executor","orchestrator"]){try{results[kind]=await tools.skills__list({authority:{kind}});}catch(e){results[kind]=String(e);}}if(typeof tools.list_mcp_resources==="function"){results.resources=await tools.list_mcp_resources({});results.templates=await tools.list_mcp_resource_templates({});try{results.read=await tools.read_mcp_resource({server:"synthetic_probe",uri:"probe://secret"});}catch(e){results.read=String(e);}}text(results);';
       let item;
-      if (step === 1) item = custom('scope_skills', skills);
+      if (mode === 'legacy') {
+        assert(step <= 2);
+        const comments = step === 1 ? [] : [{ title: 'Agreement', explanation: 'Use singular agreement.', original: 'The conclusion are immediate.', replacement: 'The conclusion is immediate.', before: '', after: '', packages: [] }];
+        item = { id: `msg_legacy_${step}`, type: 'message', role: 'assistant', status: 'completed', phase: 'final_answer', content: [{ type: 'output_text', text: JSON.stringify({ comments }), annotations: [] }] };
+      }
+      else if (step === 1) item = custom('scope_skills', skills);
       else if (mode === 'references' && step === 2) item = custom('scope_read', 'try{text(await tools.skills__read({package:"synthetic-outside-grant",resource:"file:///synthetic-ungranted.txt"}));}catch(e){text(String(e));}');
       else if (mode === 'references' && step <= 4) item = { id: `fc_scope_${step}`, type: 'function_call', status: 'completed', namespace: 'collaboration', name: step === 3 ? 'spawn_agent' : 'list_agents', arguments: step === 3 ? JSON.stringify({ task_name: 'synthetic_probe', fork_turns: 'none', message: 'Return INERT without tools.' }) : '{}', call_id: `scope_agent_${step}` };
       else if (mode === 'references' && step <= 7) {
@@ -141,7 +165,7 @@ if (process.argv[2] === '--worker') {
     await new Promise((resolve, reject) => { service.once('error', reject); service.listen(0, '127.0.0.1', resolve); });
     const config = `model = "gpt-5.6-sol"\nmodel_provider = "synthetic_protocol_probe"\n[model_providers.synthetic_protocol_probe]\nname = "Synthetic local protocol fixture"\nbase_url = "http://127.0.0.1:${service.address().port}/v1"\nwire_api = "responses"\nrequires_openai_auth = false\nsupports_websockets = false\nrequest_max_retries = 0\nstream_max_retries = 0\nstream_idle_timeout_ms = 10000\n[mcp_servers.synthetic_probe]\ncommand = ${JSON.stringify(process.execPath)}\nargs = [${JSON.stringify(fixture)}, ${JSON.stringify(marker)}]\ndefault_tools_approval_mode = "auto"\n`;
     await fs.writeFile(path.join(codexHome, 'config.toml'), config);
-    for (mode of ['references', 'none']) {
+    for (mode of ['references', 'none', 'legacy']) {
       stage = mode; step = 0; lastOutputs = [];
       const directory = path.join(root, mode); await fs.mkdir(directory);
       const child = spawn(process.execPath, ['--experimental-strip-types', script, '--worker', mode, binary, directory], { cwd: directory, env: { PATH: process.env.PATH, HOME: home, CODEX_HOME: codexHome, RUST_LOG: 'error' }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -169,33 +193,41 @@ if (process.argv[2] === '--worker') {
         stage = 'reference skill outputs';
         const skillsOutput = output('scope_skills'), skills = JSON.parse(skillsOutput.find(item => item.text?.startsWith('{')).text);
         skillProbe = skills;
-        const modern = outcome.version === '0.160.1';
+        const modern = ['0.160.1', '0.163.0'].includes(outcome.version);
         if (modern) {
           for (const kind of ['executor', 'orchestrator']) assert.equal(skills[kind], 'TypeError: tools.skills__list is not a function');
         } else { assert.deepEqual(skills.executor.skills, []); assert.deepEqual(skills.orchestrator.skills, []); }
         receipts.at(-1).skillToolSurface = modern ? 'not-exposed' : 'empty-inventory';
         stage = 'reference tool inventory';
-        assert.deepEqual(skills.toolNames.sort(), (modern ? [...referenceNames] : [...referenceNames, 'skills__list', 'skills__read']).sort());
+        const mcpResources = outcome.version === '0.163.0' ? ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'] : [];
+        assert.deepEqual(skills.toolNames.sort(), (modern ? [...referenceNames, ...mcpResources] : [...referenceNames, 'skills__list', 'skills__read']).sort());
+        if (mcpResources.length) {
+          const resources = typeof skills.resources === 'string' ? JSON.parse(skills.resources) : skills.resources;
+          const templates = typeof skills.templates === 'string' ? JSON.parse(skills.templates) : skills.templates;
+          assert.deepEqual(resources.resources, []); assert.deepEqual(templates.resourceTemplates, []);
+          assert.match(String(skills.read), /unknown.*server|not found|not available|disabled/i);
+          receipts.at(-1).mcpResourceSurface = 'empty; disabled-server read refused';
+        }
         stage = 'ungranted skill read';
         assert(JSON.stringify(output('scope_read')).includes(modern ? 'TypeError: tools.skills__read is not a function' : 'skill package is not available'));
         stage = 'blocked agent calls';
         for (const id of ['scope_agent_3', 'scope_agent_4']) assert.match(String(output(id)), /unsupported call/);
-      } else {
+      } else if (mode === 'none') {
         const blocked = output('scope_skills');
         assert.equal(typeof blocked === 'string' ? blocked : blocked?.map(item => item.text ?? '').join('\n'), 'code-mode host is disabled');
       }
       assert(!await exists(marker), 'Inherited MCP probe must not start');
     }
     assert.equal(await fs.readFile(path.join(codexHome, 'config.toml'), 'utf8'), config);
-    const files = ['package.json', 'src/main/codex-client.ts', 'src/main/codex-policy.ts', 'src/main/reference-service.ts', 'src/shared/references.ts', 'scripts/check-reference-protocol.mjs'];
+    const files = ['package.json', 'src/main/codex-client.ts', 'src/main/codex-policy.ts', 'src/main/reference-service.ts', 'src/main/review-publisher.ts', 'src/shared/references.ts', 'scripts/check-reference-protocol.mjs'];
     result = { passed: true, node: process.version, checks: receipts, requests, inheritedMcpNeverStarted: true, syntheticConfigPreserved: true, sourceHashes: Object.fromEntries(await Promise.all(files.map(async name => [name, hash(await fs.readFile(path.join(repo, name)))]))) };
-    console.log('PASS: exact advertised tool surface verified; reference tools round-trip; no-reader execution, host skills and agents are blocked. Synthetic localhost provider only.');
+    console.log('PASS: exact advertised tool surface verified; reference tools round-trip; no-reader execution, host skills and agents are blocked; legacy review resumes with final-only delivery. Synthetic localhost provider only.');
   } catch (error) { result = { passed: false, checks: receipts, requests, failedStage: failure ?? stage, syntheticSkillProbe: skillProbe, errorCode: typeof error.code === 'string' ? error.code : undefined }; process.exitCode = 1; console.error('FAIL: inspect the sanitized result and verify the supported Codex version.'); }
   finally {
     service.closeAllConnections(); await new Promise(resolve => service.close(resolve));
     result.listenerClosed = !service.listening;
     await fs.writeFile(path.join(root, 'results.json'), JSON.stringify(result, null, 2) + '\n');
-    if (result.passed) for (const name of ['home', 'references', 'none', 'harmless-mcp.mjs']) await fs.rm(path.join(root, name), { recursive: true, force: true });
+    if (result.passed) for (const name of ['home', 'references', 'none', 'legacy', 'harmless-mcp.mjs']) await fs.rm(path.join(root, name), { recursive: true, force: true });
     console.log('Sanitized evidence:', path.join(root, 'results.json'));
   }
 }

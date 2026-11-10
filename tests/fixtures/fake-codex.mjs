@@ -6,30 +6,36 @@ fs.writeFileSync('server.pid', String(process.pid));
 fs.writeFileSync('arguments.json', JSON.stringify(process.argv.slice(2)));
 const input = readline.createInterface({ input: process.stdin });
 const send = value => process.stdout.write(JSON.stringify(value) + '\n');
-const notification = (method, params) => send({ method, params: { threadId: 'thread-1', ...params } });
+let threadId = 'thread-1';
+const notification = (method, params) => send({ method, params: { threadId, ...params } });
 const requests = [];
 const has = name => fs.existsSync(name);
 const flags = process.argv.slice(2);
 const features = Object.fromEntries(flags.flatMap((flag,i) => flag === '--disable' || flag === '--enable' ? [[flags[i+1],flag === '--enable']] : []));
+if (flags.includes('features.cli_daybreak=false')) features.cli_daybreak = false;
+if (has('enabled-daybreak')) features.cli_daybreak = true;
+if (has('missing-daybreak')) delete features.cli_daybreak;
 if (flags.includes('features.goals=false')) features.goals = false;
 if (has('enabled-goals')) features.goals = true;
 if (has('missing-goals')) delete features.goals;
 let reviewConfig;
 let selectedModel = 'fixture-model';
 let referenceMode = '';
-const toolCall = (id, tool, args = {}, extra = {}) => send({ id, method: 'item/tool/call', params: { threadId: 'thread-1', turnId: 'turn-1', callId: id, namespace: null, tool, arguments: args, ...extra } });
+const toolCall = (id, tool, args = {}, extra = {}) => send({ id, method: 'item/tool/call', params: { threadId, turnId: 'turn-1', callId: id, namespace: null, tool, arguments: args, ...extra } });
 const referenceFinal = () => notification('turn/completed', { turn: { id: 'turn-1', status: 'completed', items: [{ type: 'agentMessage', text: '{"reply":"Reference checked","replacement":null,"packages":[]}' }] } });
 input.on('line', line => {
   const message = JSON.parse(line);
   requests.push(message); fs.writeFileSync('requests.json', JSON.stringify(requests));
   const { id, method, params } = message;
+  if (!method && id === 'published-batch') setTimeout(referenceFinal, 40);
   if (!method && referenceMode && id === 'ref-list') {
     toolCall('ref-read', 'references_read', { fileId: 'current-draft' });
     toolCall('ref-repeat', 'references_list', {}, { callId: 'ref-list' });
   }
   if (!method && referenceMode && id === 'ref-read') setTimeout(referenceFinal, 10);
   if (method && has('pause-' + method.replaceAll('/', '-'))) { notification('fixture/paused', { method }); return; }
-  if (method === 'initialize') send({ id, result: { userAgent: `${process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? params.clientInfo.name}/${has('unknown-version') ? '0.999.0' : has('new-version') ? '0.160.1' : has('prerelease-version') ? '0.154.0-alpha.6.2' : '0.153.4'} (fixture)` } });
+  if (method === 'initialize') send({ id, result: { userAgent: `${process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? params.clientInfo.name}/${has('unknown-version') ? '0.999.0' : has('new-version') ? '0.163.0' : has('runtime-160') ? '0.160.1' : has('prerelease-version') ? '0.154.0-alpha.6.2' : '0.153.4'} (fixture)` } });
+  if (method === 'account/rateLimits/read') send({ id, result: { rateLimits: { primary: { usedPercent: 35, windowDurationMins: 300, resetsAt: 2000000000 }, secondary: null } } });
   if (method === 'config/read') {
     if (has('config-unavailable')) send({id,error:{code:-32601,message:'Unsupported config/read'}});
     else send({id,result:{config:{features:{...features,...(has('unsafe-feature')?{plugins:true}:{}),...(has('unsafe-code-host')?{code_mode_host:!features.code_mode_host}:{}),...(has('unsafe-skill-discovery')?{skip_host_skill_discovery:false}:{})},...(has('agents-unavailable')?{}:{agents:{enabled:has('agents-enabled')||!flags.includes('agents.enabled=false')}}),web_search:'disabled',project_doc_max_bytes:0,mcp_servers:{'probe.with.dots':{command:'unused',enabled:true},'probe-two':{command:'unused',enabled:true}}}}});
@@ -42,10 +48,16 @@ input.on('line', line => {
     if (has('skills-oversized')) for (let i = 0; i < 1000; i++) skills.push({ ...skills[0], path: path.join(process.cwd(), 'extra-' + i, 'SKILL.md') });
     send({ id, result: { data: has('skills-incomplete') ? [] : [{ cwd: has('skills-wrong-cwd') ? path.dirname(process.cwd()) : process.cwd(), skills, errors: has('skills-error') ? [{ message: 'Synthetic discovery failure' }] : [] }] } });
   }
-  if (method === 'thread/start') {
+  if (method === 'thread/start' || method === 'thread/resume') {
     reviewConfig=params.config;
+    const persistent = method === 'thread/resume' || params.ephemeral === false;
+    const threads = has('stored-threads.json') ? JSON.parse(fs.readFileSync('stored-threads.json', 'utf8')) : [];
+    if (method === 'thread/resume' && (!threads.includes(params.threadId) || has('missing-thread'))) { send({ id, error: { code: -32000, message: 'Review conversation is unavailable. Choose Fresh review.' } }); return; }
+    if (method === 'thread/resume') threadId = params.threadId;
+    else if (persistent) { threadId = '00000000-0000-4000-8000-' + String(threads.length + 1).padStart(12, '0'); threads.push(threadId); fs.writeFileSync('stored-threads.json', JSON.stringify(threads)); }
+    if (has('wrong-resume')) threadId = 'another-thread';
     selectedModel = has('wrong-model') ? 'fixture-model' : params.model ?? 'fixture-model';
-    send({ id, result: { thread: { id: 'thread-1' }, approvalPolicy:has('wrong-policy')?'on-request':'never',sandbox:{type:'readOnly'},model: selectedModel, serviceTier: params.serviceTier === 'fast' ? (fs.existsSync('reject-fast') ? 'default' : 'priority') : null } });
+    send({ id, result: { thread: { id: threadId, ephemeral: !persistent }, cwd: process.cwd(), approvalPolicy:has('wrong-policy')?'on-request':'never',sandbox:{type:'readOnly'},model: selectedModel, serviceTier: params.serviceTier === 'fast' ? (fs.existsSync('reject-fast') ? 'default' : 'priority') : null } });
   }
   if (method === 'mcpServerStatus/list') {
     let data=Object.keys(reviewConfig.mcp_servers).map(name=>({name,runtimeStatus:has('enabled-mcp')?'connected':'disabled',tools:has('available-tool')?{harmless_echo:{}}:{},resources:[],resourceTemplates:[]}));
@@ -59,7 +71,7 @@ input.on('line', line => {
   }
   if (method === 'model/list') {
     const names = has('gpt6-models') ? ['gpt-6.1-sol','gpt-6-sol','gpt-6-luna','fixture-model'] : ['fixture-model'];
-    let data = names.map(model => ({ id: model, model, displayName: model, hidden: false, inputModalities: has('text-only') ? ['text'] : ['text', 'image'], supportedReasoningEfforts: (has('only-medium') ? ['medium'] : ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']).map(reasoningEffort => ({ reasoningEffort })), serviceTiers: has('no-fast') ? [] : [{ id: 'priority' }] }));
+    let data = names.map(model => ({ id: model, model, displayName: model, isDefault: model === 'fixture-model', hidden: false, inputModalities: has('text-only') ? ['text'] : ['text', 'image'], supportedReasoningEfforts: (has('only-medium') ? ['medium'] : ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']).map(reasoningEffort => ({ reasoningEffort })), serviceTiers: has('no-fast') ? [] : [{ id: 'priority' }] }));
     if(has('malformed-models')) data[0].supportedReasoningEfforts = null;
     if(has('duplicate-models')) data.push(data[0]);
     if(has('model-pagination')) data=params.cursor ? data.slice(1) : data.slice(0,1);
@@ -71,6 +83,7 @@ input.on('line', line => {
     if (has('delay-turn-response')) setTimeout(() => { send(started); fs.writeFileSync('turn-response-sent', ''); }, 40);
     else send(started);
     notification('turn/started', { turn: { id: 'turn-1' } });
+    if (mode === 'publish-tools') { toolCall('published-batch', 'publish_comments', { comments: [] }); return; }
     if (mode === 'reference-tools' || mode === 'reference-wait') {
       referenceMode = mode;
       toolCall('wrong-thread', 'references_read', { fileId: 'current-draft' }, { threadId: 'foreign' });
@@ -81,12 +94,20 @@ input.on('line', line => {
       toolCall(mode === 'reference-wait' ? 'ref-wait' : 'ref-list', mode === 'reference-wait' ? 'references_read' : 'references_list', mode === 'reference-wait' ? { fileId: 'current-draft' } : {});
       return;
     }
+    if (has('usage-events')) {
+      const multiplier = has('cumulative-usage') ? Number(has('usage-count') ? fs.readFileSync('usage-count', 'utf8') : 0) + 1 : 1;
+      if (has('cumulative-usage')) fs.writeFileSync('usage-count', String(multiplier));
+      const total = { totalTokens: 120 * multiplier, inputTokens: 100 * multiplier, cachedInputTokens: 30 * multiplier, outputTokens: 20 * multiplier, reasoningOutputTokens: 10 * multiplier };
+      for (let i = 0; i < 2; i++) notification('thread/tokenUsage/updated', { turnId: 'turn-1', tokenUsage: { total, last: total } });
+      notification('thread/tokenUsage/updated', { turnId: 'foreign', tokenUsage: { total: { ...total, totalTokens: 99999 } } });
+      notification('item/agentMessage/delta', { turnId: 'turn-1', delta: 'Answer' });
+    }
     if (mode === 'wait') return;
     if (mode === 'failure') { notification('turn/completed', { turn: { id: 'turn-1', status: 'failed', error: { message: 'Fixture model failure' }, items: [] } }); return; }
     const item = { id: 'answer-1', type: 'agentMessage', phase: 'final_answer', text: mode === 'invalid' ? 'not-json' : '{"reply":"Precise \\u03b8 advice","replacement":null,"packages":[]}' };
     notification('item/completed', { item: { ...item, id: 'commentary', phase: 'commentary', text: 'This is not the final result' } });
     // Fragment a JSONL record to exercise buffering rather than one event per chunk.
-    const line = JSON.stringify({ method: 'item/completed', params: { threadId: 'thread-1', item } }) + '\n';
+    const line = JSON.stringify({ method: 'item/completed', params: { threadId, item } }) + '\n';
     process.stdout.write(line.slice(0, 19));
     setTimeout(() => {
       process.stdout.write(line.slice(19));

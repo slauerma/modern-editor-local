@@ -231,6 +231,7 @@ export function ChangesPdfPane({ onExport, onExportSource, onExportReady, findHa
         <option value="pdf">PDF</option><option value="text">Text diff</option>
         <optgroup label="Changes PDF"><option value="changes" disabled={blocked}>Revision markup</option><option value="changes-clean" disabled={blocked}>Clean paper</option></optgroup>
       </select>
+      {baselineControl}
       <div className="change-navigation" role="group" aria-label="Navigate changes">
         <button aria-label="Previous change" title="Previous change" onClick={() => void show(Math.max(0, selected - 1))} disabled={!fresh || !changes.length || selected === 0}>‹</button>
         {changes.length ? <select aria-label="Comparison change" title={'Change ' + (Math.min(selected, changes.length - 1) + 1) + ' of ' + changes.length} value={Math.min(selected, changes.length - 1)} disabled={!fresh} onChange={e => void show(Number(e.target.value))}>
@@ -243,7 +244,6 @@ export function ChangesPdfPane({ onExport, onExportSource, onExportReady, findHa
       <details className="changes-options" onKeyDown={e => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary')?.focus(); e.stopPropagation(); } }}><summary aria-label="Comparison options" title="Save comparison, baseline and update settings">⋯</summary><div>
         <button disabled={!artifact?.build?.success} title="Save the displayed comparison, including an older snapshot. Numbered buttons and explanations are available only in the editor." onClick={e => { if (artifact?.build) { e.currentTarget.closest('details')?.removeAttribute('open'); onExport(artifact.build.id); } }}>Save Changes PDF…</button>
         <button disabled={!artifact?.build?.success} title="Save the generated source for the displayed comparison to a new .tex file. Figures, bibliography and other project resources are not copied." onClick={e => { if (artifact?.build) { e.currentTarget.closest('details')?.removeAttribute('open'); onExportSource(artifact.id); } }}>Save comparison LaTeX…</button>
-        {baselineControl}
         <label>Update after <select aria-label="Accepted changes per update" value={every} disabled={working} onChange={e => { const n = Number(e.target.value); void window.editor.changesSettings(n).then(s => setEvery(s.every)).catch(e => setError(errorText(e))); }}>{[1,3,5,10,20,50].map(n => <option key={n} value={n}>{n}</option>)}</select> accepts, and on Save.</label>
         <button disabled={blocked} onClick={() => void generate(false, true, true)}>Build locally without Sol</button>
         <p>The local PDF appears first. Sol then adds explanations and may inspect page images, using your Codex account. Keep reading while it works.</p>
@@ -259,7 +259,7 @@ export function ChangesPdfPane({ onExport, onExportSource, onExportReady, findHa
       {(working || waiting || !!message || artifact && !fresh || paused || !!omitted || !!notes) && <div className="changes-agent-status">
         <span role="status">{working ? message + ' · ' + elapsed + 's' : waiting ? 'Waiting for the current operation…' : artifact && !fresh ? 'Older comparison · Refresh to update' : paused ? 'Updates paused' : message}</span>
         {!!(omitted + notes) && <button className="text-button omitted-changes" onClick={() => { const index = changes.findIndex(c => c.layout === 'omitted'); setSelected(index); setNoteOpen(true); if (fresh) void show(index); }}>{[omitted ? omitted + ' not shown' : '', notes ? notes + (notes === 1 ? ' source note' : ' source notes') : ''].filter(Boolean).join(' · ')}</button>}
-        {working && <button className="text-button" onClick={() => { stop(); setPaused(true); }}>Stop</button>}
+        {working && <button className="text-button" onClick={() => { stop(); setPaused(true); }}>Stop comparison</button>}
       </div>}
     {artifact && artifact.presentation !== presentation && <p className="changes-pdf-notice">Showing {label(artifact.presentation).toLowerCase()} while {label(presentation).toLowerCase()} is unavailable.</p>}
     {snapshot?.agentNotice && <p className="changes-pdf-notice">Local comparison <button className="text-button" onClick={() => setNoteOpen(true)}>Details</button></p>}

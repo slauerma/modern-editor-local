@@ -11,6 +11,6 @@ export function paperGuidance(paperInstructions = '', preferences: EditPreferenc
   return {
     paperInstructions,
     ...(preferences.localEditsOnly ? { editPolicy: incrementalEditPolicy } : {}),
-    ...(preferences.preserveVoice ? { stylePolicy: 'Preserve the author’s voice, notation and intended meaning. Keep changes minimal. Avoid generic AI phrasing, unnecessary transitions, inflated claims and decorative rewrites. A substantive concern may be discussed without rewriting the passage.' } : {})
+    ...(preferences.preserveVoice ? { stylePolicy: 'Preserve the author’s voice, notation and intended meaning. Keep changes minimal unless the author explicitly requests a broader rewrite in the current request. Avoid generic AI phrasing, unnecessary transitions, inflated claims and decorative rewrites. A substantive concern may be discussed without rewriting the passage.' } : {})
   };
 }

@@ -1,0 +1,28 @@
+.cleanup-backdrop { position: fixed; inset: 0; z-index: 220; background: #14282033; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.cleanup-dialog { width: min(1120px, 100%); max-height: calc(100vh - 48px); overflow: auto; background: var(--paper, white); border: 1px solid #d7dfd5; border-radius: 10px; padding: 24px; box-shadow: 0 16px 48px #14282024; font-size: 15px; }
+.cleanup-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.cleanup-dialog h2 { margin: 0; font-size: 19px; }
+.cleanup-dialog footer { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 20px; }
+.cleanup-dialog button { min-height: 36px; }
+.cleanup-dialog label:not(.cleanup-confirm) { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.cleanup-dialog input[type=search] { flex: 1; }
+.cleanup-path, .cleanup-files code { display: block; overflow-wrap: anywhere; white-space: normal; font-size: 13px; user-select: text; }
+.cleanup-archive { padding: 12px 0; border-block: 1px solid #e2e7e0; }
+.cleanup-count { color: #53645a; font-size: 13px; }
+.cleanup-files { max-height: 36vh; overflow: auto; border-block: 1px solid #e2e7e0; }
+.cleanup-files table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.cleanup-files th, .cleanup-files td { text-align: left; padding: 10px 8px; vertical-align: top; border-bottom: 1px solid #e9ede6; }
+.cleanup-files th { position: sticky; top: 0; background: white; font-size: 13px; }
+.cleanup-files th:first-child { width: 57%; }
+.cleanup-files th:nth-child(2) { width: 20%; }
+.cleanup-files td { font-size: 13px; }
+.cleanup-files span, .cleanup-dialog li span { display: block; color: #53645a; margin-top: 5px; }
+.cleanup-dialog details { margin: 16px 0; }
+.cleanup-dialog li { margin: 10px 0; }
+.cleanup-confirm { display: flex; align-items: flex-start; gap: 10px; margin-top: 18px; }
+.cleanup-confirm input { margin-top: 4px; flex-shrink: 0; }
+
+.cleanup-options { display: flex; gap: 10px; margin-top: 20px; }
+.cleanup-options button[aria-pressed=true] { color: var(--accent, #2c6652); font-weight: 600; }
+.cleanup-papers td label { margin-top: 0 !important; }
+.cleanup-dialog footer { position: sticky; bottom: -24px; padding: 12px 0; background: var(--paper, white); }

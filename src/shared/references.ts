@@ -8,7 +8,8 @@ export const pastedContextSchema = z.object({
 }).strict();
 export type PastedContext = z.infer<typeof pastedContextSchema>;
 export type ReferenceRoot = { id: string; name: string; kind: 'file' | 'folder' | 'paste'; enabled: boolean; available: boolean; bytes?: number; createdAt?: string };
-export type ReferenceState = { roots: ReferenceRoot[]; notices: string[] };
+export type ProjectFolderAccess = { name: string; enabled: boolean; available: boolean };
+export type ReferenceState = { roots: ReferenceRoot[]; notices: string[]; projectFolder?: ProjectFolderAccess };
 export const sourceUseSchema = z.object({
   action: z.enum(['read', 'search']), name: z.string().max(500), location: z.string().max(1000),
   hash: z.string().regex(/^[a-f0-9]{64}$/), excerpts: z.array(z.object({ location: z.string().max(500), text: z.string().max(12000) })).max(20),
@@ -23,6 +24,6 @@ export type SourcesReceipt = z.infer<typeof sourcesReceiptSchema>;
 export type SourcesHistory = { items: SourcesReceipt[]; notices: string[] };
 
 export const referenceToolNames = ['references_list', 'references_search', 'references_read'] as const;
-export const referenceListSchema = z.object({ query: z.string().max(200).optional(), offset: z.number().int().min(0).max(1000).optional() }).strict();
-export const referenceSearchSchema = z.object({ query: z.string().trim().min(1).max(200), fileId: z.string().max(100).optional(), offset: z.number().int().min(0).max(1000).optional(), startPage: z.number().int().min(1).max(100000).optional() }).strict();
+export const referenceListSchema = z.object({ query: z.string().max(200).optional(), offset: z.number().int().min(0).max(10000).optional() }).strict();
+export const referenceSearchSchema = z.object({ query: z.string().trim().min(1).max(200), fileId: z.string().max(100).optional(), offset: z.number().int().min(0).max(10000).optional(), startPage: z.number().int().min(1).max(100000).optional() }).strict();
 export const referenceReadSchema = z.object({ fileId: z.string().min(1).max(100), pages: z.string().max(160).optional(), lines: z.string().max(80).optional(), offset: z.number().int().min(0).max(PASTED_CONTEXT_BYTES).optional() }).strict();

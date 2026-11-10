@@ -73,7 +73,7 @@ try {
   page=await application.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',e=>receipt.rendererErrors.push(String(e)));
   await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1560,960));
   await open();
-  await actions('Context and reference files…');await button('Paste context…').click();
+  await actions('Context and reference files…');await button('Paste material (context/comments)…').click();
   const context='  Synthetic reference notes Ω.\n'+('A long background paragraph.\n'.repeat(40000))+'Final context sentence.  \n';
   await page.getByLabel('Context name',{exact:true}).fill('Background notes');
   receipt.pasteGeometry=await page.getByLabel('Pasted context text',{exact:true}).evaluate(el=>({bounds:el.getBoundingClientRect().toJSON(),display:getComputedStyle(el).display,visibility:getComputedStyle(el).visibility,parents:[...function*(e){while(e){yield {tag:e.tagName,cls:e.className,bounds:e.getBoundingClientRect().toJSON()};e=e.parentElement;}}(el)]}));
@@ -107,7 +107,7 @@ try {
   assert.equal(await proposal.inputValue(),'The allocation are monotone.');assert.equal((await read()).text,source);
   await button('Undo').click();assert.equal(await proposal.inputValue(),'A deliberately different proposal.');
   await proposal.fill('The allocation is monotone.');receipt.checks.push('Use original is proposal-only and Undo restores the previous proposal');
-  await button('Accept & compile').click();await page.getByText('Applied · inspect the PDF',{exact:true}).waitFor({timeout:60000});
+  await button('Accept options').click();await page.getByRole('menuitem',{name:'Accept & compile',exact:true}).click();await page.getByText('Applied · inspect the PDF',{exact:true}).waitFor({timeout:60000});
   await page.getByLabel('PDF matches the current unsaved source',{exact:true}).waitFor({state:'attached'});await page.locator('.pdf-passage-marker').waitFor();
   assert.equal(await page.locator('.comment-card h1').innerText(),'Use a singular verb');
   assert((await read()).text.includes('The allocation is monotone.'));assert.equal(await fs.readFile(file,'utf8'),source);
@@ -134,7 +134,7 @@ try {
   assert.deepEqual(await fs.readFile(destination),Buffer.from(expected));assert.equal(await fs.readFile(file,'utf8'),source);
   await button('Save').click();await poll(async()=>(await fs.readFile(file,'utf8')).includes('allocation is'),'source Save');
   await button('View ▾').click();await button('Classic view').click();await rail.getByRole('button',{name:'Write',exact:true}).click();
-  await actions('Close project');await button('Open a LaTeX or text file').waitFor();await open();await page.locator('.workspace.layout-classic').waitFor();await classicGeometry('source',true);
+  await actions('Close project'); await button('Close and keep data').click();await button('Open a LaTeX or text file').waitFor();await open();await page.locator('.workspace.layout-classic').waitFor();await classicGeometry('source',true);
   await rail.getByRole('button',{name:'Context',exact:true}).click();await button('Inspect / copy').click();assert.equal(await page.getByLabel('Saved context text',{exact:true}).inputValue(),context);await button('Close local references').click();
   await rail.getByRole('button',{name:'Guide',exact:true}).click();assert.equal(await page.getByLabel('Standing paper instructions',{exact:true}).inputValue(),'Keep notation and avoid stylistic rewrites.');await button('Close paper instructions').click();
   receipt.checks.push('Classic shown/hidden Notes and Write/View preserve source/Undo; Files inventory; exact PDF export; context/guidance/Classic reopen');

@@ -1,25 +1,27 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { digest, readRegularFile } from './files.ts';
+import { sourceForScan, group, afterOptions, literal, isLiteral, type Argument } from './tex-input-syntax.ts';
+import type { BitmapGraphic } from './bitmap-graphics.ts';
 
 export type BuildInputLimits = { maxBytes: number; maxFiles: number };
 export type BuildDirectoryIdentity = { path: string; dev: number; ino: number };
 export type BuildInputFile = { relative: string; size: number; hash?: string };
 export type BuildInputInventory = { paths: BuildInputFile[]; truncated: boolean; visitedEntries: number };
 export type BuildInputPreparation = {
-  status: 'needs-selection'; reason: string; issues: string[]; requiredPaths: string[];
+  status: 'needs-selection'; reason: string; issues: string[]; requiredPaths: string[]; canAskCodex: boolean;
   requiredBytes: number; requiredFiles: number; inventory: BuildInputInventory; limits: BuildInputLimits;
   selectedBytes?: number; selectedFiles?: number;
 };
 export type BuildInputPlan = BuildInputPreparation | {
   status: 'ready'; mode: 'folder' | 'dependencies' | 'explicit'; files: BuildInputFile[]; totalBytes: number;
-  requiredPaths: string[]; inventory: BuildInputInventory; limits: BuildInputLimits; unresolvedIssues: string[];
+  requiredPaths: string[]; inventory: BuildInputInventory; limits: BuildInputLimits; unresolvedIssues: string[]; bitmapGraphics?: BitmapGraphic[];
 };
 export const BUILD_INPUT_COPY_THRESHOLD: Readonly<BuildInputLimits> = { maxBytes: 50_000_000, maxFiles: 500 };
 export const DEFAULT_BUILD_INPUT_LIMITS: Readonly<BuildInputLimits> = { maxBytes: 200_000_000, maxFiles: 2000 };
 export const MAX_BUILD_INPUT_LIMITS: Readonly<BuildInputLimits> = { maxBytes: 200_000_000, maxFiles: 2000 };
 const MAX_INVENTORY_ENTRIES = 10_000, MAX_DEPTH = 32, MAX_TEXT_BYTES = 8_000_000, MAX_GRAPH_TEXT_BYTES = 30_000_000;
-const allowed = new Set(['.tex', '.bib', '.bst', '.cls', '.sty', '.png', '.jpg', '.jpeg', '.pdf', '.eps', '.svg', '.csv', '.dat', '.txt', '.bbl', '.bb', '.def', '.cfg', '.clo', '.fd', '.ltx', '.otf', '.ttf', '.tikz', '.pgf']);
+const allowed = new Set(['.tex', '.bib', '.bst', '.cls', '.sty', '.bmp', '.png', '.jpg', '.jpeg', '.pdf', '.eps', '.svg', '.csv', '.dat', '.txt', '.bbl', '.bb', '.def', '.cfg', '.clo', '.fd', '.ltx', '.otf', '.ttf', '.tikz', '.pgf']);
 const ignoredDirectories = new Set(['node_modules', 'dist', 'build', 'output', 'out', 'releases']);
 const texExtensions = new Set(['.tex', '.sty', '.cls', '.def', '.cfg', '.clo', '.fd', '.ltx', '.tikz', '.pgf', '.bbl']);
 const companionExtensions = new Set(['.sty', '.cls', '.def', '.cfg', '.clo', '.fd', '.ltx']);
@@ -143,54 +145,6 @@ async function inventory(root: string, rootName: string, textSize: number, limit
   return { inventory: result, problems };
 }
 
-// Strip comments while preserving line offsets; verbatim bodies are prose, not
-// dependency commands. TeX macro expansion is deliberately outside this parser.
-function sourceForScan(text: string) {
-  let output = '', cursor = 0;
-  while (cursor < text.length) {
-    if (text[cursor] === '%') {
-      const end = text.indexOf('\n', cursor); if (end < 0) break;
-      output += ' '.repeat(end - cursor); cursor = end; continue;
-    }
-    if (text[cursor] === '\\') {
-      const verbatim = text.slice(cursor).match(/^\\begin\{(verbatim\*?|Verbatim|lstlisting|minted)\}/);
-      if (verbatim) {
-        const end = text.indexOf(`\\end{${verbatim[1]}}`, cursor + verbatim[0].length);
-        const stop = end < 0 ? text.length : end + verbatim[1].length + 6;
-        output += text.slice(cursor, stop).replace(/[^\n]/g, ' '); cursor = stop; continue;
-      }
-      const verb = text.slice(cursor).match(/^\\verb\*?([^a-zA-Z\s])/);
-      if (verb) {
-        const end = text.indexOf(verb[1], cursor + verb[0].length);
-        const stop = end < 0 ? text.length : end + 1;
-        output += text.slice(cursor, stop).replace(/[^\n]/g, ' '); cursor = stop; continue;
-      }
-      output += text.slice(cursor, cursor + 2); cursor += 2; continue;
-    }
-    output += text[cursor++];
-  }
-  return output;
-}
-type Argument = { value: string; end: number };
-function group(text: string, offset: number, open = '{', close = '}'): Argument | null {
-  let i = offset; while (/\s/.test(text[i] ?? '') && i < text.length) i++;
-  if (text[i] !== open) return null;
-  const start = ++i; let depth = 1;
-  for (; i < text.length; i++) {
-    if (text[i] === '\\') { i++; continue; }
-    if (text[i] === open) depth++;
-    if (text[i] === close && --depth === 0) return { value: text.slice(start, i), end: i + 1 };
-  }
-  return null;
-}
-function afterOptions(text: string, offset: number) {
-  let cursor = offset; if (text[cursor] === '*') cursor++;
-  for (let i = 0; i < 3; i++) { const option = group(text, cursor, '[', ']'); if (!option) break; cursor = option.end; }
-  return cursor;
-}
-function literal(value: string) { return value.trim().replace(/^"([^"\n]+)"$/, '$1'); }
-function isLiteral(value: string) { return !!value && !/[\\{}#$%^~\x00-\x1f]/.test(value); }
-
 /** Plan a bounded folder snapshot, narrowing a large folder by literal dependencies. */
 export async function planBuildInputs(settings: Settings): Promise<BuildInputPlan> {
   const limits = limitsFor(settings), root = path.resolve(settings.rootDir), rootName = canonicalRelative(settings.rootName);
@@ -198,7 +152,8 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
   const rootInfo = await safeStat(root, rootName, expectedIdentity), rootSize = Buffer.byteLength(settings.text);
   const listed = await inventory(root, rootName, rootSize, Math.min(MAX_INVENTORY_ENTRIES, Math.max(1, settings.inventoryEntryLimit ?? MAX_INVENTORY_ENTRIES)), expectedIdentity, settings.signal);
   const all = listed.inventory.paths, folderBytes = all.reduce((sum, file) => sum + file.size, 0);
-  if (!settings.selectedPaths && !listed.inventory.truncated && !listed.problems.length && all.some(f => f.relative === rootInfo.relative) && all.length <= Math.min(limits.maxFiles, BUILD_INPUT_COPY_THRESHOLD.maxFiles) && folderBytes <= Math.min(limits.maxBytes, BUILD_INPUT_COPY_THRESHOLD.maxBytes)) {
+  const hasBitmaps = all.some(file => /\.bmp$/i.test(file.relative)) || /\.bmp\b/i.test(settings.text);
+  if (!hasBitmaps && !settings.selectedPaths && !listed.inventory.truncated && !listed.problems.length && all.some(f => f.relative === rootInfo.relative) && all.length <= Math.min(limits.maxFiles, BUILD_INPUT_COPY_THRESHOLD.maxFiles) && folderBytes <= Math.min(limits.maxBytes, BUILD_INPUT_COPY_THRESHOLD.maxBytes)) {
     return { status: 'ready', mode: 'folder', files: all, totalBytes: folderBytes, requiredPaths: all.map(f => f.relative), inventory: listed.inventory, limits, unresolvedIssues: [] };
   }
   const selected = settings.selectedPaths ? new Set<string>() : undefined;
@@ -212,6 +167,7 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
     }
   }
   let graphBytes = 0, commands = 0;
+  const bitmapGraphics: BitmapGraphic[] = [];
   const graphicPaths = new Set<string>();
   const resolved = new Map<string, Awaited<ReturnType<typeof safeStat>> | null>();
   const lookup = async (relative: string) => {
@@ -272,7 +228,7 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
     // Copy the bounded superset instead of guessing the engine's preferred file.
     if (graphics && chosen.length) {
       for (const file of chosen) await add(file, scan, base);
-      return;
+      return chosen.map(file => file.relative);
     }
     if (chosen.length !== 1) {
       problem(`Ambiguous dependency ${at}; choose exactly one of: ${matches.map(f => f.relative).join(', ')}`);
@@ -297,9 +253,9 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
         while ((next = group(arg.value, pos))) {
           const directory = literal(next.value);
           if (!isLiteral(directory)) uncertain(`Computed graphics path in ${source}: ${directory}`);
-          // SWP often retains a Windows drive fallback alongside local paths.
+          // SWP retains Windows drive or Parallels UNC fallbacks alongside local paths.
           // It cannot resolve on this host; do not rewrite it or grant access.
-          else if (process.platform !== 'win32' && /^[a-z]:\//i.test(directory)) { /* Local matches are still required below. */ }
+          else if (process.platform !== 'win32' && (/^[a-z]:\//i.test(directory) || /^\/\/[^/]+\//.test(directory))) { /* Local matches are still required below. */ }
           else if (path.posix.isAbsolute(directory) || directory.includes(':')) problem(`Outside graphics path in ${source}: ${directory}`);
           else {
             const joined = path.posix.normalize(path.posix.join(base, directory));
@@ -351,8 +307,18 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
       const list = packages || bibliography && name === 'bibliography' ? arg.value.split(',') : [arg.value];
       for (const value of list) {
         const literalName = literal(value), ext = path.posix.extname(literalName);
-        const suffixes = ext ? [''] : packages ? ['.sty'] : classes ? ['.cls'] : bibliography ? ['.bib'] : style ? ['.bst'] : tex ? ['.tex', ''] : graphics ? ['.pdf', '.png', '.jpg', '.jpeg', '.eps'] : [''];
-        await reference(value, suffixes, source, base, tex || packages || classes, graphics, tex || packages || classes || style);
+        const suffixes = ext ? [''] : packages ? ['.sty'] : classes ? ['.cls'] : bibliography ? ['.bib'] : style ? ['.bst'] : tex ? ['.tex', ''] : graphics ? ['.pdf', '.bmp', '.png', '.jpg', '.jpeg', '.eps'] : [''];
+        const matches = await reference(value, suffixes, source, base, tex || packages || classes, graphics, tex || packages || classes || style);
+        if (graphics && ext.toLowerCase() === '.bmp' && matches?.length) {
+          if (name !== 'includegraphics') problem(`BMP preparation supports literal \\includegraphics only: ${source}: ${literalName}`);
+          else if (matches.length !== 1) problem(`Ambiguous BMP image in ${source}: ${literalName}. Use its exact local relative path.`);
+          else {
+            const image = { source, from: match.index, to: arg.end, input: matches[0] };
+            const previous = bitmapGraphics.find(item => item.source === source && item.from === image.from);
+            if (previous && previous.input !== image.input) problem(`BMP image resolves differently across input contexts: ${source}: ${literalName}`);
+            else if (!previous) bitmapGraphics.push(image);
+          }
+        }
       }
       command.lastIndex = arg.end;
     }
@@ -390,8 +356,8 @@ export async function planBuildInputs(settings: Settings): Promise<BuildInputPla
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
   await assertBuildDirectory(root, expectedIdentity);
   if (files.length > limits.maxFiles || totalBytes > limits.maxBytes) problem(`Required selection is ${files.length.toLocaleString('en-US')} files / ${(totalBytes / 1_000_000).toFixed(2)} MB; this build allows ${limits.maxFiles.toLocaleString('en-US')} files / ${limits.maxBytes / 1_000_000} MB.`);
-  if (issues.length || !selected && unresolvedIssues.length) return { status: 'needs-selection', reason: 'The local dependency check needs a reviewed file selection before compilation.', issues: [...issues, ...unresolvedIssues].slice(0, 50), requiredPaths: requiredFiles.map(f => f.relative), requiredBytes: requiredFiles.reduce((sum, f) => sum + f.size, 0), requiredFiles: requiredFiles.length, inventory: listed.inventory, limits, ...(selected ? { selectedBytes: totalBytes, selectedFiles: files.length } : {}) };
-  return { status: 'ready', mode: selected ? 'explicit' : 'dependencies', files, totalBytes, requiredPaths: requiredFiles.map(f => f.relative), inventory: listed.inventory, limits, unresolvedIssues };
+  if (issues.length || !selected && unresolvedIssues.length) return { status: 'needs-selection', reason: issues.length ? 'Resolve the input problem below, then compile again.' : 'Some input filenames need a reviewed file selection.', canAskCodex: issues.length === 0, issues: [...issues, ...unresolvedIssues].slice(0, 50), requiredPaths: requiredFiles.map(f => f.relative), requiredBytes: requiredFiles.reduce((sum, f) => sum + f.size, 0), requiredFiles: requiredFiles.length, inventory: listed.inventory, limits, ...(selected ? { selectedBytes: totalBytes, selectedFiles: files.length } : {}) };
+  return { status: 'ready', mode: selected ? 'explicit' : 'dependencies', files, totalBytes, requiredPaths: requiredFiles.map(f => f.relative), inventory: listed.inventory, limits, unresolvedIssues, bitmapGraphics };
 }
 
 /** Same checker for a proposed list; no model output is treated as a file path authority. */

@@ -1,0 +1,11 @@
+.split-button { display: flex; min-width: 0; height: 38px; }
+.split-button > button { margin: 0; min-width: 0; border: 1px solid var(--line); background: white; color: #344a3c; font-size: 13px; font-weight: 400; }
+.split-button .split-main { flex: 1; border-radius: 6px 0 0 6px; padding: 5px 6px; }
+.split-button .split-main:only-child { border-radius: 6px; }
+.split-button .split-arrow { flex: 0 0 30px; border-left: 0; border-radius: 0 6px 6px 0; padding: 5px; }
+.review-decisions .split-button > .split-arrow { flex: 0 0 30px; padding: 5px; }
+.review-decisions .split-button > .split-main { padding: 5px 6px; }
+.split-button > button:hover:not(:disabled) { background: #f5f7f4; border-color: #a9bbad; }
+.split-menu { position: fixed; z-index: 250; min-width: 210px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 5px; background: white; border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 5px 20px #20302026; }
+.split-menu button { display: block; width: 100%; min-height: 36px; text-align: left; padding: 7px 10px; border: 0; border-radius: 4px; font-size: 14px; background: white; color: #344a3c; }
+.split-menu button:hover:not(:disabled), .split-menu button:focus-visible { background: #edf3ee; }

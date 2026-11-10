@@ -61,7 +61,7 @@ export class SectionReview {
         await this.boundary();
         if (this.stopped) break;
         this.progress = { ...this.progress, label: section.label }; this.update('running');
-        await this.ports.request({ ...request, from: section.from, to: section.to, requestId: crypto.randomUUID() });
+        await this.ports.request({ ...request, conversationMode: this.progress.completed ? 'continue' : request.conversationMode, from: section.from, to: section.to, requestId: crypto.randomUUID() });
         this.progress = { ...this.progress, completed: this.progress.completed + 1 };
         await this.ports.delivered();
       }

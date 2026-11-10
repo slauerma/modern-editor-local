@@ -17,11 +17,11 @@ This repository contains the new Electron implementation; it does not import the
 
 | Component | Version | Terms and role |
 | --- | --- | --- |
-| Electron | 42.11.2 | MIT for Electron itself; its Chromium, Node.js and other bundled components have additional terms in the runtime's notices. |
+| Electron | 45.2.3 | MIT for Electron itself; its Chromium, Node.js and other bundled components have additional terms in the runtime's notices. |
 | React / React DOM | 18.3.1 | MIT; interface rendering. Scheduler and related dependency notices are included. |
 | CodeMirror and Lezer | Exact component versions in the inventory | MIT; source editing, syntax and comparison. Helper dependency notices are included. |
-| PDF.js (`pdfjs-dist`) | 6.3.289 | Apache-2.0; PDF rendering and worker. |
-| OpenAI Codex CLI (`@openai/codex` and native platform packages) | 0.155.0-alpha.9.2 | Apache-2.0 as declared by the packages; separately installed CLI for AI requests. |
+| PDF.js (`pdfjs-dist`) | 6.4.299 | Apache-2.0; PDF rendering and worker. |
+| OpenAI Codex CLI (`@openai/codex` and native platform packages) | 0.163.0 | Apache-2.0 as declared by the packages; separately installed CLI for AI requests. |
 | Zod | 3.25.76 | MIT; input validation. |
 | Vite / esbuild / Rollup | 7.3.6 / 0.28.2 / 4.63.1 | MIT and their bundled third-party terms; build tools. Vite's module-preload helper can appear in output. |
 | TypeScript | 5.9.3 | Apache-2.0 plus its supplied third-party notices; development tool. |

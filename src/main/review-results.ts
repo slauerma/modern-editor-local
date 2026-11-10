@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { resultSchema, type WaitingResult } from '../shared/contracts.ts';
 import { digest, exists, privateDirectory, readJSON, readRegularFile, writeJSON } from './files.ts';
 import type { ProjectService } from './project-service.ts';
+import type { ReviewRequestResults } from '../shared/review-outcome.ts';
 
 export class ReviewResults {
   readonly projects: ProjectService;
@@ -37,6 +38,28 @@ export class ReviewResults {
       items.push(item);
     } catch (error) { notices.push(`${file}: ${String(error)}`); }
     return { items: items.sort((a, b) => a.createdAt.localeCompare(b.createdAt)), notices };
+  }
+  async forRequests(projectId: string, requestIds: string[]): Promise<ReviewRequestResults> {
+    const ids = new Set(z.array(z.string().uuid()).min(1).max(500).parse(requestIds));
+    const p = this.projects.get(projectId), directory = await this.directory(projectId);
+    const items: ReviewRequestResults['items'] = [], notices: string[] = [];
+    let bytes = 0;
+    for (const file of (await fs.readdir(directory)).filter(n => /^result-[a-f0-9-]{36}\.json$/.test(n)).sort()) try {
+      const raw = await readRegularFile(path.join(directory, file)), result = resultSchema.parse(JSON.parse(raw.toString('utf8')));
+      if (result.rootFile !== p.name || file !== 'result-' + result.id + '.json') throw new Error('Wrong document or result identity.');
+      if (result.kind !== 'review' || !ids.has(result.originRequestId ?? result.id)) continue;
+      bytes += raw.length;
+      if (items.length >= 100 || bytes > 32000000) { notices.push('This summary is partial: more saved batches remain in the reviews folder.'); break; }
+      let receipt: 'adopted' | 'dismissed' | null = null;
+      const receiptFile = path.join(directory, 'received-' + result.id + '.json');
+      if (await exists(receiptFile)) try {
+        const value = await readJSON(receiptFile, 10000) as any;
+        if (value.rootFile !== p.name || value.resultHash !== digest(raw) || !['adopted', 'dismissed'].includes(value.outcome)) throw new Error('Invalid receipt');
+        receipt = value.outcome;
+      } catch { notices.push(file + ': delivery could not be confirmed; this result remains available to retry.'); }
+      items.push({ result, receipt });
+    } catch { notices.push(file + ': could not inspect this preserved result; counts may be incomplete.'); }
+    return { items: items.sort((a, b) => a.result.createdAt.localeCompare(b.result.createdAt)), notices };
   }
   async acknowledge(projectId: string, id: string, outcome: 'adopted' | 'dismissed') {
     z.string().uuid().parse(id); z.enum(['adopted', 'dismissed']).parse(outcome);

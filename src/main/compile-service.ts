@@ -11,9 +11,10 @@ import { classifyBuildLog } from './diagnostics.ts';
 import { compilerEnvironment, toolchainPaths, recordedInputs, within, type RecordedInput } from './compile-inputs.ts';
 import { rememberPdf, restorePdf } from './pdf-workspace-cache.ts';
 import { planBuildInputs, readBuildInput, type BuildInputLimits, type BuildInputPlan } from './build-input-plan.ts';
+import { prepareBitmapGraphics } from './bitmap-graphics.ts';
 
 type Input = { relative: string; hash: string };
-type Record = { build: Build; projectId: string; text: string; inputs: Input[]; directory: string; pdf: string; pdfHash?: string; external: RecordedInput[]; tciSupport?: { path: string; hash: string }; restored?: boolean; selectedPaths?: string[]; limits?: BuildInputLimits };
+type Record = { build: Build; projectId: string; text: string; inputs: Input[]; preparedInputs?: Input[]; preparedSourceHash?: string; directory: string; pdf: string; pdfHash?: string; external: RecordedInput[]; tciSupport?: { path: string; hash: string }; restored?: boolean; selectedPaths?: string[]; limits?: BuildInputLimits };
 const execute = promisify(execFile);
 export class CompileService {
   private running: { child: ChildProcess; cancelled: boolean } | null = null;
@@ -93,7 +94,7 @@ export class CompileService {
       const id = randomUUID(), directory = path.join(this.cache, id);
       await fs.mkdir(this.cache, { recursive: true, mode: 0o700 });
       await privateDirectory(this.cache, id);
-      await writeJSON(path.join(directory, '.editor-build.json'), { schemaVersion: 1, id }, 1000);
+      await writeJSON(path.join(directory, '.editor-build.json'), { schemaVersion: 1, id, owner: project.path }, 20000);
       const inputs: Input[] = [];
       const rootDir = path.dirname(project.path);
       let copiedBytes = 0;
@@ -112,6 +113,9 @@ export class CompileService {
       if (this.cancelled) throw new Error('Compilation cancelled.');
       await this.projects.assertDirectory(projectId);
       if (!inputs.some(i => i.relative === project.name)) throw new Error('The root source was not included in the snapshot.');
+      const preparedInputs = await prepareBitmapGraphics(directory, plan.bitmapGraphics ?? [], this.preparation.signal, plan.limits.maxBytes - copiedBytes);
+      const snapshotInputs = new Map(inputs.map(input => [input.relative, input]));
+      for (const input of preparedInputs) snapshotInputs.set(input.relative, input);
       // SWP 5.5 support belongs only in the build snapshot. A paper's own
       // root-level copy always wins, including case variants on macOS.
       let tciSupport: Record['tciSupport'];
@@ -124,7 +128,8 @@ export class CompileService {
       const flags = { pdflatex: '-pdf', lualatex: '-lualatex', xelatex: '-xelatex' };
       const args = ['-norc', flags[engine], '-synctex=1', '-interaction=nonstopmode', '-halt-on-error', '-file-line-error', '-latexoption=-recorder', '-latexoption=-no-shell-escape', './' + project.name];
       const started = Date.now();
-      let output = '';
+      const preparedImages = new Set((plan.bitmapGraphics ?? []).map(image => image.input)).size;
+      let output = preparedImages ? `Prepared ${preparedImages} BMP image(s) as PNG in the temporary build. Original source and images unchanged.\n` : '';
       const texCache = path.join(this.cache, 'texmf-cache');
       await privateDirectory(this.cache, 'texmf-cache');
       await privateDirectory(texCache, 'home'); await privateDirectory(texCache, 'tmp');
@@ -159,7 +164,7 @@ export class CompileService {
         const recorded = await recordedInputs(directory, stem, toolchain, texCache);
         external = recorded.external;
         if (recorded.unsupported.length) throw new Error('Unsupported external input: ' + recorded.unsupported.slice(0, 8).join(', ') + '. Copy manuscript resources into the paper folder and use relative paths.');
-        for (const input of inputs.filter(i => !i.relative.endsWith('.bbl'))) {
+        for (const input of [...snapshotInputs.values()].filter(i => !i.relative.endsWith('.bbl'))) {
           if (digest(await readRegularFile(path.join(directory, input.relative), 200 * 1024 * 1024)) !== input.hash) throw new Error(`Compilation changed the copied input ${input.relative}.`);
         }
         dependenciesVerified = plan.unresolvedIssues.length === 0;
@@ -170,10 +175,10 @@ export class CompileService {
       if (!success && !diagnostics.some(d => d.severity === 'error')) diagnostics.push({ severity: 'error', message: 'LaTeX did not produce a successful PDF. See the build log.' });
       const build: Build = { purpose, id, engine, success, clean: success && !blockingWarnings && dependenciesVerified && logReadable, dependenciesVerified, sourceHash: digest(text), diagnostics: diagnostics.slice(0, 50), log: output.slice(-30000), elapsedMs: Date.now() - started,
         inputSelection: { mode: plan.mode, fileCount: plan.files.length, totalBytes: plan.totalBytes, ...(plan.unresolvedIssues.length ? { unresolvedIssues: plan.unresolvedIssues } : {}) } };
-      this.records.set(id, { build, projectId, text, inputs, directory, pdf, pdfHash, tciSupport, external, selectedPaths: selectedPaths ? plan.files.map(file => file.relative) : undefined, limits });
+      this.records.set(id, { build, projectId, text, inputs, preparedInputs, preparedSourceHash: snapshotInputs.get(project.name)!.hash, directory, pdf, pdfHash, tciSupport, external, selectedPaths: selectedPaths ? plan.files.map(file => file.relative) : undefined, limits });
       // This optional snapshot is only for reopening the reader. Failure does
       // not turn a valid compilation into a failed source edit.
-      if (success && purpose === 'paper') try { await rememberPdf(directory, project.path, build, pdfHash); }
+      if (success && purpose === 'paper') try { await rememberPdf(directory, project.path, build, pdfHash, text); }
       catch { build.diagnostics.push({ severity: 'warning', message: 'This PDF could not be retained for workspace restoration. It remains available in this session.' }); }
       return build;
     } finally { this.preparation = null; this.busy = false; this.stopped.splice(0).forEach(resolve => resolve()); }
@@ -217,6 +222,7 @@ export class CompileService {
       const expectedIdentity = await this.projects.assertDirectory(projectId); stopped();
       if (record.tciSupport && digest(await readRegularFile(record.tciSupport.path, 8000000)) !== record.tciSupport.hash) return { status: 'changed' };
       for (const input of record.external) { stopped(); if (digest(await readRegularFile(input.path, 64000000)) !== input.hash) return { status: 'changed' }; }
+      for (const input of record.preparedInputs ?? []) { stopped(); if (digest(await readRegularFile(path.join(record.directory, input.relative), 200_000_000)) !== input.hash) return { status: 'changed' }; }
       const plan = await this.prepareInputs(projectId, text, record.selectedPaths, record.limits, signal); stopped();
       if (plan.status !== 'ready' || plan.unresolvedIssues.length) return { status: 'changed' };
       if (JSON.stringify(plan.files.map(file => file.relative)) !== JSON.stringify(record.inputs.map(input => input.relative))) return { status: 'changed' };
@@ -276,7 +282,7 @@ export class CompileService {
     try {
       await this.pdf(input.buildId);
       const source = path.join(record.directory, project.name), stem = project.name.replace(/\.(?:tex|txt)$/i, '');
-      if (digest(await readRegularFile(source, 8000000)) !== record.build.sourceHash) throw new Error('The compiled source snapshot changed.');
+      if (digest(await readRegularFile(source, 8000000)) !== (record.preparedSourceHash ?? record.build.sourceHash)) throw new Error('The compiled source snapshot changed.');
       await readRegularFile(path.join(record.directory, stem + '.synctex.gz'), 32000000);
       const hit = await syncTexSource(path.join(path.dirname(this.latexmk), 'synctex'), record.pdf, input, record.directory, signal);
       if (!hit) return { kind: 'unavailable', reason: 'LaTeX provided no source position here. Try nearby typeset text.' };
@@ -299,7 +305,7 @@ export class CompileService {
     try {
       await this.pdf(input.buildId);
       const source = path.join(record.directory, project.name), stem = project.name.replace(/\.(?:tex|txt)$/i, '');
-      if (digest(await readRegularFile(source, 8000000)) !== record.build.sourceHash) throw new Error('The compiled source snapshot changed.');
+      if (digest(await readRegularFile(source, 8000000)) !== (record.preparedSourceHash ?? record.build.sourceHash)) throw new Error('The compiled source snapshot changed.');
       await readRegularFile(path.join(record.directory, stem + '.synctex.gz'), 32000000);
       const location = await syncTexLocation(path.join(path.dirname(this.latexmk), 'synctex'), source, record.pdf, position, record.directory, signal);
       return location ? { kind: 'mapped', buildId: record.build.id, ...location } : { kind: 'unavailable', reason: 'LaTeX provided no visible PDF position for this line. Try nearby typeset text.' };
@@ -319,7 +325,7 @@ export class CompileService {
         if (!entry.isDirectory() || !/^[a-f0-9-]{36}$/.test(entry.name) || keep.has(entry.name)) continue;
         const dir = path.join(this.cache, entry.name);
         try {
-          const marker = await readJSON(path.join(dir, '.editor-build.json'), 1000) as any;
+          const marker = await readJSON(path.join(dir, '.editor-build.json'), 20000) as any;
           if (marker.schemaVersion !== 1 || marker.id !== entry.name) continue;
           await fs.rm(dir, { recursive: true }); this.records.delete(entry.name); removed++;
         } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }

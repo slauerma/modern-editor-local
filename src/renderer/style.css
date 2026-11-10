@@ -70,17 +70,17 @@ textarea:disabled { color:#708074; background:#f5f6f3; }
 .review-heading .hide-comments { font-size:19px; padding:1px 5px; color:var(--muted); }
 .source-pane-tools { display:flex; gap:18px; align-items:center; }
 .restore-comments { font-weight:500; }
-.review-activity { padding:28px 24px; margin:32px auto; max-width:470px; border:1px solid #c7d9c9; border-radius:12px; background:#edf5ee; box-shadow:0 4px 18px #2d655009; }
-.review-activity-heading { display:flex; align-items:center; gap:12px; }
-.review-activity h2 { margin:0; font-size:19px; line-height:1.4; color:#285640; }
-.review-activity-indicator { flex-shrink:0; width:21px; height:21px; border:2px solid #c5d9ca; border-top-color:var(--green); border-radius:50%; animation:review-turn 1.2s linear infinite; }
+/* Progress shares the existing header; starting/stopping never shifts the comment. */
+.review-progress-menu { position:relative; font-size:12px; font-weight:400; }
+.review-progress-menu>summary { display:flex; align-items:center; gap:7px; cursor:pointer; list-style:none; min-height:30px; }
+.review-progress-menu>summary::-webkit-details-marker { display:none; }
+.review-progress-popover { position:absolute; z-index:24; top:100%; left:0; width:300px; max-width:calc(100vw - 36px); padding:14px; border:1px solid var(--line); border-radius:6px; background:white; box-shadow:0 5px 18px #18342718; color:var(--ink); }
+.review-activity-heading { display:flex; align-items:center; gap:8px; font-size:13px; }
+.review-activity-indicator { display:inline-block; flex-shrink:0; width:12px; height:12px; border:2px solid #d8dfd9; border-top-color:var(--green); border-radius:50%; animation:review-turn 1.2s linear infinite; }
 .review-activity-indicator.paused { animation:none; border-color:#9db6a2; }
-.review-activity p { line-height:1.6; }
-.review-section-label { color:#41644e; font-size:12px; overflow-wrap:anywhere; margin:14px 0 8px; }
-.review-activity-note { font-size:12px; color:#637868; margin:12px 0 18px; }
-.review-activity-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }.review-activity-actions button { font-size:11px; padding:6px 9px; }
-.review-activity.compact { position:sticky; top:0; z-index:8; max-width:none; margin:0 0 14px; padding:13px 15px; }
-.review-activity.compact h2 { font-size:14px; }.review-activity.compact .review-activity-indicator { width:16px; height:16px; }
+.review-section-label { color:var(--muted); font-size:12px; overflow-wrap:anywhere; margin:10px 0; }
+.review-activity-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.review-activity-actions button { font-size:12px; min-height:30px; }
 @keyframes review-turn { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .review-activity-indicator { animation:none; } }
 .review-nav { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:12px; margin-bottom:12px; }.review-nav button { padding:5px 8px; }.review-nav>span { color:#778278; font-size:11px; }
@@ -122,7 +122,7 @@ textarea:disabled { color:#708074; background:#f5f6f3; }
 .reply-current { display:block; margin-top:6px; }
 .empty-comments { padding:20px 7px; color:#74816f; line-height:1.7; }.empty-comments h2 { font-size:16px; color:#40543e; }.empty-comments p { font-size:12px; }
 .comment-card .accept-compile { font-size:11px; padding:6px 10px; margin-top:4px; }
-.comment-overview { border:1px solid #dce4d7; border-radius:6px; background:white; padding:8px; margin-bottom:12px; }.comment-overview>div:first-child { display:flex; gap:6px; }.comment-overview select { min-width:0; max-width:52%; font-size:11px; padding:5px; }.overview-items { max-height:240px; overflow:auto; }.overview-items button { display:block; width:100%; white-space:normal; text-align:left; border:0; margin-top:5px; font-size:12px; }.overview-items small { display:block; color:var(--muted); margin-top:4px; }.overview-items [aria-current=true] { background:#e7f0e1; }
+.comment-overview { border:1px solid #dce4d7; border-radius:6px; background:white; padding:8px; margin-bottom:12px; }.comment-overview>div:first-child { display:flex; flex-wrap:wrap; gap:6px; }.comment-overview input[type=search] { width:100%; min-width:0; }.comment-overview select { min-width:0; max-width:52%; font-size:11px; padding:5px; }.overview-items { max-height:240px; overflow:auto; }.overview-items button { display:block; width:100%; white-space:normal; text-align:left; border:0; margin-top:5px; font-size:12px; }.overview-items small { display:block; color:var(--muted); margin-top:4px; }.overview-items [aria-current=true] { background:#e7f0e1; }
 .pdf-pane { display:flex; flex-direction:column; min-height:0; min-width:0; background:#e9ece7; }
 .pdf-controls { height:36px; flex-shrink:0; display:flex; align-items:center; gap:6px; padding:0 10px; font-size:11px; background:#f5f7f2; border-bottom:1px solid #dce2d6; }
 .pdf-controls button { padding:0 5px; font-size:20px; border:0; background:none; }.pdf-controls select { font-size:11px; padding:3px 4px; max-width:90px; margin-left:auto; }.pdf-controls input { width:44px; border:1px solid #d8dfd7; border-radius:4px; padding:2px; }.pdf-state { font-size:10px; white-space:nowrap; color:#8c6a34; }.pdf-state.current { color:#38634a; }
@@ -131,7 +131,12 @@ textarea:disabled { color:#708074; background:#f5f6f3; }
 .source-recovery,.review-request,.waiting-results,.context-preview { position:absolute; top:64px; left:24px; right:24px; z-index:25; max-height:calc(100vh - 118px); overflow:auto; padding:18px 22px; background:#fbfcf9; border:1px solid #cddbc6; border-radius:10px; box-shadow:0 10px 36px #23362130; font-size:12px; }
 .recovery-heading,.request-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .source-recovery p,.waiting-results p,.review-request p { line-height:1.6; overflow-wrap:anywhere; }.source-recovery textarea { height:200px; margin:12px 0; }.source-recovery select { max-width:100%; }
-.waiting-results details { border-top:1px solid var(--line); padding:12px 0; }.waiting-results pre,.context-preview pre { max-height:45vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.65 ui-monospace,monospace; background:#f1f4ee; padding:12px; }.waiting-results summary,.review-request summary { cursor:pointer; }
+.waiting-actions { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+.waiting-result { display:flex; align-items:flex-start; gap:16px; border-top:1px solid var(--line); padding:12px 0; }
+.waiting-result details { flex:1; min-width:0; }
+.waiting-result summary { min-height:32px; align-content:center; }
+.waiting-add { flex:0 0 auto; min-width:64px; }
+.waiting-results pre,.context-preview pre { max-height:45vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.65 ui-monospace,monospace; background:#f1f4ee; padding:12px; }.waiting-results summary,.review-request summary { cursor:pointer; }
 .review-request { max-width:950px; margin:auto; }.review-request textarea { min-height:82px; height:90px; font-family:inherit; margin:6px 0 10px; }.review-request details { margin-top:14px; }.request-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
 .review-presets { display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; }
 .review-presets label { display:flex; align-items:center; gap:8px; margin:0; }
@@ -249,6 +254,7 @@ footer { color:#53634f; font-size:12px; }
 .decision-meta,.source-search span,.pdf-controls,.review-nav>span { font-size:12px; }
 .empty-pdf { color:#59685d; }
 .stale-notice { color:#805425; }.stale-notice button,.pdf-navigation button { font-size:12px; }
+.anchor-repair-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .build-diagnostics button { font-size:12px; }
 .message strong,.message button,.reply-packages,.reply-current { font-size:12px; }
 
@@ -263,6 +269,27 @@ footer { color:#53634f; font-size:12px; }
 .viewer-controls .comparison-baseline { flex:1; min-width:120px; }
 .viewer-controls .comparison-baseline select { flex:1; width:0; }
 .viewer-controls .viewer-close { margin-left:auto; }
+.comparison-picker { min-width:0; flex:1; }
+.comparison-picker-button { display:flex; align-items:center; justify-content:space-between; gap:6px; width:100%; min-width:0; }
+.comparison-picker-button>span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.comparison-choices { position:absolute; z-index:40; top:44px; left:8px; right:8px; max-height:min(580px,70vh); overflow:auto; padding:12px; background:white; border:1px solid var(--line); border-radius:6px; box-shadow:0 5px 18px #203c2426; font-size:13px; }
+.comparison-choices-heading,.comparison-other,.comparison-keep { display:flex; align-items:center; gap:8px; }
+.comparison-choices-heading { justify-content:space-between; margin-bottom:8px; }
+.comparison-version-list { display:grid; gap:4px; }
+.comparison-version { display:grid; text-align:left; gap:3px; width:100%; padding:9px; background:transparent; border-color:transparent; white-space:normal; }
+.comparison-version[aria-pressed="true"] { border-color:var(--line); background:#f5f7f2; }
+.comparison-version>span:first-child { color:var(--green,#2c6552); }
+.comparison-version small,.comparison-excerpt { color:#59685d; font-size:12px; font-weight:normal; }
+.comparison-excerpt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.comparison-keep { margin-top:12px; flex-wrap:wrap; }
+.comparison-keep input { flex:1; min-width:100px; width:0; }
+.comparison-other { margin-top:8px; flex-wrap:wrap; }
+.changes-toolbar .comparison-picker { flex:1 1 100px; max-width:170px; }
+.changes-toolbar .comparison-version { white-space:normal; }
+.changes-toolbar .comparison-choices { top:100%; }
+.comparison-choices .version-picker { flex-wrap:wrap; }
+.comparison-choices .version-picker label { min-width:0; }
+.comparison-choices .version-picker select { width:100%; max-width:100%; }
 .viewer-pane>.viewer-caption { margin:0; padding:7px 12px; font-size:12px; border-bottom:1px solid var(--line); white-space:normal; overflow-wrap:anywhere; }
 /* Preview information floats above the reader: opening it never resizes or
    repositions a PDF page. The details grow upward from a compact bottom bar. */
@@ -355,3 +382,56 @@ footer { color:#53634f; font-size:12px; }
 .wording-choice-row label { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .wording-choice-row select { min-width: 0; max-width: 100%; flex: 1; }
 .wording-reason { font-size: 13px; margin: 6px 0 10px; color: var(--muted); }
+
+.context-ellipsis { color:var(--muted); }
+.contextual-proposal .context-toggle { margin:8px 0 0; font-size:12px; }
+.review-request .review-model-controls { margin:0; min-width:0; flex:1; font-size:12px; }
+.review-model-controls>summary { color:var(--green); padding:6px 0; }
+.review-model-fields { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; padding:8px 0; }
+.review-model-fields label { display:flex; flex-direction:column; gap:5px; min-width:80px; }
+.review-model-fields label:first-child { flex:1; min-width:180px; }
+.review-model-fields select { width:100%; }
+.model-notice { color:var(--muted); font-size:12px; line-height:1.5; margin:6px 0; overflow-wrap:anywhere; }
+.model-notice .text-button { font-size:inherit; padding:3px 6px; }
+.comment-updates { font:inherit; }
+.comment-updates[aria-pressed="true"] { color:var(--green); background:#f5f7f2; }
+.chat-settings .model-notice { padding:0 10px; }
+.usage-panel { width:min(1020px, calc(100vw - 48px)); }
+.usage-controls { display:flex; align-items:center; gap:10px; margin:14px 0; }
+.usage-recording { display:flex; gap:8px; align-items:center; }
+.usage-summary { line-height:1.8; }
+.usage-table-wrap { overflow:auto; max-height:42vh; }
+.usage-table { border-collapse:collapse; width:100%; font-size:12px; text-align:left; }
+.usage-table caption { text-align:left; color:var(--muted); padding:8px 0; }
+.usage-table th,.usage-table td { padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+.usage-table th { position:sticky; top:0; background:white; font-weight:500; }
+.usage-account { margin-top:20px; padding-top:10px; border-top:1px solid var(--line); }
+.usage-account h3 { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:500; }
+.usage-account li { margin:8px 0; }
+
+.project-folder-access { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.project-folder-access label { display: inline-flex; align-items: center; gap: 7px; font-size: inherit; }
+.project-folder-access input[type="checkbox"] { margin: 0; flex: 0 0 auto; }
+.project-folder-access > span { color: var(--muted); font-size: 0.9em; }
+
+/* Review continuity uses the same quiet controls as paper guidance. */
+.review-conversation { margin: 10px 0; }
+.review-conversation-choice, .rejection-reason-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.review-conversation-choice label { display: flex; align-items: center; gap: 10px; }
+.review-conversation-history { margin-top: 6px; }
+.review-history-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 6px 0; }
+.review-history-row button { text-align: left; overflow-wrap: anywhere; white-space: normal; min-width: 0; flex: 1; }
+.review-history-row span { flex-shrink: 0; color: #627167; font-size: .85em; }
+.review-history-text { white-space: pre-wrap; overflow: auto; max-height: 40vh; overflow-wrap: anywhere; }
+.rejection-reason-panel { max-width: 640px; }
+.rejection-reason-panel textarea { width: 100%; min-height: 100px; margin: 8px 0 16px; }
+.author-rejection-reason { color: #536159; }
+
+.review-history-exchange { padding: 12px 0; border-top: 1px solid #e2e7e3; }
+.review-history-prose { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow: auto; }
+.review-history-exchange details, .review-outcome-detail details { margin: 10px 0; }
+.review-history-exchange pre, .review-outcome-detail pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.review-outcome > summary { cursor: pointer; }
+.review-outcome.compact { min-width: 0; max-width: 70%; }
+.review-outcome.compact > summary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.review-outcome.compact > .review-outcome-detail { position: absolute; bottom: 42px; left: 12px; z-index: 40; width: min(640px, calc(100vw - 24px)); max-height: 60vh; overflow: auto; padding: 16px; background: white; border: 1px solid #dce3dd; border-radius: 8px; box-shadow: 0 4px 20px #23362120; font-size: 14px; line-height: 1.5; }

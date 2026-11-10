@@ -13,16 +13,23 @@ const cachedBuildSchema = z.object({
   diagnostics: z.array(z.object({ severity: z.enum(['error', 'warning']), message: z.string().max(10000), file: z.string().max(10000).optional(), line: z.number().int().nonnegative().optional() })).max(50),
   log: z.string().max(30000), elapsedMs: z.number().finite().nonnegative()
 });
-const snapshotSchema = z.object({ schemaVersion: z.literal(1), owner: z.string().max(10000), build: cachedBuildSchema, pdfHash: hash, syncTexHash: hash.nullable() });
+const snapshotSchema = z.object({ schemaVersion: z.literal(1), owner: z.string().max(10000), build: cachedBuildSchema, pdfHash: hash, syncTexHash: hash.nullable(), preparedSourceHash: hash.optional() });
 
-export async function rememberPdf(directory: string, owner: string, build: Build, expectedHash?: string) {
+export async function rememberPdf(directory: string, owner: string, build: Build, expectedHash?: string, originalText?: string) {
   if (build.purpose && build.purpose !== 'paper') throw new Error('A comparison or proposal preview cannot become a restored paper PDF.');
   const stem = path.basename(owner).replace(/\.(?:tex|txt)$/i, '');
   const pdf = await readRegularFile(path.join(directory, stem + '.pdf'), 100000000);
   if (expectedHash && digest(pdf) !== expectedHash) throw new Error('The compiled PDF changed before it could be retained.');
   let syncTexHash: string | null = null;
   try { syncTexHash = digest(await readRegularFile(path.join(directory, stem + '.synctex.gz'), 32000000)); } catch {}
-  const snapshot = snapshotSchema.parse({ schemaVersion: 1, owner, build, pdfHash: digest(pdf), syncTexHash });
+  const compiledSource = await readRegularFile(path.join(directory, path.basename(owner)), 2000000);
+  let preparedSourceHash: string | undefined;
+  if (digest(compiledSource) !== build.sourceHash) {
+    if (originalText === undefined || digest(originalText) !== build.sourceHash) throw new Error('The original source snapshot is unavailable.');
+    await fs.writeFile(path.join(directory, '.editor-original-source.tex'), originalText, { flag: 'wx', mode: 0o600 });
+    preparedSourceHash = digest(compiledSource);
+  }
+  const snapshot = snapshotSchema.parse({ schemaVersion: 1, owner, build, pdfHash: digest(pdf), syncTexHash, preparedSourceHash });
   await writeJSON(path.join(directory, '.editor-pdf-snapshot.json'), snapshot, 1000000);
 }
 
@@ -30,13 +37,15 @@ export async function restorePdf(cache: string, owner: string, id: string) {
   z.string().uuid().parse(id);
   const directory = path.join(cache, id), stat = await fs.lstat(directory);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('The PDF snapshot directory is not a regular local directory.');
-  const marker = await readJSON(path.join(directory, '.editor-build.json'), 1000) as { schemaVersion: number; id: string };
+  const marker = await readJSON(path.join(directory, '.editor-build.json'), 20000) as { schemaVersion: number; id: string };
   if (marker.schemaVersion !== 1 || marker.id !== id) throw new Error('Unknown PDF snapshot.');
   const snapshot = snapshotSchema.parse(await readJSON(path.join(directory, '.editor-pdf-snapshot.json'), 1000000));
   if (snapshot.owner !== owner || snapshot.build.id !== id) throw new Error('The PDF snapshot belongs to another paper.');
   const stem = path.basename(owner).replace(/\.(?:tex|txt)$/i, ''), pdf = path.join(directory, stem + '.pdf');
-  const source = await readRegularFile(path.join(directory, path.basename(owner)), 2000000), bytes = await readRegularFile(pdf, 100000000);
+  const compiledSource = await readRegularFile(path.join(directory, path.basename(owner)), 2000000), bytes = await readRegularFile(pdf, 100000000);
+  if (snapshot.preparedSourceHash && digest(compiledSource) !== snapshot.preparedSourceHash) throw new Error('The prepared PDF source changed.');
+  const source = snapshot.preparedSourceHash ? await readRegularFile(path.join(directory, '.editor-original-source.tex'), 2000000) : compiledSource;
   if (digest(source) !== snapshot.build.sourceHash || digest(bytes) !== snapshot.pdfHash || bytes.subarray(0, 5).toString() !== '%PDF-') throw new Error('The PDF snapshot changed.');
   if (snapshot.syncTexHash && digest(await readRegularFile(path.join(directory, stem + '.synctex.gz'), 32000000)) !== snapshot.syncTexHash) throw new Error('The PDF position map changed.');
-  return { build: snapshot.build, text: new TextDecoder('utf-8', { fatal: true }).decode(source), directory, pdf, pdfHash: snapshot.pdfHash };
+  return { build: snapshot.build, text: new TextDecoder('utf-8', { fatal: true }).decode(source), directory, pdf, pdfHash: snapshot.pdfHash, preparedSourceHash: snapshot.preparedSourceHash };
 }

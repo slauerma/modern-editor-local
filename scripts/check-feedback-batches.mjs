@@ -24,10 +24,17 @@ dialog.showOpenDialog=async()=>({canceled:false,filePaths:[probe.file]});
 dialog.showSaveDialog=async()=>({canceled:!probe.save,filePath:probe.save});
 const actualCompile=compiler.compile.bind(compiler);
 compiler.compile=async(...args)=>{probe.builds++;const result=await actualCompile(...args);probe.lastBuild={success:result.success,verified:result.dependenciesVerified,diagnostics:result.diagnostics};return result;};
-codex.client.run=async prompt=>{
+codex.client.run=async(prompt,schema,progress,effort,fast,reader)=>{
   probe.calls++;const p=JSON.parse(prompt);
   if(!p.items)throw Error('Unexpected model call in controlled test');
-  return {items:p.items.slice(0,probe.calls===probe.failAt?-1:undefined).map(item=>({itemId:item.itemId,comments:[JSON.parse(item.feedback)]}))};
+  let feedback='',offset=0;
+  for(;;){const part=await reader.call('references_read',{fileId:'outside-feedback',offset});feedback+=part.excerpts.map(e=>e.text).join('');if(part.nextOffset===null)break;if(part.nextOffset<=offset)throw Error('Feedback paging did not advance');offset=part.nextOffset;}
+  return {items:p.items.slice(0,probe.calls===probe.failAt?-1:undefined).map(item=>{
+    const heading='## '+item.originalNumber+' · '+item.itemId+'\\n\\n',start=feedback.indexOf(heading);
+    if(start<0)throw Error('Missing feedback item '+item.itemId);
+    const body=feedback.slice(start+heading.length).split('\\n\\n## ')[0].trim();
+    return {itemId:item.itemId,comments:[JSON.parse(body)]};
+  })};
 };
 codex.planChanges=async(id,prompt)=>{probe.arrangements++;const p=JSON.parse(prompt);return{inspect:[],groups:p.changes.map(c=>({ids:[c.id],layout:'keep',summary:'Controlled trial explanation.'}))};};
 globalThis.__feedbackProbe=probe;globalThis.__feedbackProjects=projects;globalThis.__feedbackService=codex;globalThis.__feedbackCompiler=compiler;
@@ -54,18 +61,18 @@ async function poll(fn,label,ms=45000){const until=Date.now()+ms;while(Date.now(
 async function screenshot(name){await page.screenshot({path:path.join(evidence,name+'.png')});}
 async function actions(name){await button('Actions ▾').click();await button(name).click();}
 async function open(){await application.evaluate((_,file)=>globalThis.__feedbackProbe.file=file,file);await button('Open a LaTeX or text file').click();await page.locator('.source-pane .cm-content').waitFor();await page.evaluate(reader.outputFiles[0].text);if(await button('Dismiss notice').count())await button('Dismiss notice').click();}
-async function paste(name,text){await button('Paste context…').click();await page.getByLabel('Context name',{exact:true}).fill(name);await page.getByLabel('Pasted context text',{exact:true}).fill(text);await button('Save and enable for this paper').click();await page.locator('.reference-roots li').filter({hasText:name}).waitFor();}
+async function paste(name,text){await button('Paste material (context/comments)…').click();await page.getByLabel('Context name',{exact:true}).fill(name);await page.getByLabel('Pasted context text',{exact:true}).fill(text);await button('Save and enable for this paper').click();await page.locator('.reference-roots li').filter({hasText:name}).waitFor();}
 try {
  application=await _electron.launch({executablePath:require('electron'),args:[desktop],cwd:appRoot,env:{...process.env,MODERN_EDITOR_RUNTIME_DIR:path.join(root,'runtime')},chromiumSandbox:true,timeout:25000});
  const child=application.process();receipt.processes.push({pid:child.pid,exited:false});console.log('Owned Electron PID',child.pid);
  page=await application.firstWindow();page.setDefaultTimeout(20000);page.on('pageerror',e=>receipt.rendererErrors.push(String(e)));
  await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1580,980));
  await open();await actions('Context and reference files…');await paste('Trial report A',raw);
- await button('Turn into comments…').click();await button('Prepare items').click();
+ await page.locator('.reference-roots li').filter({hasText:'Trial report A'}).getByRole('button',{name:'Turn into comments…',exact:true}).click();await button('Prepare items').click();
  await panel().getByText('0 / '+comments.length+' review items converted · 0 comments saved · '+comments.length+' pending',{exact:true}).waitFor();
  assert.equal((await probe()).calls,0);assert.equal((await read()).text,source);
  const recordId=await page.getByLabel('Saved outside feedback').inputValue();
- assert(await panel().getByLabel('Add comments when ready',{exact:true}).isChecked());await panel().getByLabel('Add comments when ready',{exact:true}).uncheck();
+ const autoUpdates=panel().getByRole('button',{name:'Add suggestions as they arrive',exact:false});assert.equal(await autoUpdates.getAttribute('aria-pressed'),'true');await autoUpdates.click();
  await button('Next batch (10)').click();await panel().getByText('10 / '+comments.length+' review items converted · 10 comments saved · '+(comments.length-10)+' pending',{exact:true}).waitFor();
  await button('Convert remaining with Codex').click();await panel().getByRole('alert').waitFor();
  assert.equal(await panel().locator('.feedback-comment').count(),10);
@@ -80,7 +87,7 @@ try {
  await button('Undo').click();assert.equal((await read()).text,source);
  await actions('Import outside feedback…');await page.getByLabel('Saved outside feedback').selectOption(recordId);
  await button('Select all available ('+comments.length+')').click();await button('Add selected comments').click();
- await poll(async()=>await panel().getByText('All these comments are already in the queue. The original review remains here.',{exact:true}).count(),'idempotent import');
+ await poll(async()=>await panel().getByText(comments.length+' in Comments · 0 matched a prior rejection · 0 available to add',{exact:true}).count(),'idempotent import');
  await button('Close outside feedback').click();
  const firstTitle=await page.locator('.comment-card h1').innerText();await button('Accept').click();
  await poll(async()=>(await read()).text!==source && await page.locator('.comment-card h1').innerText()!==firstTitle,'accept completes before background arrival');
@@ -90,14 +97,14 @@ try {
  await poll(async()=>await page.getByLabel('Saved outside feedback').inputValue()==='', 'explicit context clears previous record');assert(await page.getByLabel('Feedback context').inputValue());assert.equal(await panel().getByRole('button',{name:'Convert remaining with Codex',exact:true}).count(),0);
  await screenshot('03-report-switch');await button('Prepare items').click();
  await panel().getByText('0 / 1 review items converted · 0 comments saved · 1 pending',{exact:true}).waitFor();
- await panel().getByLabel('Add comments when ready',{exact:true}).check();await button('Convert remaining with Codex').click();
+ if(await autoUpdates.getAttribute('aria-pressed')!=='true')await autoUpdates.click();await button('Convert remaining with Codex').click();
  await panel().getByText('1 / 1 review items converted · 1 comments saved · 0 pending',{exact:true}).waitFor();
- await panel().getByText('All these comments are already in the queue. The original review remains here.',{exact:true}).waitFor();
+ await panel().getByText('1 in Comments · 0 matched a prior rejection · 0 available to add',{exact:true}).waitFor();
  await button('Close outside feedback').click();assert.equal(await page.locator('.comment-card h1').innerText(),activeBeforeArrival);
  assert.equal((await read()).text,editedBeforeArrival.text);await button('Undo').click();assert.equal((await read()).text,source);
  const afterAutoUndo=await application.evaluate(async()=>{const p=globalThis.__feedbackProjects.current;return (await globalThis.__feedbackService.feedback.list(p.id)).items;});
  assert.equal(afterAutoUndo.length,2);await actions('Import outside feedback…');await page.getByLabel('Saved outside feedback').selectOption(afterAutoUndo.find(r=>r.label==='Trial report B').id);
- await panel().getByText('All these comments are already in the queue. The original review remains here.',{exact:true}).waitFor();await button('Close outside feedback').click();
+ await panel().getByText('1 in Comments · 0 matched a prior rejection · 0 available to add',{exact:true}).waitFor();await button('Close outside feedback').click();
  receipt.checks.push('Automatic feedback arrival preserves selected old comment and source; Undo reverses the last acceptance while keeping the new comment');
 
  receipt.checks.push('Import is one undoable review action; repeating it adds no duplicates; switching to another context exposes its preparation instead of the previous report');
@@ -105,7 +112,7 @@ try {
  assert.equal((await read()).text,source);
  await button('Accept').click();await poll(async()=>(await read()).text!==source,'ordinary accept');
  assert.equal((await probe()).builds,0);await button('Undo').click();assert.equal((await read()).text,source);
- await button('Accept & compile').click();
+ await button('Accept options').click();await page.getByRole('menuitem',{name:'Accept & compile',exact:true}).click();
  await poll(async()=>await page.getByText('Applied · inspect the PDF',{exact:true}).count() || await button('Apply despite warnings').count(),'checked acceptance result',90000);
  if(await button('Apply despite warnings').count()){
   assert(fixture,'Synthetic check should compile without acceptance warnings');
@@ -126,9 +133,9 @@ try {
  await actions('Files & history…');await button('Save displayed PDF…').click();
  await poll(async()=>{try{return(await fs.stat(path.join(evidence,'exported-comparison.pdf'))).size>0;}catch{return false;}},'PDF export');
  assert.equal(await fs.readFile(file,'utf8'),source);await button('Save').click();await poll(async()=>await fs.readFile(file,'utf8')===after,'Save');
- await actions('Close project');await button('Open a LaTeX or text file').waitFor();await open();
+ await actions('Close project'); await button('Close and keep data').click();await button('Open a LaTeX or text file').waitFor();await open();
  assert.equal((await read()).text,after);await actions('Import outside feedback…');await page.getByLabel('Saved outside feedback').selectOption(recordId);
- assert(await panel().getByText('All these comments are already in the queue. The original review remains here.',{exact:true}).count());
+ assert(await panel().getByText(comments.length+' in Comments · 0 matched a prior rejection · 0 available to add',{exact:true}).count());
  receipt.checks.push('Classic/workspace preserve source; Accept skips compilation and Undo restores it; Accept & compile → inspect → Next; real markup/clean PDF/export/Save/reopen');
  receipt.counts=await probe();delete receipt.counts.file;delete receipt.counts.save;
  assert.deepEqual(receipt.rendererErrors,[]);receipt.passed=true;

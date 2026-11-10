@@ -217,7 +217,7 @@ try {
   await screenshot('04-laptop-contextual-review');
   await button('Collapse comments').click();
   await button('Show comments (2)').click();await details().click();assert.equal(await automatic.isChecked(),false);await page.keyboard.press('Escape');
-  await actions('Close project');await button('Open a LaTeX or text file').waitFor();await open();
+  await actions('Close project'); await button('Close and keep data').click();await button('Open a LaTeX or text file').waitFor();await open();
   assert.equal(await page.locator('.discussion').count(),0);
   await details().click();assert.equal(await automatic.isChecked(),false);await page.keyboard.press('Escape');
   assert.equal(await fs.readFile(file,'utf8'),source);

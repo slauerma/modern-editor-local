@@ -16,7 +16,7 @@ async function fixture() {
   await fs.mkdir(bin, { recursive: true }); await fs.mkdir(runtime);
   const script = `#!/usr/bin/env node\nimport fs from 'node:fs'; import path from 'node:path';\nconst name=path.basename(process.argv[1]); fs.writeFileSync(path.join(process.cwd(),name+'-probe.json'),JSON.stringify({args:process.argv.slice(2),secret:process.env.TEST_SETUP_SECRET??null,home:process.env.HOME}));\nconsole.log(name==='codex'?'codex-cli ${verifiedCodexVersions[0]}':name+' version 1.2.3');\n`;
   for (const tool of ['codex', 'latexmk', 'pdflatex', 'lualatex', 'xelatex', 'kpsewhich', 'synctex']) await fs.writeFile(path.join(bin, tool), script, { mode: 0o700 });
-  const settings = { codexPath: path.join(bin, 'codex'), latexmkPath: path.join(bin, 'latexmk') };
+  const settings = { codexPath: path.join(bin, 'codex'), latexmkPath: path.join(bin, 'latexmk'), codexModel: 'gpt-6.1-sol' };
   return { root, bin, runtime, settings, service: new ToolSettingsService(runtime, 1500) };
 }
 test('reset defaults resolve the managed CLI against this installation and match a fresh profile', async () => {
@@ -24,6 +24,7 @@ test('reset defaults resolve the managed CLI against this installation and match
   const service = new ToolSettingsService(f.runtime, 1500, appDirectory);
   const defaults = service.defaults();
   assert.equal(defaults.codexPath, managedCodexLocation(appDirectory).path);
+  assert.equal(defaults.codexModel, 'gpt-6.1-sol');
   assert.deepEqual((await service.load()).settings, defaults);
   await service.save({ ...f.settings, codexModel: 'gpt-6-sol' });
   assert.deepEqual(service.defaults(), defaults);
@@ -53,8 +54,10 @@ test('corrupt settings are preserved and surfaced, and linked TeX binaries keep 
 
 test('legacy settings remain readable and an explicit model persists without changing executable paths', async () => {
   const f = await fixture();
-  await fs.writeFile(f.service.file, JSON.stringify(f.settings));
-  assert.equal((await f.service.load()).settings.codexModel, undefined);
+  const legacy = JSON.stringify({ codexPath: f.settings.codexPath, latexmkPath: f.settings.latexmkPath });
+  await fs.writeFile(f.service.file, legacy);
+  assert.equal((await f.service.load()).settings.codexModel, 'gpt-6.1-sol');
+  assert.equal(await fs.readFile(f.service.file, 'utf8'), legacy);
   for (const codexModel of ['gpt-6-sol', 'gpt-6-luna', null]) {
     const next = { ...f.settings, codexModel };
     await f.service.save(next);

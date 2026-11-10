@@ -68,7 +68,7 @@ async function open(file) {
   await application.evaluate((_, file) => { globalThis.__viewerProbe.file = file; }, file);
   await button('Open a LaTeX or text file').click(); await page.locator('.source-pane .cm-content').waitFor(); if (await button('Dismiss notice').count()) await button('Dismiss notice').click();
 }
-async function home() { if (!await button('Close project').isVisible()) await button('Actions ▾').click(); await button('Close project').click(); await button('Open a LaTeX or text file').waitFor(); await page.evaluate(reader.outputFiles[0].text); }
+async function home() { if (!await button('Close project').isVisible()) await button('Actions ▾').click(); await button('Close project').click(); await button('Close and keep data').click(); await button('Open a LaTeX or text file').waitFor(); await page.evaluate(reader.outputFiles[0].text); }
 async function snapshot(name) { await page.screenshot({ path: path.join(evidence, name + '.png') }); }
 async function pdfGeometry() {
   return page.locator('#pdf-surface > .pdf-reader .pdf-scroll').evaluate(el => {
@@ -144,7 +144,7 @@ try {
   await page.locator('.review-rail').focus(); await page.keyboard.press('Shift+A');
   await poll(async () => (await read()).text.includes('allocation is'), 'text acceptance');
   await button('Save').click(); await poll(async () => (await fs.readFile(txtFile, 'utf8')).includes('allocation is'), 'text Save');
-  assert.equal(await page.getByLabel('Text diff baseline').inputValue(), 'session');
+  assert(await button('Choose comparison version').isVisible());
   assert(await page.locator('.text-diff-host .cm-deletedChunk').count() > 0 || await page.locator('.text-diff-host .cm-changedText').count() > 0);
   await snapshot('02-text-changes'); await button('Undo').click(); await poll(async () => (await read()).text === plain, 'text Undo');
   assert.equal((await probe()).builds, 0); receipt.checks.push('Text open / preview / Shift+A / fixed baseline after Save / Undo without TeX');
@@ -250,7 +250,9 @@ try {
   for(const label of ['Source + comments','PDF + comments','Three panes','Source + PDF · writing','PDF below · stacked','Automatic']) {
     await button('View ▾').click(); await button(label).click(); assert.equal((await read()).text,layoutBefore.text); assert.equal((await read()).undo,layoutBefore.undo);
   }
-  await page.getByLabel('Viewer format').selectOption('text'); await page.getByLabel('Text diff baseline').selectOption('saved'); await page.getByRole('region',{name:'Compare document versions'}).waitFor();
+  await page.getByLabel('Viewer format').selectOption('text'); await button('Choose comparison version').click(); await button('Saved versions…').click(); await page.getByRole('region',{name:'Saved source versions'}).waitFor();
+  await button('Close comparison versions').click();
+  await button('Actions ▾').click(); await button('Compare versions…').click(); await page.getByRole('region',{name:'Compare document versions'}).waitFor();
   await button('View ▾').click(); await button('Three panes').click(); await page.getByLabel('Viewer format').waitFor();
   await application.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1120,760));
   receipt.compactViewer = await page.locator('.viewer-pane').evaluate(el => { const caption=el.querySelector('.viewer-caption'), s=getComputedStyle(caption); return { viewerWidth:el.clientWidth, viewerRight:el.getBoundingClientRect().right, viewport:innerWidth, captionWidth:caption.clientWidth, captionScrollWidth:caption.scrollWidth, captionHeight:caption.clientHeight, captionScrollHeight:caption.scrollHeight, whiteSpace:s.whiteSpace, flexShrink:s.flexShrink }; });

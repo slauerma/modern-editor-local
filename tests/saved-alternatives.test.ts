@@ -115,7 +115,7 @@ test('late alternatives retain custom drafts and receipts, deduplicate identical
   assert.equal(linked.alternatives![0].original, original);
 });
 
-test('Quick alternative uses Sol Low and one-option output without reference tools or altering paper settings', async t => {
+test('Quick alternative uses Sol Low and one-option output with local context reading and unchanged paper settings', async t => {
   const f = await fixture(t); await f.projects.setEffort(f.p.id, 'max'); await f.projects.setFastMode(f.p.id, true);
   let call: any;
   f.service.client.run = async (prompt, schema, _progress, effort, fast, reader, config) => {
@@ -124,7 +124,7 @@ test('Quick alternative uses Sol Low and one-option output without reference too
   };
   const request = { projectId: f.p.id, text: source, comment: c(), message: quickAlternativeQuestion, action: 'quick-alternative' as const, attachmentPreviewId: 'must-not-be-read' };
   await f.service.reply(request, () => {});
-  assert.equal(call.effort, 'low'); assert.equal(call.fast, false); assert.equal(call.reader, undefined);
+  assert.equal(call.effort, 'low'); assert.equal(call.fast, false); assert(call.reader); assert.deepEqual(call.prompt.availableReferences.foldersAndFiles, []);
   assert.equal(call.config.model, 'gpt-6.1-sol'); assert.deepEqual(call.schema, quickAlternativeOutputSchema);
   assert.equal(call.schema.properties.alternatives.maxItems, 1); assert.equal(call.prompt.references, undefined);
   assert.match(call.prompt.task, /at most ONE/); assert.match(call.prompt.task, /ENTIRE original/);
@@ -144,7 +144,7 @@ test('Quick alternative uses Sol Low and one-option output without reference too
   assert.equal(noOptions?.schemaVersion, 1);
   assert.equal(await fs.readFile(f.file, 'utf8'), source);
   const context = replyContext({ ...request, text: 'a'.repeat(10000) + source, comment: { ...c(), from: 10000, to: 10000 + original.length } });
-  assert(context.nearbySource.length <= original.length + 3000);
+  assert(!('nearbySource' in context)); assert.equal(context.scope.from, 10000); assert.equal(context.scope.to, 10000 + original.length);
 });
 
 test('automatic arrival preference is paper-specific and defaults on for older workspace files', () => {

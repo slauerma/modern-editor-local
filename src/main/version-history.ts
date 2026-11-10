@@ -66,7 +66,7 @@ async function scan(file: string, extraProtected: string[] = []): Promise<Scan> 
       await regularDirectory(document);
       const identity = await readJSON(path.join(document, 'document.json'), 10000) as any;
       const name = identity?.rootFile;
-      if (identity?.schemaVersion !== 1 || typeof name !== 'string' || name !== path.basename(name) || path.extname(name).toLowerCase() !== '.tex' || digest(name) !== dir.name) throw new Error('Unverified document owner.');
+      if (identity?.schemaVersion !== 1 || typeof name !== 'string' || name !== path.basename(name) || !['.tex', '.txt'].includes(path.extname(name).toLowerCase()) || digest(name) !== dir.name) throw new Error('Unverified document owner.');
       const backups = path.join(document, 'backups');
       if (!await regularDirectory(backups)) continue;
       const names = (await fs.readdir(backups)).filter(n => /^source-[a-f0-9]{64}\.tex$/.test(n));

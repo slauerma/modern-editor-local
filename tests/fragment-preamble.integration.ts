@@ -18,9 +18,14 @@ test('the real Codex-service path retains a structured answer and the real compi
   const projects = new ProjectService(path.join(root, 'cache')), p = await projects.open(file);
   const codex = new CodexService(projects, path.join(root, 'codex'));
   const compiler = new CompileService(projects, path.join(root, 'builds'), undefined, undefined, path.resolve('resources/tex-support/tcilatex.tex'));
-  codex.client.run = async (prompt, schema) => {
+  codex.client.run = async (prompt, schema, _progress, _effort, _fast, reader) => {
     const request = JSON.parse(prompt);
-    assert.equal(request.source, source); assert.equal(request.insertionPoint, 0); assert.equal(request.engine, 'pdflatex');
+    assert.equal(request.source.fileId, 'current-draft');
+    assert.deepEqual([request.source.from, request.source.to], [0, source.length]);
+    assert.equal(request.source.text, undefined); assert(!prompt.includes(source)); assert(reader);
+    const read = await reader.call('references_read', { fileId: 'current-draft' }) as { excerpts: { text: string }[]; nextOffset: number | null };
+    assert.equal(read.excerpts.map(e => e.text).join(''), source); assert.equal(read.nextOffset, null);
+    assert.equal(request.insertionPoint, 0); assert.equal(request.engine, 'pdflatex');
     assert.deepEqual(schema, preambleOutputSchema);
     return { explanation: 'AMS packages and an ordinary lemma environment.', preamble: '\\documentclass{article}\n\\usepackage{amsmath,amssymb,amsthm}\n\\newtheorem{lemma}{Lemma}\n\\begin{document}', ending: '\\end{document}', needsInput: null };
   };

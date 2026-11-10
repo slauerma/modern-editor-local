@@ -15,6 +15,7 @@ test('chat recovery synchronizes both surfaces, rejects stale reads and detaches
   let reads = 0, notifications = 0;
   let saved: ChatTurn[] = [], unsaved: ChatTurn[] | null = null;
   let readOverride: (() => Promise<ChatState>) | undefined;
+  const arrivals = new Set<(projectId: string) => void>();
   const id = 'a'.repeat(64), item = { id, label: 'Paper A' };
   const turn = (id: string, reply: string): ChatTurn => ({
     id, reply, message: 'Question', context: '{}', createdAt: '2026-09-21T00:00:00.000Z',
@@ -26,6 +27,7 @@ test('chat recovery synchronizes both surfaces, rejects stale reads and detaches
   });
   const win = {
     editor: {
+      onReviewResult: (callback: (projectId: string) => void) => { arrivals.add(callback); return () => { arrivals.delete(callback); }; },
       chatState: async () => {
         assert(++reads < 100, 'refresh loop');
         return readOverride ? readOverride() : snapshot();
@@ -166,8 +168,11 @@ test('chat recovery synchronizes both surfaces, rejects stale reads and detaches
     await click(drawer, 'Preview what is sent'); assert(button(drawer, 'Hide preview'));
 
     const baselineReads = reads, baselineNotifications = notifications;
+    assert.equal(arrivals.size, 1);
+    arrivals.forEach(callback => callback('another-paper')); // Editor-help chat is isolated from paper arrivals.
     await settle(); assert.equal(reads, baselineReads); assert.equal(notifications, baselineNotifications);
   } finally { drawer.unmount(); pending.unmount(); }
   const baselineReads = reads;
+  assert.equal(arrivals.size, 0);
   win.dispatchEvent(new Event('chat-persistence')); await tick(); assert.equal(reads, baselineReads);
 });

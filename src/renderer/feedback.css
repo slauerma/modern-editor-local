@@ -10,3 +10,7 @@
 .feedback-panel details { margin:1rem 0; }
 .feedback-comment { border-top:1px solid #d7e0d7; margin:1rem 0; padding:.5rem 0; }
 .feedback-comment small { color:#667869; }
+
+.feedback-delivery { display: flex; align-items: baseline; gap: 12px; margin: 8px 0; }
+.feedback-delivery > details { flex: 1; min-width: 0; }
+.feedback-delivery > button { flex-shrink: 0; }

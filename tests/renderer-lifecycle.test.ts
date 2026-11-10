@@ -1,3 +1,4 @@
+import { defaultReviewSettings } from '../src/shared/codex-options.ts';
 import { defaultEditPreferences } from '../src/shared/paper-guidance.ts';
 import * as previewTools from '../src/shared/proposal-preview.ts';
 import { documentMode, documentModeNotice } from '../src/shared/document-mode.ts';
@@ -26,7 +27,7 @@ import { pdfReviewPlan } from '../src/renderer/pdf-review-plan.ts';
 // real CodeMirror/Zod, replacing only DOM painting and the narrow IPC boundary.
 const source = await fs.readFile('src/renderer/App.tsx', 'utf8');
 const syntax = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ['previewSuggestion', 'leavePreview', 'input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf', 'clearBuilds', 'decidePdfReview', 'savePdfSnapshot', 'openWorkspacePdf', 'showLatexFromPdf'];
+const names = ['previewSuggestion', 'leavePreview', 'input', 'validateTransaction', 'dispatchTransactions', 'returnToSource', 'flush', 'captureWorkspace', 'flushWorkspace', 'patch', 'compile', 'applyDespiteWarnings', 'acceptAll', 'buildAssistance', 'cancelCompilation', 'acceptWithoutCompile', 'doHistory', 'discuss', 'appendReview', 'addAuthorComment', 'close', 'prepareProjectCleanup', 'cancelProjectCleanup', 'save', 'open', 'load', 'addPreambleAndCompile', 'cancelPreamble', 'cancelPdfNavigation', 'stopPendingPdfNavigation', 'toggleComparison', 'showInPdf', 'navigatePdf', 'clearBuilds', 'decidePdfReview', 'savePdfSnapshot', 'openWorkspacePdf', 'showLatexFromPdf', 'saveRejectionReason'];
 const extracted: string[] = []; let filter = '', bindings = '';
 function visit(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? '')) extracted.push(node.getText(syntax));
@@ -57,15 +58,18 @@ function fixture(text = quote) {
     compile: async () => ({ id: 'build-1', engine: 'pdflatex', success: true, clean: true, diagnostics: [], log: '', elapsedMs: 1, sourceHash: '' }),
     validateBuild: async (value: any) => { states.validations.push(value); return true; },
     save: async (value: any) => { states.saved = structuredClone(value); },
-    cancelBuild: async () => { states.events.push('cancel build'); }, cancelCodex: async () => { states.events.push('cancel codex'); },
+    cancelBuild: async () => { states.events.push('cancel build'); }, cancelChat: async () => { states.events.push('cancel chat'); }, cancelAnchorRepair: async () => { states.events.push('cancel anchors'); }, cancelCodex: async () => { states.events.push('cancel codex'); },
     finishClose: async () => { states.events.push('closed'); },
   };
   const scope: any = {
     traceInteraction: (action: string, fields: unknown) => { (states.interactions ??= []).push({ action, fields }); },
-    defaultEditPreferences, EditorState, Transaction, isolateHistory, undo, redo, documentMode, documentModeNotice, attachmentPromptContext, defaultKeymap, historyKeymap, commentSchema, crypto, defaultWorkspace, workspaceSchema, ...reviewTools, ...stateTools, ...preambleTools, ...contextTools, ...acceptanceTools, ...previewTools,
+    defaultReviewSettings, defaultEditPreferences, EditorState, Transaction, isolateHistory, undo, redo, documentMode, documentModeNotice, attachmentPromptContext, defaultKeymap, historyKeymap, commentSchema, crypto, defaultWorkspace, workspaceSchema, ...reviewTools, ...stateTools, ...preambleTools, ...contextTools, ...acceptanceTools, ...previewTools,
     document: { body: {}, activeElement: {} }, requestAnimationFrame: (callback: () => void) => { states.frame = callback; }, setCompareOpen: () => {},
     lastSource: { current: null }, lastReviewTop: { current: 0 }, revealPdf: () => {}, revealSource: () => {}, workspaceValues: { current: defaultWorkspace() }, restoredSource: { current: null }, laterRef: { current: false }, discussionLock: { current: false }, autoAddRef: { current: true }, followPending: { current: null }, followTasks: { current: new LatestTask() },
+    comparisonRefresh: { current: 0 }, setComparisonVersions: (value: unknown) => { states.ComparisonVersions = value; },
     sourcePosition: () => defaultWorkspace().source,
+    textImport: { current: { cancel: async () => {} } },
+    setPasteRequest: () => {}, setAttachmentsOpen: () => {}, attachmentReturnReview: { current: false },
     snapshotView: { current: 'review-session-original' },
     navigationHistory: { current: new NavigationHistory() }, navigationBookmark: () => null, rememberNavigation: () => {}, setCanGoBack: () => {}, setOutlineOpen: () => {}, setSourcePeek: () => {},
     previewJob: { current: null }, previewCache: { current: null }, representation: 'pdf', pdfPosition: {page:1,zoom:1.25}, docMode: 'latex', build: null, candidateBuild: null, preambleRun: { current: null }, buildRun: { current: null }, sectionRun: { current: null }, comparisonPosition: { current: {} },
@@ -73,14 +77,17 @@ function fixture(text = quote) {
     pdfSession: { id: 'pdf-session', original: text, comments: [c] },
     approvedBuildInputs: { current: undefined }, buildHelpEpoch: { current: 0 }, buildRetry: null,
     displayedBuild: { current: null }, pdfRequest: { current: 0 }, keyboardReviewFocus: { current: null },
-    gate: { current: gate }, window: { editor: api }, view: { current: editor }, projectRef: { current: p }, reviewRef: { current: review }, activeRef: { current: c.id }, historyRef: { current: false }, active: c,
+    cleanupActive: { current: false }, setCloseProjectOpen: (value: boolean) => { states.CloseProjectOpen = value; }, gate: { current: gate }, window: { editor: api }, view: { current: editor }, projectRef: { current: p }, reviewRef: { current: review }, activeRef: { current: c.id }, historyRef: { current: false }, active: c,
     attachmentPreview: null, attachmentBusy: false, attachmentPending: false, codexCancelEpoch: { current: 0 }, viewCandidate: false, busy: false, aiBusy: false, effortBusy: false, engine: 'pdflatex', errorText: (e: Error) => e.message,
     setError: (e: string) => states.errors.push(e), setNotice: (v: string) => { states.notice = v; }, setStatus: (v: string) => { states.status = v; },
     choose: (v: string) => { scope.activeRef.current = v; }, move: () => {},
   };
-  for (const setter of ['Preview', 'PreviewPosition', 'DocMode', 'Representation', 'SessionText', 'ComparisonBase', 'Layout', 'CompactTab', 'DisplayName', 'ChangesOpen', 'CommentsHidden', 'ReviewBusy', 'ReviewOpen', 'CandidatePosition', 'DiscussionBusy', 'LaterOnly', 'PaneSizes', 'ToolbarCollapsed', 'FollowComments', 'Busy', 'AiBusy', 'PreambleBusy', 'LastAttempt', 'Build', 'PdfText', 'DependencyStale', 'PdfOpen', 'PdfJump', 'PdfNavigation', 'PdfLocating', 'ViewCandidate', 'CandidateBuild', 'ShowHistory', 'NotesOpen', 'Project', 'CompareOpen', 'Baseline', 'Effort', 'FastMode', 'Engine', 'Text', 'SavedText', 'PdfPosition', 'FindOpen', 'FindNotice', 'ActiveId', 'PaperInstructions', 'SavedInstructions', 'SectionProgress', 'ContextOpen', 'OverviewOpen', 'InboxOpen', 'ContextText']) scope['set' + setter] = (value: any) => { states[setter] = value; };
-  for (const setter of ['PdfReview', 'PdfSession', 'PdfReviewBuilds', 'PdfReviewExports', 'AutoAddComments', 'BuildRetry', 'ReferenceState', 'SourcesOpen', 'FilesOpen', 'ChangesExport', 'Inspection', 'GuidanceOpen', 'SavedPreferences', 'LocalEditsOnly', 'PreserveVoice', 'Classic', 'ClassicSurface', 'ClassicDetails']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  for (const setter of ['ReviewOutcome', 'WaitingScope', 'Preview', 'PreviewPosition', 'DocMode', 'Representation', 'SessionText', 'ComparisonBase', 'Layout', 'CompactTab', 'DisplayName', 'ChangesOpen', 'CommentsHidden', 'ReviewBusy', 'ReviewOpen', 'CandidatePosition', 'DiscussionBusy', 'LaterOnly', 'PaneSizes', 'ToolbarCollapsed', 'FollowComments', 'Busy', 'AiBusy', 'CodexTask', 'PreambleBusy', 'LastAttempt', 'Build', 'PdfText', 'DependencyStale', 'PdfOpen', 'PdfJump', 'PdfNavigation', 'PdfLocating', 'ViewCandidate', 'CandidateBuild', 'ShowHistory', 'NotesOpen', 'Project', 'CompareOpen', 'Baseline', 'Effort', 'FastMode', 'Engine', 'Text', 'SavedText', 'PdfPosition', 'FindOpen', 'FindNotice', 'ActiveId', 'PaperInstructions', 'SavedInstructions', 'SectionProgress', 'ContextOpen', 'OverviewOpen', 'InboxOpen', 'ContextText']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  for (const setter of ['PdfReview', 'PdfSession', 'PdfReviewBuilds', 'PdfReviewExports', 'AutoAddComments', 'BuildRetry', 'ReferenceState', 'SourcesOpen', 'FilesOpen', 'ChangesExport', 'Inspection', 'GuidanceOpen', 'SavedPreferences', 'LocalEditsOnly', 'PreserveVoice', 'Classic', 'ClassicSurface', 'ClassicDetails', 'AnchorRepairStatus', 'AnchorRepairReport', 'ChatStatus']) scope['set' + setter] = (value: any) => { states[setter] = value; };
   states.changeEvents = { accepted: 0, saved: 0 };
+  scope.setReviewMode = (value: string) => { states.ReviewMode = value; };
+  for (const setter of ['ReviewHasConversation', 'ReviewScope', 'ReviewSelection', 'ReviewOptionsOpen']) scope['set' + setter] = (value: any) => { states[setter] = value; };
+  scope.setRejectionTarget = (value: string | null) => { states.RejectionTarget = value; };
   scope.setChangeEvents = (value: any) => { states.changeEvents = typeof value === 'function' ? value(states.changeEvents) : value; };
   scope.setWarningAcceptance = (value: any) => { states.WarningAcceptance = value; scope.warningAcceptance = value; };
   scope.workspaceWriter = { current: new RecoveryWriter<any>(async value => { states.workspace = value; }, () => {}) };
@@ -147,6 +154,29 @@ test('PDF-mode export requires a named snapshot and never falls back to the hidd
   assert.equal(exports.at(-1), 'hidden-workspace');
   assert.equal(f.editor.state.doc.toString(), quote); assert.equal(f.states.saved, undefined);
 });
+test('Close project first offers keeping data; opening the choice neither cancels work nor clears anything', async () => {
+  const f = fixture(); await f.scope.close(true);
+  assert.equal(f.states.CloseProjectOpen, true); assert.equal(f.gate.locked, false);
+  assert.deepEqual(f.states.events, []); assert.deepEqual(f.states.writes, []);
+});
+test('cleanup preview settles all lanes and recovery, locks editing until cancelled, and does not close the paper', async () => {
+  const f = fixture(), done = f.gate.begin('codex')!;
+  f.api.previewProjectCleanup = async () => { assert(f.states.writes.length); assert(f.states.workspace); return { id: 'preview' }; };
+  f.api.cancelProjectCleanup = async () => { f.states.events.push('cancel cleanup'); };
+  const pending = f.scope.prepareProjectCleanup(); await turns(); assert(f.gate.locked);
+  done(); assert.deepEqual(await pending, { id: 'preview' });
+  assert(f.gate.locked); assert.equal(f.scope.cleanupActive.current, true);
+  assert.deepEqual(f.states.events, ['cancel build', 'cancel chat', 'cancel anchors', 'cancel codex']);
+  await f.scope.cancelProjectCleanup(); assert.equal(f.gate.locked, false); assert.equal(f.scope.cleanupActive.current, false);
+  assert.equal(f.states.CloseProjectOpen, false); assert.equal(f.scope.projectRef.current.id, 'p1');
+});
+test('failed initial cleanup preview releases both barriers without losing the draft', async () => {
+  const f = fixture(); let cancelled = false;
+  f.api.previewProjectCleanup = async () => { throw new Error('Cannot verify owner'); };
+  f.api.cancelProjectCleanup = async () => { cancelled = true; };
+  await assert.rejects(f.scope.prepareProjectCleanup(), /Cannot verify owner/);
+  assert(cancelled); assert.equal(f.gate.locked, false); assert.equal(f.editor.state.doc.toString(), quote);
+});
 test('Close project waits for cancelled work and final recovery before clearing the project and returning home', async () => {
   const f = fixture(), done = f.gate.begin('codex')!;
   f.editor.dispatch({ changes: { from: 0, insert: 'Unsaved introduction. ' } });
@@ -156,10 +186,10 @@ test('Close project waits for cancelled work and final recovery before clearing 
     assert(f.states.workspace); f.states.events.push('project cleared');
   };
   f.scope.window.location = { reload: () => f.states.events.push('home') };
-  const closing = f.scope.close(true); await turns();
-  assert(f.gate.locked); assert.deepEqual(f.states.events, ['cancel build', 'cancel codex']);
+  const closing = f.scope.close(true, true); await turns();
+  assert(f.gate.locked); assert.deepEqual(f.states.events, ['cancel build', 'cancel chat', 'cancel anchors', 'cancel codex']);
   done(); await closing;
-  assert.deepEqual(f.states.events, ['cancel build', 'cancel codex', 'project cleared', 'home']);
+  assert.deepEqual(f.states.events, ['cancel build', 'cancel chat', 'cancel anchors', 'cancel codex', 'project cleared', 'home']);
   assert.equal(f.states.saved, undefined); assert.equal(f.editor.state.doc.toString(), text);
 });
 for (const phase of ['recovery', 'workspace', 'close']) test(`Close project keeps the buffer available when ${phase} persistence fails`, async () => {
@@ -168,7 +198,7 @@ for (const phase of ['recovery', 'workspace', 'close']) test(`Close project keep
   f.api.closeProject = async () => { if (phase === 'close') throw new Error('Storage unavailable'); };
   if (phase === 'recovery') f.api.persist = async () => { throw new Error('Storage unavailable'); };
   if (phase === 'workspace') f.scope.workspaceWriter.current = new RecoveryWriter(async () => { throw new Error('Storage unavailable'); }, () => {});
-  await f.scope.close(true);
+  await assert.rejects(f.scope.close(true, true), /Storage unavailable/);
   assert.equal(reloads, 0); assert.equal(f.gate.locked, false);
   assert.equal(f.scope.projectRef.current.id, 'p1'); assert.equal(f.editor.state.doc.toString(), quote);
   assert(f.states.errors.at(-1).includes('project stayed open'));
@@ -396,6 +426,21 @@ test('Save uses a brief editing barrier so later recovery cannot be overwritten 
   f.editor.dispatch({ changes: { from: 0, insert: 'While saving' } }); assert.equal(f.editor.state.doc.toString(), quote);
   const closing = f.scope.close(); await turns(); assert(!f.states.events.includes('closed'));
   saving.resolve(); await Promise.all([operation, closing]); assert.equal(f.states.saved.text, f.states.writes.at(-1).text);
+});
+
+test('first Save after recovery keeps the comparison label and actual reference aligned', async () => {
+  const recovered = 'Recovered unsaved draft. ' + quote, f = fixture(recovered);
+  f.scope.sessionText = recovered;
+  const baseline = { name: 'Before first editor Save', text: 'Earlier source on disk.' };
+  f.api.save = async () => ({ baseline });
+  const before = f.editor.state;
+  await f.scope.save();
+  assert.equal(f.states.Baseline, baseline);
+  assert.equal(f.states.ComparisonBase, 'pinned');
+  assert.equal(f.scope.projectRef.current.baseline, baseline);
+  assert.equal(f.editor.state.doc.toString(), recovered);
+  assert.equal(undoDepth(f.editor.state), undoDepth(before));
+  assert.deepEqual(f.states.errors.filter(Boolean), []);
 });
 
 test('closing during project handoff cannot combine the new project id with the old source', async () => {
@@ -635,6 +680,9 @@ test('opening another paper clears the latest outgoing Codex context', () => {
   const next = { ...f.scope.projectRef.current, id: 'paper-b', path: '/synthetic/paper-b.tex', name: 'paper-b.tex', notices: [], text: quote };
   f.scope.load(next);
   assert.equal(f.states.ContextText, ''); assert.equal(f.states.ContextOpen, false);
+  assert.equal(f.states.ReviewMode, 'continue'); assert.equal(f.states.RejectionTarget, null);
+  assert.equal(f.states.ReviewHasConversation, false); assert.equal(f.states.ReviewScope, 'document');
+  assert.equal(f.states.ReviewSelection, null); assert.equal(f.states.ReviewOptionsOpen, false);
   assert.equal(f.states.PdfReview, false); assert.equal(f.states.PdfSession, null); assert.deepEqual(f.states.PdfReviewBuilds, []);
 });
 
@@ -708,4 +756,22 @@ test('late reverse snapshot lookup cannot open a popup after leaving or replacin
   const pending = f.scope.showLatexFromPdf({ buildId: 'original', page: 1, x: 50, y: 50 }, { text: quote, title: 'Original source' });
   f.scope.snapshotView.current = 'workspace'; wait.resolve({ kind: 'mapped', from: 0, to: 3, line: 1 }); await pending;
   assert.equal(popups, 0);
+});
+
+
+test('a quick rejection reason is one undoable decision, leaves source unchanged and survives persistence', async () => {
+  const f = fixture(); f.scope.saveRejectionReason('c1', 'Keep my wording');
+  const comment = f.editor.state.field(stateTools.commentsField)[0];
+  assert.equal(comment.decision, 'dismissed'); assert.equal(comment.rejectionReason, 'Keep my wording');
+  assert.equal(f.editor.state.doc.toString(), quote); await f.scope.flush();
+  assert.equal(f.states.writes.at(-1).review.comments[0].rejectionReason, 'Keep my wording');
+  undo(f.editor); assert.equal(f.editor.state.field(stateTools.commentsField)[0].decision, 'open');
+  assert.equal(f.editor.state.field(stateTools.commentsField)[0].rejectionReason, undefined);
+});
+test('late import previews are cancelled if window closing began during the file dialog', async () => {
+  const f = fixture(), ready = deferred<any>(); let cancelled = false;
+  f.api.openProject = () => ready.promise; f.api.cancelTextImport = async () => { cancelled = true; };
+  const opening = f.scope.open(); await turns(); const closing = f.scope.close(); await turns();
+  ready.resolve({ kind: 'text-import', id: 'preview' }); await opening; await closing;
+  assert(cancelled); assert.equal(f.scope.projectRef.current.id, 'p1'); assert(f.states.events.includes('closed'));
 });

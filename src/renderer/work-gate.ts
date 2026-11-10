@@ -6,6 +6,7 @@ export class WorkGate {
   private changed: () => void;
   constructor(changed: () => void = () => {}) { this.changed = changed; }
   get locked() { return this.closing || this.committing || this.pending.has('project'); }
+  cancelClose() { this.closing = false; this.changed(); }
   async idle() {
     while (!this.closing && this.pending.size) await Promise.all([...this.pending.values()]);
   }

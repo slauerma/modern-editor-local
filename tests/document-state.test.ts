@@ -34,7 +34,7 @@ test('two roots in one folder retain separate comments, drafts, settings, baseli
   await f.service.pinBaseline(f.p.id, 'First original', f.p.text);
   await f.service.persist({ projectId: f.p.id, text: 'First unsaved', review: { ...f.p.review, activeId: 'first-review' } });
   const second = await f.service.open(f.b);
-  assert.equal(second.engine, 'pdflatex'); assert.equal(second.effort, 'medium'); assert.equal(second.baseline, null); assert.equal(second.review.activeId, null);
+  assert.equal(second.engine, 'pdflatex'); assert.equal(second.effort, 'xhigh'); assert.equal(second.baseline, null); assert.equal(second.review.activeId, null);
   await f.service.pinBaseline(second.id, 'Second original', second.text);
   await f.service.setEffort(second.id, 'low');
   await f.service.save({ projectId: second.id, text: 'Second saved', review: { ...second.review, activeId: 'second-review' } });

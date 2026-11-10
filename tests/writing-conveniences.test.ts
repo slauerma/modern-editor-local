@@ -1,3 +1,4 @@
+import { paperContextDocuments } from '../src/shared/context-documents.ts';
 import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -69,7 +70,11 @@ test('pasted long-line continuation, rename, disable and remove stay local and s
   await f.references.change(f.paper.id, id, false);
   await assert.rejects(session.call('references_read', { fileId: 'paste-' + id }), /cancelled|changed/);
   await f.references.finish(session, false);
-  assert.equal(await f.references.begin(f.paper.id, f.text, 'reply', () => {}), undefined);
+  const nextSession = await f.references.begin(f.paper.id, f.text, 'reply', () => {});
+  const nextInventory = await nextSession.call('references_list', {}) as any;
+  assert(nextInventory.files.some((x: any) => x.id === 'current-draft'));
+  assert(!nextInventory.files.some((x: any) => x.id === 'paste-' + id));
+  await f.references.finish(nextSession, true);
   const other = path.join(f.root, 'other.txt'); await fs.writeFile(other, f.text);
   const next = await f.projects.open(other);
   assert.deepEqual((await f.references.state(next.id)).roots, []);
@@ -146,7 +151,9 @@ test('paper guidance and Classic workspace survive reopen and are shared across 
     feedbackContext({ projectId: f.paper.id, text: f.text, label: 'Notes', feedback: 'Check clarity.' }, instructions, preferences),
     chatContext(chat, help, [], instructions, preferences).context
   ];
-  for (const payload of payloads) for (const [key,value] of Object.entries(paperGuidance(instructions, preferences))) assert.equal((payload as any)[key], value);
+  for (const payload of payloads) { assert(!JSON.stringify(payload).includes(instructions)); assert(!('paperInstructions' in payload)); }
+  const guidance = paperContextDocuments(instructions, preferences)[0].text;
+  for (const value of Object.values(paperGuidance(instructions, preferences))) assert(guidance.includes(value));
   assert(payloads.every(p => !('editPolicy' in p)));
   const editorHelp = chatContext({ ...chat, projectId: null, paper: 'none', source: '', from: 0, to: 0 }, help, [], instructions, preferences).context;
   assert(!('paperInstructions' in editorHelp)); assert(!('stylePolicy' in editorHelp));
@@ -159,7 +166,11 @@ test('paper guidance and Classic workspace survive reopen and are shared across 
 test('saving new guidance invalidates an unsent chat preview before model use; new preview uses new guidance', async t => {
   const f = await fixture(t), client = new CodexClient(path.join(f.root, 'codex'));
   let calls = 0;
-  client.run = async prompt => { calls++; const value = JSON.parse(prompt); assert.equal(value.paperInstructions, 'New guidance.'); assert(!('editPolicy' in value)); return { reply: 'Synthetic response.', suggestion: null }; };
+  client.run = async (prompt, _schema, _progress, _effort, _fast, reader) => { calls++; assert(!prompt.includes('New guidance.')); assert(reader);
+    const guidance = (await reader.call('references_read', { fileId: 'paper-instructions' }) as any).excerpts[0].text;
+    assert.match(guidance, /New guidance/); assert.match(guidance, /Smallest-local-edits preference is off/);
+    return { reply: 'Synthetic response.', suggestion: null };
+  };
   const service = new HelpChat(f.projects, client, path.join(f.runtime, 'help-chats'), async () => help);
   const input = chatInputSchema.parse({ projectId: f.paper.id, source: f.text, from: 0, to: 0, paper: 'draft', editorState: { pdf: 'none', unsaved: false, error: '', compilation: '' }, message: 'Explain.' });
   const stale = await service.preview(input);

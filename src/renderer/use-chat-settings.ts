@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { chatPreferencesSchema, type ChatPreferences } from '../shared/help-chat.ts';
+import { chatPreferencesSchema, defaultChatSettings, type ChatPreferences } from '../shared/help-chat.ts';
 import { effortSchema } from '../shared/contracts.ts';
 import type { CodexModel } from '../shared/codex-models.ts';
 
 const key = 'modern-editor.side-chat-settings.v1';
 function savedPreferences(): ChatPreferences {
   try { return chatPreferencesSchema.parse(JSON.parse(localStorage.getItem(key) ?? 'null')); }
-  catch { return { model: null, effort: 'medium', fastMode: false }; }
+  catch { return { ...defaultChatSettings }; }
 }
 
 export function useChatSettings(open: boolean, blocked: boolean) {

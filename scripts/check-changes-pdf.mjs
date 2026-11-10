@@ -104,8 +104,8 @@ try {
   if (await button('Dismiss notice').count()) await button('Dismiss notice').click();
   const reviewStart = await read();
   await button('Review with Codex').click();
-  const reviewDialog = page.getByRole('region', {name:'Request Codex review'}), localEdits = reviewDialog.getByLabel('Smallest local edits only');
-  assert(await localEdits.isChecked());
+  const reviewDialog = page.getByRole('region', {name:'Request Codex review'}), localEdits = reviewDialog.getByLabel('Keep edits small');
+  await button('More options').click(); assert(await localEdits.isChecked());
   for (const preset of ['literary','creative','academic']) {
     await reviewDialog.getByLabel('Review template',{exact:true}).selectOption(preset);
     assert((await reviewDialog.getByLabel('Instructions for this review').inputValue()).length>100);
@@ -114,13 +114,17 @@ try {
   await reviewDialog.getByLabel('Instructions for this review').fill('Keep my notation. Correct one word at a time.');
   assert.equal(await reviewDialog.getByLabel('Review template',{exact:true}).inputValue(),'custom');
   await snapshot('00-review-templates');
-  await button('Preview context sent to Codex').click();
+  await button('Inspect request').click();
   const previewed = JSON.parse(await page.locator('.context-preview pre').innerText());
   assert(previewed.editPolicy.includes('shortest safe exact source quotation'));
   assert.equal(previewed.authorInstructions,'Keep my notation. Correct one word at a time.');
   await button('Close Codex context').click(); await button('Start review').click();
   await poll(async()=>await application.evaluate(()=>globalThis.__comparisonProbe.reviewPrompts.length)===1 && await button('Review with Codex').isEnabled(),'local review completed');
-  assert.deepEqual(await application.evaluate(()=>globalThis.__comparisonProbe.reviewPrompts[0]),previewed,'The exact previewed template and local-edit policy reach Codex through IPC');
+  const sentReview = await application.evaluate(()=>globalThis.__comparisonProbe.reviewPrompts[0]);
+  const { availableReferences, reviewConversation, ...sentInstructions } = sentReview;
+  assert.deepEqual(sentInstructions,previewed,'The exact previewed template and local-edit policy reach Codex through IPC');
+  assert.equal(availableReferences.currentDraft.fileId, 'current-draft');
+  assert.equal(reviewConversation.currentDraftHash, createHash('sha256').update(before).digest('hex'));
   await button('Review with Codex').click(); await localEdits.uncheck();await button('Save paper guidance').click();
   await button('Start review').click();
   await poll(async()=>await application.evaluate(()=>globalThis.__comparisonProbe.reviewPrompts.length)===2 && await button('Review with Codex').isEnabled(),'ordinary review completed');
@@ -199,13 +203,16 @@ try {
     const toolbar=pane().locator('.changes-toolbar'), header=await toolbar.boundingBox(), reader=await pane().locator('.pdf-scroll').boundingBox();
     assert(reader.y-header.y<=44,'Wide and narrow views keep a single header row');
     assert(await toolbar.evaluate(el=>el.scrollWidth<=el.clientWidth),'All header controls fit without horizontal overflow');
+    await pane().getByRole('button', { name: 'Choose comparison version', exact: true }).click();
+    assert(await pane().getByRole('dialog', { name: 'Comparison versions' }).isVisible());
+    assert.deepEqual(await pdfGeometry(),stable,'Opening comparison versions leaves PDF bounds and position unchanged');
+    await pane().getByRole('button', { name: 'Close comparison versions', exact: true }).click();
     await pane().locator('.changes-options > summary').click();
-    assert(await pane().getByLabel('Text diff baseline').isVisible());
     assert(await pane().getByLabel('Accepted changes per update').isVisible());
     assert.deepEqual(await pdfGeometry(),stable,'Opening baseline/settings leaves PDF bounds and position unchanged');
     await pane().locator('.changes-options > summary').press('Escape');
-    assert(!await pane().getByLabel('Text diff baseline').isVisible());
-    await pane().locator('.compact-pdf-controls .actions-menu > button').click();await pane().getByRole('button',{name:'Find in PDF…',exact:true}).click();
+    assert(!await pane().getByRole('dialog', { name: 'Comparison versions' }).isVisible());
+    await pane().getByRole('button',{name:'Find',exact:true}).click();
     assert(await pane().getByLabel('Find in PDF').isVisible());
     assert.deepEqual(await pdfGeometry(),stable,'Opening PDF search never moves the page');
     await pane().getByRole('button',{name:'Close PDF search',exact:true}).click();
@@ -235,7 +242,7 @@ try {
   const cancelCount = await application.evaluate(()=>{globalThis.__comparisonProbe.holdPersist=true;return globalThis.__comparisonProbe.builds;});
   await page.evaluate(()=>{const pane=document.querySelector('.changes-pdf-pane'),format=pane.querySelector('[aria-label="Viewer format"]');format.value='changes-clean';format.dispatchEvent(new Event('change',{bubbles:true}));pane.querySelector('[aria-label="Refresh Changes PDF"]').click();});
   await poll(()=>application.evaluate(()=>!!globalThis.__comparisonProbe.releasePersist),'held full update with absent clean style');
-  await pane().getByRole('button',{name:'Stop',exact:true}).click();
+  await pane().getByRole('button',{name:'Stop comparison',exact:true}).click();
   await application.evaluate(()=>{globalThis.__comparisonProbe.releasePersist();globalThis.__comparisonProbe.releasePersist=null;});
   await poll(async()=>await pane().getAttribute('aria-busy')==='false','stopped absent-style update');
   await page.waitForTimeout(400);
@@ -328,7 +335,7 @@ try {
   await application.evaluate(()=>{globalThis.__comparisonProbe.holdLocation=true;globalThis.__comparisonProbe.skipVisual=false;});
   await pane().getByRole('button',{name:'Refresh Changes PDF',exact:true}).click();
   await poll(()=>application.evaluate(()=>!!globalThis.__comparisonProbe.releaseLocation),'held post-build navigation');
-  await pane().getByRole('button',{name:'Stop',exact:true}).click();
+  await pane().getByRole('button',{name:'Stop comparison',exact:true}).click();
   await application.evaluate(()=>{globalThis.__comparisonProbe.releaseLocation();globalThis.__comparisonProbe.releaseLocation=null;globalThis.__comparisonProbe.skipVisual=false;});
   await poll(async()=>await pane().getAttribute('aria-busy')==='false','stopped navigation settled');
   assert.equal(await pane().locator('.pdf-change-note.selected').count(),0,'Stop prevents a late exact-marker response from moving the viewer');
@@ -430,7 +437,7 @@ try {
   await write(after.replace('otherwise reads well','otherwise reads naturally'));
   await pane().getByRole('button',{name:'Refresh Changes PDF',exact:true}).click();
   await poll(() => application.evaluate(() => !!globalThis.__comparisonProbe.releasePersist), 'held source flush');
-  await pane().getByRole('button',{name:'Stop',exact:true}).click();
+  await pane().getByRole('button',{name:'Stop comparison',exact:true}).click();
   await application.evaluate(() => { globalThis.__comparisonProbe.releasePersist(); globalThis.__comparisonProbe.releasePersist = null; });
   await poll(async () => await pane().getByRole('button',{name:'Refresh Changes PDF',exact:true}).isEnabled(), 'cancelled comparison settled');
   assert.equal(await application.evaluate(() => globalThis.__comparisonProbe.builds), buildCount, 'Cancel prevents a build waiting for recovery from starting');
@@ -460,7 +467,7 @@ try {
   await poll(async()=>await fs.readFile(file,'utf8')===before,'save restored synthetic source');
   const state = await application.evaluate(() => globalThis.__comparisonProjects.current);
   if (!await button('Close project').isVisible()) await button('Actions ▾').click();
-  await button('Close project').click(); await button('Open a LaTeX or text file').waitFor();
+  await button('Close project').click(); await button('Close and keep data').click(); await button('Open a LaTeX or text file').waitFor();
   await button('Open a LaTeX or text file').click(); await page.locator('.source-pane .cm-content').waitFor();
   const workspace = await application.evaluate(() => globalThis.__comparisonProjects.current.workspace);
   assert(workspace.pdfBuildId); assert.equal(workspace.pdfBuildId,ordinaryId);
@@ -475,7 +482,7 @@ try {
   await fs.writeFile(batchFile,batchText);
   await fs.writeFile(path.join(paper,'.modern-editor/review.json'),JSON.stringify({schemaVersion:1,rootFile:'batch.tex',sourceHash:createHash('sha256').update(batchText).digest('hex'),activeId:'batch-0',updatedAt:new Date().toISOString(),comments:batchComments}));
   if (!await button('Close project').isVisible()) await button('Actions ▾').click();
-  await button('Close project').click(); await button('Open a LaTeX or text file').waitFor();
+  await button('Close project').click(); await button('Close and keep data').click(); await button('Open a LaTeX or text file').waitFor();
   await page.evaluate(reader.outputFiles[0].text);
   await application.evaluate((_,file)=>{globalThis.__comparisonProbe.file=file;},batchFile);
   const beforeRequest = await application.evaluate(()=>globalThis.__comparisonProbe.arrangements);

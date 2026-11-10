@@ -68,3 +68,12 @@ test('stale previews and cancelled model replies cannot start a later input plan
     assert.equal(result.validation.ready, false); assert.match(result.needsInput!, /alternative/);
   } finally { await f.remove(); }
 });
+
+test('missing files receive a local error without an ineffective model file-list request', async () => {
+  const f = await fixture(); let calls = 0;
+  try {
+    f.codex.client.run = async () => { calls++; throw new Error('Unexpected model call'); };
+    await assert.rejects(f.help.prepare(f.project.id, '\\input{missing-file}'), /file list cannot fix.*missing-file/);
+    assert.equal(calls, 0);
+  } finally { await f.remove(); }
+});

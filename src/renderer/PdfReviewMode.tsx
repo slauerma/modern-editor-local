@@ -6,6 +6,7 @@ import type { PdfPosition } from './pdf-position.ts';
 import { pdfReviewChangeState, pdfReviewOwners, pdfReviewPlan, pdfReviewScopes, pdfReviewScopeIds, pdfReviewTentative, pdfReviewRegion, type PdfReviewSession } from './pdf-review-plan.ts';
 import { usePdfReviewBuild, type PdfReviewWork } from './use-pdf-review-build.ts';
 import { InfoHint } from './CommentDetails.tsx';
+import { SplitButton } from './SplitButton.tsx';
 import './pdf-review.css';
 
 export type PdfReviewExports = {
@@ -20,6 +21,7 @@ type Props = {
   onSelect(id: string): void; onClose(): void; onRestart(): void; onExport(id: string): void; onExportSource(artifactId: string): void;
   onDecide(ids: string[], decision: 'applied' | 'dismissed' | 'resolved', mode: 'individual' | 'bulk'): Promise<boolean>;
   onDiscuss(): void; onUndo(): void; canUndo: boolean; onSource(id: string): void;
+  onRejectReason(id: string): void;
   onBuilds(ids: string[]): void;
   onExportReady(value: PdfReviewExports | null): void;
 };
@@ -163,7 +165,7 @@ export function PdfReviewMode(props: Props) {
       {artifact?.notice && <span>{artifact.notice}</span>}
       {visualProblem && <details><summary>{visualProblem}</summary>{artifact?.visual?.issues.join(' ')}</details>}
       {!!plan?.excluded.length && <details><summary>{plan.excluded.length} suggestions not included</summary>{plan.excluded.map(c => <button key={c.id} onClick={() => inspect(c.id)}>{c.title} · {c.validity !== 'current' ? c.validity : 'overlapping, Later or incomplete'}</button>)}</details>}
-      {built.busy && <button onClick={built.stop}>Stop</button>}
+      {built.busy && <button onClick={built.stop}>Stop PDF build</button>}
     </div>}
     {open && <section ref={popup} className={'pdf-review-inspector' + (expanded ? ' expanded' : '')} role="dialog" aria-label="PDF comment inspector" tabIndex={-1}
       style={expanded ? undefined : { transform: 'translate(' + offset.x + 'px,' + offset.y + 'px)' }}
@@ -193,7 +195,7 @@ export function PdfReviewMode(props: Props) {
       </div>
       <div className="pdf-review-inspector-actions">
         <button disabled={blocked || !active || active.decision !== 'open' || active.replacement !== null && active.validity !== 'current'} onClick={() => active && void decide([active.id], active.replacement === null ? 'resolved' : 'applied')}>{active?.replacement === null ? 'Resolve' : 'Accept'}</button>
-        <button disabled={blocked || !active || active.decision !== 'open'} onClick={() => active && void decide([active.id], 'dismissed')}>Reject</button>
+        <SplitButton label="Reject" menuLabel="Reject options" disabled={blocked || !active || active.decision !== 'open'} onClick={() => active && void decide([active.id], 'dismissed')} actions={[{ label: 'Reject with reason…', disabled: blocked || !active || active.decision !== 'open', action: () => active && props.onRejectReason(active.id) }]} />
         <button disabled={!active} onClick={props.onDiscuss}>Discuss</button>
         <button disabled={!props.canUndo || blocked} onClick={props.onUndo}>Undo</button>
         <button disabled={!active} onClick={() => active && props.onSource(active.id)}>Source</button>

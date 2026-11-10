@@ -6,6 +6,19 @@ type Props = {
   value: CodexEffort; disabled: boolean; onChange(value: CodexEffort): void;
 };
 
+export function ReviewModelButton({ disabled, onClick }: { disabled: boolean; onClick(): void }) {
+  const [label, setLabel] = useState('');
+  useEffect(() => {
+    let current = true;
+    const refresh = () => { void window.editor.getSetup().then(setup => {
+      if (current) setLabel(setup.settings.codexModel ?? 'Codex default');
+    }).catch(() => { if (current) setLabel('unavailable'); }); };
+    refresh(); window.addEventListener('review-model-changed', refresh);
+    return () => { current = false; window.removeEventListener('review-model-changed', refresh); };
+  }, []);
+  return <button className="text-button" aria-label="Choose review model" disabled={disabled} onClick={onClick} title="Choose the model for new reviews and ordinary discussions. Quick actions use Sol separately.">{label ? `Model: ${label}…` : 'Model…'}</button>;
+}
+
 // Opening unrelated Actions must not start Codex setup or reserve its worker.
 export function PaperEffortControl(props: Props) {
   const [open, setOpen] = useState(false);
@@ -37,7 +50,7 @@ function EffortChoices({ value, disabled, onChange }: Props) {
   }, [disabled]);
   const choices = codexEfforts.filter(e => model?.efforts.includes(e));
   return <label title={error || (loading ? 'Checking supported effort; no paper text is sent.' : model?.name)}>
-    Codex effort
+    Codex effort{model ? ` · ${model.name}` : ''}
     <select aria-label="Codex effort" value={value} disabled={disabled || loading || !model} onChange={e => onChange(e.target.value as CodexEffort)}>
       {!choices.includes(value) && <option value={value} disabled>{effortOptions[value].label}{model ? ' · unavailable' : ''}</option>}
       {choices.map(e => <option key={e} value={e}>{effortOptions[e].label}</option>)}

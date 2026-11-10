@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { referenceText, searchReferenceText } from './reference-text.ts';
 import { digest, readRegularFile } from './files.ts';
-import { ATTACHMENT_LIMITS as limits, attachmentSelectionsSchema, selectedPdfPages, selectedTextLines, type AttachmentInventory, type AttachmentItem, type AttachmentPreview, type AttachmentSelection, type AttachmentExcerpt } from '../shared/attachments.ts';
+import { ATTACHMENT_LIMITS as limits, REFERENCE_FOLDER_LIMITS, REFERENCE_TEXT_EXTENSIONS, attachmentSelectionsSchema, selectedPdfPages, selectedTextLines, type AttachmentInventory, type AttachmentItem, type AttachmentPreview, type AttachmentSelection, type AttachmentExcerpt } from '../shared/attachments.ts';
 
 type Grant = { item: AttachmentItem; file: string; root: string; dev: number; ino: number };
 type Snapshot = { preview: AttachmentPreview; files: { grant: Grant; hash: string }[] };
@@ -106,9 +106,11 @@ export class AttachmentService {
     const scope = this.scope(projectId);
     return { items: [...scope.grants.values()].map(grant => ({ ...grant.item })).sort((a, b) => a.name.localeCompare(b.name)), notices: [...scope.notices] };
   }
-  // Call only with paths returned by the native file/folder picker, never renderer paths.
-  async grant(projectId: string, selectedPaths: string[]): Promise<AttachmentInventory> {
+  // Paths come from the native picker or the main process's opened-paper folder,
+  // never from renderer/model arguments. Recursive mode is for on-demand reading.
+  async grant(projectId: string, selectedPaths: string[], recursive = false): Promise<AttachmentInventory> {
     if (!selectedPaths.length || selectedPaths.length > 20) throw new Error('Choose between one and twenty files or folders at a time.');
+    const scan = recursive ? REFERENCE_FOLDER_LIMITS : limits;
     const scope = this.scope(projectId); scope.generation++; scope.snapshot = null;
     const generation = scope.generation;
     let inspected = 0, skipped = 0, limited = false;
@@ -116,7 +118,7 @@ export class AttachmentService {
     const add = async (file: string, root: string, name: string) => {
       if (hiddenOrPrivate(path.basename(file))) { skipped++; return; }
       const extension = path.extname(file).toLowerCase();
-      const kind = extension === '.pdf' ? 'pdf' : ['.tex', '.txt', '.md', '.markdown'].includes(extension) ? 'text' : null;
+      const kind = extension === '.pdf' ? 'pdf' : (REFERENCE_TEXT_EXTENSIONS as readonly string[]).includes(extension) ? 'text' : null;
       if (!kind) { skipped++; return; }
       const stat = await fs.lstat(file);
       if (!stat.isFile() || stat.isSymbolicLink()) { skipped++; return; }
@@ -124,7 +126,7 @@ export class AttachmentService {
       if (stat.size > maxBytes) { notices.push(`${displayName(name)}: too large (${maxBytes / 1_000_000} MB limit).`); return; }
       const existing = [...scope.grants.values()].find(g => g.file === file);
       if (existing) { existing.dev = stat.dev; existing.ino = stat.ino; existing.item.bytes = stat.size; return; }
-      if (scope.grants.size >= limits.inventory) { limited = true; return; }
+      if (scope.grants.size >= scan.inventory) { limited = true; return; }
       let label = displayName(name), suffix = 2;
       while ([...scope.grants.values()].some(g => g.item.name === label)) label = `${displayName(name)} (${suffix++})`;
       const item: AttachmentItem = { id: randomUUID(), name: label, kind, bytes: stat.size };
@@ -135,19 +137,19 @@ export class AttachmentService {
       if (!stat.isDirectory() || stat.isSymbolicLink() || await fs.realpath(dir) !== dir) { skipped++; return; }
       const handle = await fs.opendir(dir);
       for await (const entry of handle) {
-        if (++inspected > limits.entries || scope.grants.size >= limits.inventory) { limited = true; break; }
+        if (++inspected > scan.entries || scope.grants.size >= scan.inventory) { limited = true; break; }
         if (entry.isSymbolicLink() || hiddenOrPrivate(entry.name)) { skipped++; continue; }
         const file = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           if (excludedDirectory(entry.name)) { skipped++; continue; }
-          if (depth >= limits.depth) { limited = true; continue; }
+          if (depth >= scan.depth) { limited = true; continue; }
           await walk(file, root, depth + 1);
         } else if (entry.isFile()) await add(file, root, path.join(path.basename(root), path.relative(root, file)));
         else skipped++;
       }
     };
     for (const selected of selectedPaths) {
-      if (inspected >= limits.entries) { limited = true; break; }
+      if (inspected >= scan.entries) { limited = true; break; }
       const name = displayName(path.basename(selected));
       try {
         const stat = await fs.lstat(selected);
@@ -163,7 +165,7 @@ export class AttachmentService {
     }
     if (scope.generation !== generation) throw new Error('The reference selection changed. Choose the references again.');
     if (skipped) notices.push(`${skipped} hidden, linked, generated, sensitive-name or unsupported items were excluded.`);
-    if (limited) notices.push(`This inventory is incomplete: at most ${limits.inventory} files, ${limits.entries} entries and ${limits.depth} nested folder levels are inspected. Choose a smaller folder to see more.`);
+    if (limited) notices.push(`This inventory is incomplete: at most ${scan.inventory} files, ${scan.entries} entries and ${scan.depth} nested folder levels are inspected. Attach a more specific folder to see more.`);
     if (!scope.grants.size) notices.push('No eligible PDF, LaTeX, Markdown or text files were found.');
     scope.notices = [...new Set([...scope.notices, ...notices])].slice(-50);
     return this.inventory(projectId);

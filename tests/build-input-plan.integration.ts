@@ -101,3 +101,63 @@ test('local planning reserves the compilation lifecycle and cancel releases it f
     assert.equal(plan.status, 'ready'); assert.equal(f.compiler.isBusy, false);
   } finally { await f.remove(); }
 });
+
+test('SWP Beamer BMP snapshots compile, restore and validate against original inputs without changing the paper', { timeout: 90_000, skip: process.platform !== 'darwin' }, async () => {
+  const f = await fixture();
+  try {
+    const { sampleBitmap } = await import('./fixtures/sample-bitmap.ts');
+    const { restorePdf } = await import('../src/main/pdf-workspace-cache.ts');
+    const { digest } = await import('../src/main/files.ts');
+    const bitmap = sampleBitmap();
+    await fs.mkdir(path.join(f.paper, 'figures'));
+    await fs.writeFile(path.join(f.paper, 'figures/picture.bmp'), bitmap);
+    const frozen = String.raw`\documentclass{beamer}
+\graphicspath{{figures/}{//Mac/Dropbox/lecture/figures/}}
+\begin{document}
+\begin{frame}{Rational preferences}
+The ordering is complete.
+\includegraphics[
+natheight=1in,
+natwidth=2in,
+height=1cm,
+width=2cm
+]%
+{picture.bmp}
+\end{frame}
+\end{document}
+`;
+    const build = await f.compiler.compile(f.project.id, frozen, 'pdflatex');
+    assert.equal(build.success, true, build.log); assert.equal(build.clean, true, JSON.stringify(build.diagnostics));
+    assert.equal(build.sourceHash, digest(frozen)); assert.equal(await f.compiler.validate(f.project.id, build.id, frozen), true);
+    const directory = path.join(f.root, 'builds', build.id), compiled = await fs.readFile(path.join(directory, 'main.tex'), 'utf8');
+    assert.notEqual(compiled, frozen); assert.equal(compiled.split('\n').length, frozen.split('\n').length);
+    assert.match(compiled, /height=1cm/); assert.doesNotMatch(compiled, /natheight|natwidth/);
+    assert.equal((await restorePdf(path.join(f.root, 'builds'), path.join(f.paper, 'main.tex'), build.id)).text, frozen);
+    const location = await f.compiler.locatePdf({ projectId: f.project.id, buildId: build.id, text: frozen, from: frozen.indexOf('The ordering'), to: frozen.indexOf('The ordering') + 20 });
+    assert.equal(location.kind, 'mapped', JSON.stringify(location));
+    if (location.kind === 'mapped') {
+      const request = { projectId: f.project.id, buildId: build.id, text: frozen, page: location.page, x: location.x + location.width / 2, y: location.y + location.height / 2 };
+      const back = await f.compiler.locateSource(request); assert.equal(back.kind, 'mapped', JSON.stringify(back));
+      // Beamer buffers frame bodies, so SyncTeX may point at the closing frame line.
+      if (back.kind === 'mapped') assert(back.from >= frozen.indexOf('\\begin{frame}') && back.to <= frozen.indexOf('\\end{frame}') + '\\end{frame}'.length);
+      const reopened = new CompileService(f.compiler.projects, path.join(f.root, 'builds'));
+      try { await reopened.restore(f.project.id, build.id); assert.equal((await reopened.locateSource(request)).kind, 'mapped'); } finally { await reopened.stop(); }
+    }
+    const proposal = frozen.replace('is complete.', 'is complete and transitive.');
+    const preview = await f.compiler.compile(f.project.id, proposal, 'pdflatex', undefined, undefined, 'proposal');
+    assert.equal(preview.clean, true, JSON.stringify(preview.diagnostics)); assert.equal(await f.compiler.validate(f.project.id, preview.id, proposal), true);
+    assert.equal(await fs.readFile(path.join(f.paper, 'main.tex'), 'utf8'), f.text);
+    assert.deepEqual(await fs.readFile(path.join(f.paper, 'figures/picture.bmp')), bitmap);
+    assert.deepEqual(await fs.readdir(path.join(f.paper, 'figures')), ['picture.bmp']);
+    await fs.writeFile(path.join(directory, 'main.tex'), compiled + '% tampered');
+    assert.equal(await f.compiler.validate(f.project.id, build.id, frozen), false);
+    await assert.rejects(restorePdf(path.join(f.root, 'builds'), path.join(f.paper, 'main.tex'), build.id), /prepared PDF source changed/);
+    await fs.writeFile(path.join(directory, 'main.tex'), compiled);
+    await fs.appendFile(path.join(f.paper, 'figures/picture.bmp'), 'changed original');
+    assert.equal(await f.compiler.validate(f.project.id, preview.id, proposal), false);
+    const previous = Buffer.from(await f.compiler.pdf(build.id));
+    await fs.writeFile(path.join(f.paper, 'figures/picture.bmp'), 'broken BMP');
+    await assert.rejects(f.compiler.compile(f.project.id, frozen, 'pdflatex'), /readable BMP/);
+    assert.deepEqual(Buffer.from(await f.compiler.pdf(build.id)), previous);
+  } finally { await f.remove(); }
+});

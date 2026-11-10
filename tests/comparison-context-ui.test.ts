@@ -50,12 +50,12 @@ function mount(file: string, name: string, props: Record<string, any>, editor: R
 
 for (const edit of ['name', 'typing', 'paste', 'none', 'failure']) test('context save preserves the right draft: ' + edit, async () => {
   const held = deferred<any>(), sent: any[] = [];
-  const host = mount('src/renderer/ReferencePanel.tsx', 'ReferencePanel', { projectId: 'one', disabled: false, onState() {}, showSources() {}, convert() {} }, {
+  const host = mount('src/renderer/ReferencePanel.tsx', 'ReferencePanel', { projectId: 'one', state: { roots: [], notices: [] }, disabled: false, onState() {}, showSources() {}, convert() {} }, {
     referenceState: async () => ({ roots: [], notices: [] }),
     pasteContext: (_: string, value: any) => { sent.push(value); return held.promise; }
   });
   try {
-    host.get('Paste context…').props.onClick(); host.render();
+    host.get('Paste material (context/comments)…').props.onClick(); host.render();
     host.get('Context name').props.onChange({ target: { value: 'First name' } });
     host.get('Pasted context text').props.onChange({ target: { value: 'First text' } }); host.render();
     host.get('Save and enable for this paper').props.onClick(); host.render();

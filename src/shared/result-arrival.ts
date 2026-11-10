@@ -6,7 +6,7 @@ import { adoptComment, locate, replyFields } from './review.ts';
 export function mergeResult(text: string, existing: Comment[], result: WaitingResult, sameSource: boolean): Comment[] {
   if (result.kind === 'review') {
     const ids = new Set(existing.map(c => c.id));
-    const incoming = result.comments.filter(c => !ids.has(c.id) && !isRejectedRepeat(c, existing, text)).map(c => ({ ...c, reviewedSourceHash: result.sourceHash, reviewedAt: result.createdAt }));
+    const incoming = result.comments.filter(c => !ids.has(c.id) && !isRejectedRepeat(c, existing, text, sameSource)).map(c => ({ ...c, reviewedSourceHash: result.sourceHash, reviewedAt: result.createdAt }));
     const placed = incoming.map(c => sameSource ? locate(text, c, true) : c.validity === 'current' ? adoptComment(text, c) : locate(text, c));
     return commentsSchema.parse([...existing, ...placed]);
   }

@@ -16,9 +16,9 @@ const evidence = process.env.ME_TEST_EVIDENCE || path.join(appRoot, 'test-eviden
 await fs.mkdir(copy, { recursive: true }); await fs.mkdir(evidence, { recursive: true });
 await fs.cp(path.join(appRoot, 'dist'), path.join(copy, 'dist'), { recursive: true });
 await fs.symlink(path.join(appRoot, 'node_modules'), path.join(copy, 'node_modules'), 'dir');
-await fs.writeFile(path.join(copy, 'package.json'), JSON.stringify({ name:'writing-check', version:'1.2.1', main:'dist/main.cjs', private:true }));
+await fs.writeFile(path.join(copy, 'package.json'), JSON.stringify({ name:'writing-check', version:JSON.parse(await fs.readFile(path.join(appRoot,'package.json'),'utf8')).version, main:'dist/main.cjs', private:true }));
 const injection = `
-ipcMain.removeHandler('setup:models');ipcMain.handle('setup:models',()=>[{id:'test-smart',name:'Test Smart',efforts:['low','medium','high','max'],images:true,fast:true,isDefault:true}]);
+ipcMain.removeHandler('setup:models');ipcMain.handle('setup:models',()=>[{id:'gpt-6.1-sol',name:'Test Sol',efforts:['low','medium','high','xhigh','max'],images:true,fast:true,isDefault:true}]);
 const probe={file:null,save:null,builds:0,modelCalls:0,pdfReads:0,pdfIds:[],completedBuilds:[],dialogs:0,artifacts:[]};
 dialog.showOpenDialog=async()=>({canceled:false,filePaths:[probe.file]});
 dialog.showSaveDialog=async(_,options)=>{probe.dialogs++;probe.dialog=options;return {canceled:!probe.save,filePath:probe.save};};
@@ -86,7 +86,9 @@ async function checkChatRole(label) {
   // Wait for this request to finish before reading its context.
   await poll(async()=>await chat.getByRole('button',{name:'Preview what is sent',exact:true}).isEnabled(),'chat preview prepared');
   const prepared=chat.locator('.chat-prepared pre');await prepared.waitFor();
-  const context=JSON.parse(await prepared.innerText());assert.match(context.editorState.visiblePdf,label);assert.equal(context.source.text,source);assert.match(context.editorState.suppliedSource,/current draft/i);
+  const context=JSON.parse(await prepared.innerText());assert.match(context.editorState.visiblePdf,label);assert.match(context.editorState.suppliedSource,/current draft/i);
+  assert.equal(context.source.text,undefined);assert.equal(context.source.fileId,'current-draft');
+  assert.equal(context.source.from,0);assert.equal(context.source.to,source.length);assert.equal((await read()).text,source);
   await chat.getByRole('button',{name:'Close Codex Side Chat',exact:true}).click();
 }
 async function saveComparison(menuLabel, label) {

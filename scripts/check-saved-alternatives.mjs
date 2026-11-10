@@ -105,7 +105,7 @@ try {
   assert.equal(reviewCalls[1].value.rejectedSuggestions.totalRejected,1);
   await snapshot('02-background-arrival');
   receipt.checks.push('Current automatic-arrival switch controls an in-flight review; integration preserves selection/draft and suppresses rejected repeat.');
-  await arrival(false); await actions('Close project'); await button('Open a LaTeX or text file').waitFor();
+  await arrival(false); await actions('Close project'); await button('Close and keep data').click(); await button('Open a LaTeX or text file').waitFor();
   await open(); await page.getByRole('heading',{name:'Choose a concise wording'}).waitFor(); await button('Edit').click();
   assert.equal(await draft.inputValue(),'My draft while Codex works.'); assert.equal(await arrival(),false);
   assert.equal(await wording.locator('option').count(),4);

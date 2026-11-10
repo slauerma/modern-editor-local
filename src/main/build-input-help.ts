@@ -24,6 +24,7 @@ export class BuildInputHelp {
     const project = this.projects.get(projectId), expectedIdentity = await this.projects.assertDirectory(projectId), plan = await this.compiler.planInputs(projectId, text);
     this.check(generation);
     if (plan.status === 'ready') throw new Error('The local dependency check can now prepare this draft. Try Compile again.');
+    if (!plan.canAskCodex) throw new Error('A file list cannot fix this input problem. ' + plan.issues[0]);
     const notices: string[] = [], sources: { file: string; text: string; truncated: boolean }[] = [];
     let remaining = 40_000;
     const rootText = text.slice(0, 28_000);

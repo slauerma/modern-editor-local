@@ -1,5 +1,67 @@
 # Changelog
 
+## 1.8.0 — Review workflows and local data
+
+- Default reviews to GPT-6.1 Sol with Extra high (`xhigh`) effort and Fast speed. Preserve explicit saved model and paper preferences.
+
+- Simplify Review around instructions and scope, with the model and folder access always visible. Keep secondary controls under More options, add Paste material and Start/Continue split buttons, and make selection versus whole-document scope explicit.
+
+- Upgrade the desktop runtime to Electron 45.2.3, including its Chromium and Node.js updates.
+- Update Zod, Vite and Undici to patched releases; adapt review and Side Chat validation for Zod 4 while preserving saved-data defaults.
+
+- Make Review history readable, with full instructions, returned suggestions, and **Use these instructions again**. Keep raw records under Technical details and preserve current draft/settings on reuse.
+- Link outside-feedback items to their current comments or History, displaying current decisions and wording without reopening or duplicating comments.
+- Summarize stopped/failed reviews using request-attributed retained batches and verified delivery receipts. Offer scoped local retry and distinguish model completion from review validation/storage in Usage & speed.
+
+- Keep rejected suggestions tied to their verified occurrence, including after nearby edits. Refresh decisions between outside-feedback batches and show whether each saved comment is in Comments, withheld by a prior rejection, or available to add.
+- Let an explicit current rewrite request override the minimal-edit preference. Ask a question for consequential uncertainty without a safe correction; leave satisfactory prose alone.
+- Add **First usable** to Usage & speed for reviews and Side Chat Suggest edits, measured after comment recovery is saved and Accept or discussion is available. Distinguish manual additions, no-comment results and unmeasured older requests.
+- Search Comments Overview across wording, discussions and rejection reasons, with visible counts for matches hidden by filters. Clarify delivery/Stop labels and preserve earlier suggestions and accepted edits when a final response fails.
+
+- Add **Settings → Data & cleanup** for old builds or selected papers' editing records. Protect open work, show full paths/dates/sizes, and verify one dated recovery archive before removal.
+- Add Language, Technical consistency and Slides review purposes, plus **Changes since version** using the existing comparison picker. Read exact changes and context through tools, keep replacements within that scope, and encourage the first useful suggestion immediately without a batch quota.
+
+- Keep review prompts short: read the unsaved draft, paper instructions, decisions and navigable history through existing tools. Use read-only Markdown views of existing records, with no new context folders or model-maintained logs. Side Chat, outside-feedback conversion and preamble assistance use the same snapshot reading; retain scope checks, early delivery and recovery.
+
+- Open common non-UTF-8 text through a warning, encoding preview and an exclusive new UTF-8 copy. Preserve original bytes and refuse lossy decoding, stale inputs and conflicting legacy LaTeX declarations.
+- Add related-action arrows beside Accept, Reject and Discuss. Keep one-click decisions, add preset/custom rejection reasons, and keep reasons in History with Undo.
+- Put **Paste material (context/comments)…** directly in Review, keep Save above the paste, show truthful save status, and provide **Back to review / Done** and a direct saved-feedback conversion route.
+- Add a searchable recent-project picker on Home, in the filename and under Actions. Reopen existing source/recovery and paper records; keep missing files labelled and the list bounded locally.
+
+- Default Side Chat to GPT-6.1 Sol with Extra high effort and Fast speed, preserving explicitly saved chat choices.
+
+- Closing a project now offers an optional file-by-file cleanup preview, with full paths, contents, sizes and modification dates. Saved drafts are required; a verified dated recovery archive precedes removal. Sources, exports, other papers and shared or unverified data stay intact.
+
+- Let Side Chat and Repair anchors run alongside a review, with independent progress and Stop controls. Preserve simultaneous comment arrivals, review history and source-use records; recheck the current text before applying repaired anchors.
+
+- Add **Suggest edits** in Side Chat: Sol with Low effort and Fast speed delivers saved suggestions directly to Comments as they arrive. Keep ordinary chat settings, author decisions and the current selection; Stop retains received suggestions.
+
+- Upgrade the editor-managed Codex CLI to 0.163.0. Refresh model choices directly in Review; show catalog replacement notices without silently changing a saved model. Keep automatic CLI model routing disabled.
+- Add **Add suggestions as they arrive** in Review, Comments details and running-review controls. Codex can publish validated batches before finishing; completed batches survive Stop and are deduplicated against the final answer. Record time to the first saved batch in Usage & speed.
+
+- Fix `.txt` save-history ownership checks. Preserve the first paste into an empty draft and full drafts before review requests; select dated versions directly in Text diff and Changes PDF. Keep the selected comparison fixed through Save and reopening.
+
+- Remove the standard review's eight-comment prompt quota and its separate 30-comment response restriction. Longer reviews use the existing review storage limits.
+
+- Continue one saved review conversation per paper, with a Fresh review choice and inspectable earlier exchanges. Refresh the current draft, instructions and author decisions on every request; ordinary comment discussions share that conversation.
+- Add optional author rejection reasons and an explicit way to copy a preference into paper instructions. Keep one-click Reject and Undo. Record Fresh/Continue timing and per-request reported usage.
+
+- Add all waiting review comments in one action, with a visible Add beside each result. Preserve the current source, selection, decisions and hand-edited proposals; keep uncertain anchors flagged and discussion answers separate.
+
+- Enable read-only access to the opened paper’s folder and subfolders by default, with a remembered checkbox in Review and Context. Keep the unsaved draft available independently, read other documents on demand, and show actual reading coverage in Sources used.
+
+- Compile ordinary SWP BMP figures on macOS through temporary PNG copies, preserving original source, image dimensions, checked acceptance and PDF/source navigation. Allow local figures alongside Parallels graphics-path fallbacks.
+- Keep compilation-input problems compact and dismissible, with file details collapsed. Offer Codex file-list assistance only when it can help resolve computed dependencies.
+
+- Keep small suggestions compact with nearby sentences and More/Less context, preserving the complete edit in Changes, Clean and Edit.
+- Preserve unchanged comment anchors when pasting a lightly revised large selection. Keep edited quotations stale and preserve Undo/Redo.
+- Add Usage & speed with bounded local metadata, timing and reported tokens, plus a separate read-only account-limit refresh.
+- Choose model, effort and speed together in Review. Keep instructions and settings scope intact, with supported catalog choices.
+- Put routine review progress and its controls in the existing comments header; expand info hints on hover or keyboard focus.
+
+- Repair affected comment anchors together using Sol with High effort and Fast mode. Repairs preserve the source and suggestions, support Undo, and leave uncertain passages flagged.
+- Open the review model choice directly from Review. The Review dialog and Actions show the saved model; effort uses Low, Medium, High, Extra high, Max and Ultra consistently.
+
 ## 1.7.0 — Beamer slides and comparison
 
 - Mark ordinary Beamer frame, bullet, block and column wording changes inline, using in-frame comparison anchors. Preserve article rendering and exact source protections. List unsupported changes on separate comparison-notes slides and report TeX overflow.
